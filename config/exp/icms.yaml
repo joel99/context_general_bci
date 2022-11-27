@@ -1,0 +1,8 @@
+# @package _global_
+tag: icms
+
+
+dataset:
+  data_keys:
+  - "spikes"
+  - "stim"
