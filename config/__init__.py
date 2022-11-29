@@ -113,6 +113,7 @@ class ModelConfig:
 class DataKey(Enum):
     # TODO need more thinking about this. Data is heterogenuous, can we maintain a single interface
     # when we have multiple arrays?
+    # What is the right we to specify we want some type of array?
     spikes = 'spikes'
     stim = 'stim' # icms
 

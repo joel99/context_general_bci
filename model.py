@@ -83,6 +83,10 @@ class BrainBertInterface(pl.LightningModule):
             channel_count = subject_to_array[subject].channel_count
             self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
 
+            # TODO add something for the stim array (similar attr)
+            if self.cfg.task.task == Task.icms_one_step_ahead:
+                raise NotImplementedError
+
             decoder_layers = [
                 nn.Linear(self.backbone.out_size, channel_count)
             ]

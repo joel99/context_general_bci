@@ -7,15 +7,18 @@ from datetime import datetime
 from dataclasses import dataclass
 
 import logging
-
+import pickle
 import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 import pytorch_lightning as pl
 
-from config import DatasetConfig, MetaKey
+from config import DatasetConfig, MetaKey, DataKey
 from array_locations import subject_to_array
+from context_registry import context_registry
+
+from tasks.passive_icms import infer_stim_parameters, icms_loader
 
 r"""
     Stores range of contexts provided by a dataset.
@@ -49,7 +52,7 @@ r"""
     This is not really designed with loading diverse data in the same instance; it's for doing so across instances/runs.
     Loader is responsible for preprocessing as well.
 """
-SessionLoader = Callable[[Path, DatasetConfig], pd.DataFrame]
+SessionLoader = Callable[[Path, DatasetConfig, Path], pd.DataFrame]
 def get_loader(path: Path) -> SessionLoader:
     if 'passive_icms' in path:
         return icms_loader
@@ -60,22 +63,12 @@ def get_loader(path: Path) -> SessionLoader:
     if path.suffix == '.pth':
         assert False, "no pth handler yet"
 
-
-# Each loader should be responsible for loading/caching all information in paths
-def icms_loader(path: Path):
-    r"""
-        Loader for data from `icms_modeling` project.
-        Takes in a payload containing all trials, fragments according to config.
-        TODO
-    """
-    return pd.DataFrame({})
-
 class SpikingDataset(Dataset):
     r"""
         Generic container for spiking data from intracortical microelectrode recordings.
         Intended to wrap multiple (large) datasets, hence stores time series in disk, not memory.
         In order to be schema agnostic, we'll maintain metadata in a pandas dataframe and larger data (time series) will be stored in a file, per trial.
-        Some training modes may open a file and not use all info in said file, but if this turns into an issue we can revisit and split the files as well.
+"        Some training modes may open a file and not use all info in said file, but if this turns into an issue we can revisit and split the files as well.
 
         Design considerations:
         - Try to be relatively agnostic (needs to deal with QuickLogger + NWB)
@@ -93,17 +86,20 @@ class SpikingDataset(Dataset):
     def __init__(self, cfg: DatasetConfig):
         super().__init__()
         self.cfg = cfg
+        assert DataKey.spikes in cfg.data_keys, "Must have spikes"
+
         meta_df = []
         for d in self.cfg.datasets:
             meta_df.append(self.load_single_session(d))
-        self.meta_df = pd.concat(meta_df)
+        self.meta_df = pd.concat(meta_df).reset_index()
 
         self.context_index = None
         self.subsetted = False
 
-    def preprocess_path(self, session_path: Path) -> Path:
+    @staticmethod
+    def preprocess_path(cls, cfg: DatasetConfig, session_path: Path) -> Path:
         # TODO assert some sort of versioning system for preprocessing
-        return self.cfg.root_dir / self.cfg.preprocess_suffix / session_path.name
+        return cfg.root_dir / cfg.preprocess_suffix / session_path.name
 
     def validate_meta(self, meta_df: pd.DataFrame):
         assert all([k in meta_df.columns for k in self.cfg.meta_keys])
@@ -117,7 +113,7 @@ class SpikingDataset(Dataset):
             session_path = Path(session_path)
         if not (hash_dir := self.preprocess_path(session_path)).exists():
             loader = get_loader(session_path)
-            meta = loader(session_path, self.cfg)
+            meta = loader(session_path, self.cfg, hash_dir)
             self.validate_meta(meta)
             meta.to_csv(hash_dir / 'meta.csv')
         else:
