@@ -31,13 +31,7 @@ def run_exp(cfg : RootConfig) -> None:
     train, val = dataset.create_tv_datasets()
     logging.info(f"Training on {len(train)} examples")
 
-    if cfg.load_from_id:
-        model = BrainBertInterface.load_from_checkpoint(
-            checkpoint_path=get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id),
-            cfg=cfg.model # ! Very mysterious bug, can't load config, omegaconf expects "model.cfg"; some automatic mechanism is breaking
-        )
-    else:
-        model = BrainBertInterface(cfg.model, dataset.get_data_attrs())
+    model = BrainBertInterface(cfg.model, dataset.get_data_attrs())
 
     epochs = cfg.train.epochs
     callbacks=[
@@ -89,7 +83,7 @@ def run_exp(cfg : RootConfig) -> None:
         # Note, wandb.run can also be accessed as logger.experiment but there's no benefit
         if cfg.tag:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
-        wandb.config.update(cfg)
+        wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
 
     # === Train ===
     # num_workers = 1
@@ -107,7 +101,8 @@ def run_exp(cfg : RootConfig) -> None:
             batch_size=cfg.train.batch_size,
             num_workers=num_workers,
             persistent_workers=True
-        )
+        ),
+        ckpt_path=get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )
     logging.info('Run complete')
 

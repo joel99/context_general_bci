@@ -29,7 +29,6 @@ def infer_stim_parameters(
 ):
     trial_record = torch.tensor(trial_record).T.unsqueeze(-1) # C T to T C 1
     # Target shape: Trial[time bin x channel x feat]
-    # TODO replace with NEV
     r""" EXTRACT STIMULATION PARAMETERS
         Our preprocessing will extract putative stimulation times (`trial_stim_samples`),
         which we need to identify the true stimulation parameters for (such as channel, amplitude).
