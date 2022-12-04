@@ -7,6 +7,7 @@ import torch
 
 from config import DataKey, MetaKey, DatasetConfig
 from context_registry import context_registry
+from array_registry import ArrayID
 
 TrialNum = int
 MetadataKey = str
@@ -136,8 +137,9 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/prepr
     # `meta_info.arrays` is more static, and should dictate the order arrays are savedi n
     arrays_to_use = [a for a in meta_info.arrays if a in cfg.passive_icms.arrays]
 
+
     # TODO implement extract_and_pad_arrays
-    def extract_and_pad_arrays(arrays_to_use, payload, cfg) -> torch.Tensor:
+    def extract_and_pad_arrays(arrays_to_use, payload, cfg) -> Dict[ArrayID, torch.Tensor]:
         # TODO implement
         # * We now have to reckon with the fact that maybe we want to keep S1 + M1 together because 32 + 96 is awkward to separate
         # * Or maybe we want units of 32
@@ -162,6 +164,7 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/prepr
                     time_bin_size_s=cfg.bin_size_ms / 1000.,
                 )
                 single_payload[k] = trial_stim_state
+                # TODO implement in fragmented (but probably not, that's too much work...)
             elif k == DataKey.spikes:
                 single_payload[k] = extract_and_pad_arrays(payload[k][t], arrays_to_use)
             else: # Honestly have no idea what other keys even are

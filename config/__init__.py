@@ -123,7 +123,6 @@ class ModelConfig:
 
 class DataKey(Enum):
     # TODO need more thinking about this. Data is heterogenuous, can we maintain a single interface
-    # when we have multiple arrays?
     # What is the right we to specify we want some type of array?
     spikes = 'spikes'
     stim = 'stim' # icms
@@ -144,15 +143,20 @@ class ExperimentalConfig:
     r"""
         It seems plausible we'll want to specify the arrays to use from different datasets with some granularity.
         For example, some stim experiments really only have good sensory array data or motor array data.
-        For now, we will specify this at the level of experimental task.
-        # ! No. Array specification needs to be done at Subject x Task level. TODO how should we resolve this interaction?
-        # Right now we default to using all arrays.
+        For now, we will specify this at the level of experimental task. Note though, that we need to additionally specify selection per subject.
 
-        I will use a compromise strategy for now
+        I will use a somewhat heavyhanded strategy for now
         - Each dataset/subject only provides some arrays (which have subject-specific hashes)
         - Configured task arrays are keys that indicate which of these arrays should be used
         - It is assumed that subjects will not have all of these - some of these arrays belong to other subjects
         - For now we will require all full explicit array names to be specified
+
+        Additionally, we would like to be able to specify when to group arrays together or not.
+        - Probably the strategy for doing this will be array group aliases
+            - This alias must propagate in both meta info and data - data should be stored per meta info.
+        - It may be advantageous, or may not be advantageous, to split or group arrays.
+        - More tokens, especially for distant arrays, is likely useful. However, memory is quadratic in tokens.
+        * TODO Think more about this
     """
     arrays: List[str] = MISSING
 
@@ -178,8 +182,12 @@ class DatasetConfig:
     pad_batches: bool = True # else, trim batches to the shortest trial
     max_trial_length: int = 1500 # in bins
 
+    # Pad to this number of channels per array group
+    # If set to 0, will skip padding checks.
+    max_channels: int = 0
+
     # Pad to this number of arrays (for meta and data alike)
-    # If set to 0, we will skip padding checks.
+    # If set to 0, will skip padding checks.
     max_arrays: int = 0
     # TODO think about preprocessing strategies
 

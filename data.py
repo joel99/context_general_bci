@@ -25,13 +25,11 @@ r"""
     Data will serve attributes as index of provided contexts.
     The model should probably unique parameters for each context (JY thinks they should be embeddings).
     - `subject` context will _determine_ data shape.
-    - TODO we need to figure out a multi-shape strategy.
     1. Simple is to get a linear layer per subject.
     2. Odd but maybe workable is to pad to some max length (e.g. 128, current generation Utah array).
     3. Stretch; too much of a separate research endeavor -- use Set networks to learn a subject-based cross-attention operator to downproject.
     These contexts are not independent. In fact, they're almost hierarchical.
     Subject -> Array -> Session, Task -> session.
-    TODO think about whether Task should be here. Right now we're not attempting multitask. But multitask pretraining might be reasonable.
 """
 @dataclass
 class ContextAttrs:
@@ -134,14 +132,29 @@ class SpikingDataset(Dataset):
             else:
                 meta_items[k] = self.context_index[k].index(trial[k])
 
+        r"""
+            Currently we store spikes in a split-array format as a dict of tensors T C H.
+            We must use the IDs to reconstruct the stack we want.
+        """
         data_items = {}
         payload = torch.load(trial.path)
         for k in self.cfg.data_keys:
-            if self.cfg.max_arrays:
-                data_items[k] = torch.cat([
-                    payload[k],
-                    torch.zeros(self.cfg.max_arrays - payload[k].shape[0], *payload[k].shape[1:])
-                ])
+            if k == DataKey.spikes and self.cfg.max_arrays:
+                data_items[k] = []
+                for alias in trial[MetaKey.array]:
+                    alias_arrays = subject_array_registry.resolve_alias(alias) # list of strs
+                    array_group = torch.cat([payload[a] for a in alias_arrays], dim=-2) # T C' H
+                    # ! Right now pad channels seems subservient to pad arrays, that doesn't seem to be necessary.
+                    if self.cfg.max_channels:
+                        array_group = torch.cat([
+                            array_group, torch.zeros((
+                                array_group.shape[0], self.cfg.max_channels - array_group.shape[1], array_group.shape[2]
+                            ), dtype=array_group.dtype)
+                        ], 1)
+                data_items[k] = torch.stack([
+                    data_items[k],
+                    torch.zeros(self.cfg.max_arrays - len(data_items[k]), *data_items[k][0].shape[1:])
+                ], 0)
             else:
                 data_items[k] = payload[k]
         # TODO provide a channel mask, array mask, and length mask

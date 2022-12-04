@@ -89,7 +89,7 @@ class BrainBertInterface(pl.LightningModule):
                 assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
                 # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
                 # * A rework will be needed if we want to do this lookup grouped per subject
-                channel_count = sum(subject_array_registry.query_by_id(a).get_channel_count() for a in self.data_attrs.context.array)
+                channel_count = sum(subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array)
                 self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
             elif self.cfg.readin_strategy == EmbedStrat.token:
                 self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)

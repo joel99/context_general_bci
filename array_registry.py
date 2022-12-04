@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import List, Dict, Type, Tuple
+from typing import List, Dict, Type, Tuple, Optional
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,6 +8,7 @@ import torch.nn as nn
 _PEDESTAL_OFFSET = 500, # num of recording channels per pedestal should be well under this
 
 # Another registry of sorts - holding subject + array info instead of experimental info.
+ArrayID = str
 @dataclass
 class ArrayInfo:
     array: np.ndarray
@@ -29,18 +30,80 @@ class SubjectInfo:
     # By convention, stim channels 1-32 is anterior 65-96, and 33-64 is posterior 65-96.
     # Is spatially arranged to reflect true geometry of array.
     # ! Note - this info becomes desynced once we subset channels. We can probably keep it synced by making this class track state, but that's work for another day...
-    subject_id: str
-    _arrays: Dict[str, ArrayInfo] # Registry of array names. ! Should include subject name as well? For easy lookup?
+    _arrays: Dict[ArrayID, ArrayInfo] # Registry of array names. ! Should include subject name as well? For easy lookup?
+    _aliases: Dict[ArrayID, List[str]] # Refers to other arrays (potentially multiple) used for grouping
 
     @property
-    def arrays(self) -> Dict[str, ArrayInfo]:
+    def arrays(self) -> Dict[ArrayID, ArrayInfo]:
         return self._arrays
 
-    def get_channel_count(self, arrays: str | List[str] = ""):
+    @property
+    def aliases(self) -> Dict[ArrayID, List[ArrayID]]:
+        return self._aliases
+
+    def get_channel_count(self, arrays: ArrayID | List[ArrayID] = ""):
         if isinstance(arrays, str) and arrays:
             arrays = [arrays]
         queried = self.arrays.values() if not arrays else [self.arrays[a] for a in arrays]
         return sum([a.get_channel_count() for a in queried])
+
+
+class SubjectArrayRegistry:
+    instance = None
+    _subject_registry: Dict[str, SubjectInfo] = {}
+    _array_registry: Dict[ArrayID, ArrayInfo] = {}
+    _alias_registry: Dict[ArrayID, List[str]] = {}
+
+    def __new__(cls, init_items: List[SubjectInfo]=[]):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super().__new__(cls)
+            cls.instance.register(init_items)
+        return cls.instance
+
+    @staticmethod
+    def wrap_array(cls, subject_id, array_id):
+        return f"{subject_id}-{array_id}"
+
+    # Pattern taken from habitat.core.registry
+    @classmethod
+    def register(cls, to_register: SubjectInfo, name: Optional[str]=None, assert_type = SubjectInfo):
+        def wrap(to_register):
+            if assert_type is not None:
+                assert issubclass(
+                    to_register, assert_type
+                ), "{} must be a subclass of {}".format(
+                    to_register, assert_type
+                )
+            register_name = to_register.__name__ if name is None else name
+
+            cls._subject_registry[register_name] = to_register # ? Possibly should refer to singleton instance explicitly
+            for array in to_register.arrays:
+                cls._array_registry[cls.wrap_array(register_name, array)] = to_register.arrays[array]
+            for alias in to_register.aliases:
+                cls._array_registry[cls.wrap_array(register_name, alias)] = to_register.arrays[alias]
+            return to_register
+        return wrap(to_register)
+
+    @classmethod
+    def resolve_alias(cls, alias: ArrayID) -> List[ArrayID]:
+        return cls._alias_registry[alias]
+
+    @classmethod
+    def query_by_array(cls, id: ArrayID) -> ArrayInfo:
+        if id in cls._array_registry:
+            return cls._array_registry[id]
+        elif id in cls._alias_registry:
+            return ArrayInfo(np.concatenate(cls._array_registry[a].array.flatten() for a in cls._alias_registry[id]))
+
+    @classmethod
+    def query_by_subject(cls, id: str) -> SubjectInfo:
+        return cls._subject_registry[id]
+
+
+# ? Should we be referencing this instance or the class in calls? IDK
+subject_array_registry = SubjectArrayRegistry()
+
+
 
 class SubjectInfoPittChicago(SubjectInfo):
     r"""
@@ -50,8 +113,8 @@ class SubjectInfoPittChicago(SubjectInfo):
     channels_per_pedestal = 128
     channels_per_stim_bank = 32
 
-    motor_arrays: List[np.ndarray]
-    sensory_arrays: List[np.ndarray]
+    motor_arrays: List[ArrayInfo]
+    sensory_arrays: List[ArrayInfo]
     # Implicit correspondence - we assume motor_arrays[i] is in same pedestal as sensory_arrays[i]. I'm not sure if this surfaces in any code logic, though.
     blacklist_channels: np.ndarray = np.array([]) # specifies (within pedestal) 1-indexed position of blacklisted channels
     blacklist_pedestals: np.ndarray = np.array([]) # to be paired with above
@@ -66,6 +129,17 @@ class SubjectInfoPittChicago(SubjectInfo):
             'medial_s1': self.sensory_arrays[1],
             'lateral_m1': self.motor_arrays[0],
             'medial_m1': self.motor_arrays[1],
+            # We use a simple aliasing system right now, but this abstraction hides the component arrays
+            # Which means the data must be stored in groups, since we cannot reconstruct the aliased.
+            # To do this correctly, we need to
+        }
+
+    @property
+    def aliases(self):
+        return {
+            'sensory': ['lateral_s1', 'medial_s1'],
+            'motor': ['lateral_m1', 'medial_m1'],
+            'all': ['lateral_s1', 'medial_s1', 'lateral_m1', 'medial_m1'],
         }
 
     @property
@@ -106,7 +180,8 @@ class SubjectInfoPittChicago(SubjectInfo):
         else:
             return self.blacklist_channels, self.blacklist_pedestals
 
-class CRS02(SubjectInfoPittChicago):
+@SubjectArrayRegistry.register
+class CRS02b(SubjectInfoPittChicago):
     # Layout shared across motor channels
     subject_id = "CRS02b"
     motor_arrays = [
@@ -157,6 +232,7 @@ class CRS02(SubjectInfoPittChicago):
     blacklist_channels = np.array([113, 115, 117, 119, 121, 123, 125, 127]) + 1
     blacklist_pedestals = np.zeros(8, dtype=int)
 
+@SubjectArrayRegistry.register
 class CRS07(SubjectInfoPittChicago):
     # Layout shared across motor channels
     subject_id = "CRS07"
@@ -193,6 +269,7 @@ class CRS07(SubjectInfoPittChicago):
         _sensory_array#  + 32
     ]
 
+@SubjectArrayRegistry.register
 class BCI02(SubjectInfoPittChicago):
     # No, the floating point isn't a concern
     subject_id = "BCI02"
@@ -245,40 +322,6 @@ class BCI02(SubjectInfoPittChicago):
     ])
 
     blacklist_pedestals = np.zeros(128 + 32, dtype=int)
-
-
-ArrayID = str
-class SubjectArrayRegistry:
-    instance = None
-    _subject_registry: Dict[str, SubjectInfo] = {}
-    _array_registry: Dict[ArrayID, ArrayInfo] = {}
-
-    def __new__(cls, init_items: List[SubjectInfo]=[]):
-        if not hasattr(cls, 'instance'):
-            cls.instance = super().__new__(cls)
-            cls.instance.register(init_items)
-        return cls.instance
-
-    @staticmethod
-    def wrap_array(cls, subject_id, array_id):
-        return f"{subject_id}-{array_id}"
-
-    def register(self, info: List[SubjectInfo]):
-        for item in info:
-            self.instance._subject_registry[item.subject_id] = item
-            for array_name in item.arrays:
-                self.instance._array_registry[self.wrap_array(item.subject_id, array_name)] = item.arrays[array_name]
-
-    def query_by_array(self, id: ArrayID) -> ArrayInfo:
-        return self._array_registry[id]
-
-    def query_by_subject(self, id: str) -> SubjectInfo:
-        return self._subject_registry[id]
-
-
-subject_array_registry = SubjectArrayRegistry([
-    CRS02(), CRS07(), BCI02()
-])
 
 
 

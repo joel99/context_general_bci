@@ -11,7 +11,7 @@ import pandas as pd
 from config import ExperimentalTask
 from utils import StimCommand
 
-from array_registry import SubjectArrayRegistry
+from array_registry import subject_array_registry, SubjectArrayRegistry
 r"""
     ContextInfo class is an interface for storing meta-information needed by several consumers, mainly the model, that may not be logged in data from various sources.
     ContextRegistry allows consumers to query for this information from various identifying sources.
@@ -38,16 +38,24 @@ class ContextInfo:
     train_dir: Path = ""
 
     def __init__(self,
-        session: int,
-        set: int,
+        session: str, # TODO this isn't the right abstraction - we want some sort of ID
+        subject: str,
         task: str,
-        arrays: List[str],
+        arrays: List[str] = [],
         **kwargs
     ):
         self.session = session
-        self.set = set
-        self.subject
-        self.task = task
+        assert subject_array_registry.query_by_subject(subject) is not None, f"Subject {subject} not found in SubjectArrayRegistry"
+        self.subject = subject
+        self.task = task # TODO build task registry
+        if not arrays: # Default to all arrays
+            self._arrays = subject_array_registry.query_by_subject(subject).arrays.values()
+        else:
+            self._arrays = arrays
+
+
+        # TODO - pitt-type experiment
+        self.set = 0
 
         if self.task == ExperimentalTask.passive_icms:
             self.build_icms(**kwargs)
@@ -146,12 +154,12 @@ class ContextRegistry:
             if len(found) > 1:
                 raise ValueError(f"Multiple sets found for session {session}, please specify set")
         else:
-            found = self.instance.search_index[(self.instance.search_index.session == session) & (self.instance.search_index.set == set)]
+            found = self.instance.search_index[(self.search_index.session == session) & (self.instance.search_index.set == set)]
             assert len(found) == 1
         return self._registry(found.iloc[0]['id'])
 
     def query_by_datapath(self, datapath: Path) -> ContextInfo:
-        found = self.instance.search_index[self.instance.search_index.datapath == datapath]
+        found = self.instance.search_index[self.search_index.datapath == datapath]
         assert len(found) == 1
         return self._registry(found.iloc[0]['id'])
 
