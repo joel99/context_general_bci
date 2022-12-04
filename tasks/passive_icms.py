@@ -135,7 +135,6 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path):
     del data
 
     # Validate
-    payload['path'] = []
     meta_info = context_registry.query_by_datapath(path)
     # `meta_info.arrays` is more static, and should dictate the order arrays are cached in (though I expect to overwrite)
     # TODO review whether we should save the configured subset or configure outside of cache
@@ -157,6 +156,7 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path):
             return info
         raise NotImplementedError
 
+    payload['path'] = []
     for t in payload[MetaKey.trial]:
         single_payload = {}
         for k in cfg.data_keys:
@@ -183,9 +183,4 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path):
 
     for k in cfg.data_keys:
         del payload[k]
-    # TODO potentially move this meta query out of task-specific loader
-    meta_df = pd.DataFrame(payload)
-    for k in cfg.meta_keys:
-        meta_df[k] = getattr(meta_info, k)
-    # TODO consider filtering meta df to be more lightweight
-    return meta_df
+    return pd.DataFrame(payload)

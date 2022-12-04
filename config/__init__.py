@@ -189,8 +189,6 @@ class DatasetConfig:
     # Pad to this number of arrays (for meta and data alike)
     # If set to 0, will skip padding checks.
     max_arrays: int = 0
-    # TODO think about preprocessing strategies
-
 
     # Experimental Task configuration
     passive_icms: ExperimentalConfig = ExperimentalConfig()

@@ -1,5 +1,6 @@
 from typing import Callable, Self, List, Any, Optional, Dict
 import copy
+import json
 from pathlib import Path
 import re
 import itertools
@@ -47,6 +48,8 @@ class DataAttrs:
 r"""
     A heterogenuous dataset needs some way of figuring out how to load data from different sources.
     We define loaders per data source, and will route using a data registry.
+    Loader is primarily responsible for caching data; the actual metadata returned is trial-specific and mostly noncritical
+    - The critical trial-specific meta is just the cache path
     This is not really designed with loading diverse data in the same instance; it's for doing so across instances/runs.
     Loader is responsible for preprocessing as well.
 """
@@ -107,6 +110,19 @@ class SpikingDataset(Dataset):
             for s in unique_subjects:
                 assert SubjectArrayRegistry.query_by_subject(s) is not None, f"Subject {s} not found registered."
 
+    def preproc_version(self):
+        return {
+            'max_trial_length': self.cfg.max_trial_length,
+            'bin_size_ms': self.cfg.bin_size_ms
+        }
+
+    def checksum_diff(self, version_path: Path):
+        # load json in session path
+        with open(version_path, 'r') as f:
+            cached_preproc_version = json.load(f)
+        return self.preproc_version() != cached_preproc_version
+
+
     def load_single_session(self, session_path: Path | str):
         r"""
             Data will be pre-cached, typically in a flexible format, so we don't need to regenerate too often.
@@ -116,13 +132,21 @@ class SpikingDataset(Dataset):
         """
         if isinstance(session_path, str):
             session_path = Path(session_path)
-        if not (hash_dir := self.preprocess_path(session_path)).exists():
+        hash_dir = self.preprocess_path(self.cfg, session_path)
+        if not (hash_dir := self.preprocess_path(session_path)).exists() or \
+            self.checksum_diff(hash_dir / 'preprocess_version.json'):
             loader = get_loader(session_path)
+            # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
             meta = loader(session_path, self.cfg, hash_dir)
-            self.validate_meta(meta)
             meta.to_csv(hash_dir / 'meta.csv')
+            with open(hash_dir / 'preprocess_version.json', 'w') as f:
+                json.dump(self.preproc_version(), f)
         else:
             meta = pd.read_csv(hash_dir / 'meta.csv')
+        context_meta = context_registry.query_by_datapath(session_path)
+        for k in self.cfg.meta_keys:
+            meta[k] = getattr(context_meta, k)
+        self.validate_meta(meta)
 
         # Filter arrays using task configuration
         meta[MetaKey.array] = meta.apply(lambda x: [a for a in x[MetaKey.array] if a in getattr(self.cfg, x[MetaKey.task]).arrays], axis=1)
