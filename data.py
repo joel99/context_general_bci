@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 import pytorch_lightning as pl
 
 from config import DatasetConfig, MetaKey, DataKey
-from array_registry import subject_to_array
+from array_registry import subject_array_registry
 from context_registry import context_registry
 
 from tasks.passive_icms import infer_stim_parameters, icms_loader
@@ -106,7 +106,7 @@ class SpikingDataset(Dataset):
         if MetaKey.subject in self.cfg.meta_keys:
             unique_subjects = meta_df[MetaKey.subject].unique()
             for s in unique_subjects:
-                assert s in subject_to_array, f"Subject {s} not found registered."
+                assert subject_array_registry.query_by_subject(s) is not None, f"Subject {s} not found registered."
 
     def load_single_session(self, session_path: Path | str):
         if isinstance(session_path, str):

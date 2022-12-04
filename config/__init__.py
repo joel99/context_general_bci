@@ -168,7 +168,7 @@ class DatasetConfig:
         `data_keys` and `meta_keys` specify the attributes of the dataset are served.
     """
     data_keys: List[DataKey] = [DataKey.spikes]
-    meta_keys: List[MetaKey] = [MetaKey.session, MetaKey.array] # Array info is always needed for readin.
+    meta_keys: List[MetaKey] = [MetaKey.session, MetaKey.array] # JY recommends providing array meta info, but thinks the system should be designed to not error without.
 
     split_key: MetaKey = MetaKey.unique
     # ==== Data parsing/processing ====

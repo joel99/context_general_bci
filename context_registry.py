@@ -11,6 +11,7 @@ import pandas as pd
 from config import ExperimentalTask
 from utils import StimCommand
 
+from array_registry import SubjectArrayRegistry
 r"""
     ContextInfo class is an interface for storing meta-information needed by several consumers, mainly the model, that may not be logged in data from various sources.
     ContextRegistry allows consumers to query for this information from various identifying sources.
@@ -25,9 +26,11 @@ class ContextInfo:
     """
     # Context items - this info should be provided in all datasets.
     session: int
-    subject: str
+    subject: str # These should match what's registered in SubjectArrayRegistry
     task: str
-    arrays: List[str]
+    # These should be provided as denoted in SubjectArrayRegistry WITHOUT subject specific handles.
+    # Dropping subject handles is intended to be a convenience since these contexts are essentially metadata management. TODO add some safety in case we decide to start adding handles explicitly as well...
+    _arrays: List[str]
 
     stim_banks: Tuple[int]
     stimsync_banks: Tuple[int]
@@ -57,6 +60,13 @@ class ContextInfo:
         if self.task == ExperimentalTask.passive_icms:
             return f"{self.subject}_{self.session}_{self.set}"
 
+    @property
+    def arrays(self):
+        r"""
+            We wrap the regular array ID with the subject so we don't confuse arrays across subjects.
+            These IDs will be used to query for array geometry later. `array_registry` should symmetrically register these IDs.
+        """
+        return [SubjectArrayRegistry.wrap_array(self.subject, a) for a in self._arrays]
 
     # ICMS props
     def build_icms(self,
@@ -115,7 +125,7 @@ class ContextRegistry:
 
     def __new__(cls, init_items: List[ContextInfo]=[]):
         if not hasattr(cls, 'instance'):
-            cls.instance = super(ContextRegistry, cls).__new__(cls)
+            cls.instance = super().__new__(cls)
             cls.search_index = pd.DataFrame()
             cls.instance.register(init_items)
         return cls.instance
@@ -124,7 +134,7 @@ class ContextRegistry:
         index = [(item.id, item.session, item.set, item.datapath) for item in items]
         return pd.DataFrame(index, columns=['id', 'session', 'set', 'datapath'])
 
-    def register(self, context_info: ContextInfo | List[ContextInfo]):
+    def register(self, context_info: List[ContextInfo]):
         self.instance.search_index = pd.concat([self.instance.search_index, self.instance.build_search_index(context_info)])
         for item in context_info:
             self.instance._registry[item.id] = item
@@ -150,6 +160,7 @@ class ContextRegistry:
 
 
 context_registry = ContextRegistry([
+    # TODO update all of these... probably via an ICMS subclass that binds sensory arrays
     ContextInfo(845, 9, 'stim_trains_100uA_500ITI_long/', (2, 6)),
     ContextInfo(850, 7, 'stim_trains_single_pulse/', (2, 6)),
     ContextInfo(853, 4, 'stim_trains_100uA_500ITI_16cond_padded/', (2, 6)),

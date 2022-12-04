@@ -9,7 +9,7 @@ from config import (
 )
 
 from data import DataAttrs
-from array_registry import subject_to_array
+from array_registry import subject_array_registry
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 from backbones import TemporalTransformer
@@ -29,15 +29,19 @@ class BrainBertInterface(pl.LightningModule):
         self.data_attrs = None
         self.bind_io(data_attrs)
 
-        # TODO add some check to compare whether dataset provides everything model needs for tasks
-        # (possibly should be in run script)
-
     def bind_io(self, data_attrs: DataAttrs):
         r"""
             Add context-specific input/output parameters.
 
             Ideally, we will just bind embedding layers here, but there may be some MLPs.
         """
+        if self.cfg.session_embed_strategy is not EmbedStrat.none:
+            assert data_attrs.context.session, "Session embedding strategy requires session in data"
+        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
+            assert data_attrs.context.subject, "Subject embedding strategy requires subject in data"
+        if self.cfg.array_embed_strategy is not EmbedStrat.none:
+            assert data_attrs.context.array, "Array embedding strategy requires array in data"
+
         if self.data_attrs is not None: # IO already exists
             import pdb;pdb.set_trace() # check this named_children call
             # TODO update this to re-assign any preserved io
@@ -83,17 +87,9 @@ class BrainBertInterface(pl.LightningModule):
                 # Doesn't (yet) support task-subject specific readin.
                 # ? I am unclear how Talukder managed to have mixed batch training if different data was shaped different sizes.
                 assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
-                # readin = []
-                # for subject in self.data_attrs.context.subject:
-                #     channel_count = subject_to_array[subject].channel_count
-                #     readin.append(nn.Linear(channel_count, self.cfg.hidden_size))
-                #     # for array in self.data_attrs.context.array: # TODO array subselection
-                # self.readin = nn.ModuleList(readin)
-                subject = self.data_attrs.context.subject[0]
                 # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
-                # * More broadly, arrays should be pulled from context, not some subject lookup.
-                # * A rework will be needed if we want to do this lookup for multiple subjects.
-                channel_count = subject_to_array[subject].get_channel_count(self.data_attrs.context.array)
+                # * A rework will be needed if we want to do this lookup grouped per subject
+                channel_count = sum(subject_array_registry.query_by_id(a).get_channel_count() for a in self.data_attrs.context.array)
                 self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
             elif self.cfg.readin_strategy == EmbedStrat.token:
                 self.array_embed = nn.Embedding(len(self.data_attrs.context.array), self.cfg.array_embed_size)

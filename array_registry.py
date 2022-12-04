@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from dataclasses import dataclass
 from typing import List, Dict, Type, Tuple
 import numpy as np
 import torch
@@ -6,8 +7,19 @@ import torch.nn as nn
 
 _PEDESTAL_OFFSET = 500, # num of recording channels per pedestal should be well under this
 
+# Another registry of sorts - holding subject + array info instead of experimental info.
+@dataclass
 class ArrayInfo:
+    array: np.ndarray
+
+    def get_channel_count(self):
+        return (self.array != np.nan).sum()
+
+
+class SubjectInfo:
     r"""
+        Right now, largely a wrapper for potentially capturing multiple arrays.
+        ArrayInfo in turn exists largely to report array shape.
         Provides info relating channel ID (1-indexed, a pedestal/interface concept) to location _within_ array (a brain tissue concept).
         This doesn't directly provide location _within_ system tensor, which might have multi-arrays without additional logic! (see hardcoded constants in this class)
         Agnostic to bank info.
@@ -17,20 +29,20 @@ class ArrayInfo:
     # By convention, stim channels 1-32 is anterior 65-96, and 33-64 is posterior 65-96.
     # Is spatially arranged to reflect true geometry of array.
     # ! Note - this info becomes desynced once we subset channels. We can probably keep it synced by making this class track state, but that's work for another day...
-
-    _arrays: Dict[str, np.ndarray] # Registry of array names. ! Should include subject name as well? For easy lookup?
+    subject_id: str
+    _arrays: Dict[str, ArrayInfo] # Registry of array names. ! Should include subject name as well? For easy lookup?
 
     @property
-    def arrays(self) -> Dict[str, np.ndarray]:
+    def arrays(self) -> Dict[str, ArrayInfo]:
         return self._arrays
 
     def get_channel_count(self, arrays: str | List[str] = ""):
         if isinstance(arrays, str) and arrays:
             arrays = [arrays]
-        arrays = self.arrays if not arrays else [self.arrays[a] for a in arrays]
-        return sum([(a != np.nan).sum() for a in arrays])
+        queried = self.arrays.values() if not arrays else [self.arrays[a] for a in arrays]
+        return sum([a.get_channel_count() for a in queried])
 
-class ArrayInfoPittChicago(ArrayInfo):
+class SubjectInfoPittChicago(SubjectInfo):
     r"""
         Human array subclass. These folks all have 4 arrays, wired to two pedestals
         ? Is it ok that I don't define `arrays`
@@ -94,10 +106,11 @@ class ArrayInfoPittChicago(ArrayInfo):
         else:
             return self.blacklist_channels, self.blacklist_pedestals
 
-class CRS02(ArrayInfoPittChicago):
+class CRS02(SubjectInfoPittChicago):
     # Layout shared across motor channels
+    subject_id = "CRS02b"
     motor_arrays = [
-        np.array([ # wire bundle to right, viewing from pad side (electrodes down)
+        ArrayInfo(np.array([ # wire bundle to right, viewing from pad side (electrodes down)
             [np.nan, np.nan, 42, 58, 3, 13, 27, 97, np.nan, np.nan],
             [np.nan, 34, 44, 57, 4, 19, 29, 98, 107, np.nan],
             [33, 36, 51, 62, 7, 10, 31, 99, 108, 117],
@@ -108,11 +121,11 @@ class CRS02(ArrayInfoPittChicago):
             [45, 49, 55, 63, 15, 14, 28, 104, 112, 127],
             [np.nan, 48, 54, 2, 8, 16, 30, 105, 115, np.nan],
             [np.nan, np.nan, 52, 1, 11, 20, 32, 106, np.nan, np.nan, ]
-        ])
+        ]))
     ] * 2 # 2 motor pedestal layouts are the same
 
     sensory_arrays = [
-        np.array([ # Lateral (Anterior), wire bundle to right, viewing from pad side (electrodes down).
+        ArrayInfo(np.array([ # Lateral (Anterior), wire bundle to right, viewing from pad side (electrodes down).
             [65,    np.nan,     72,     np.nan,     85,     91],
             [np.nan,    77, np.nan,         81, np.nan,     92],
             [67,    np.nan,     74,     np.nan,     87, np.nan],
@@ -123,9 +136,9 @@ class CRS02(ArrayInfoPittChicago):
             [np.nan,    68, np.nan,         83, np.nan,     96],
             [73,    np.nan,     80,     np.nan,     90, np.nan],
             [75,        70, np.nan,         86, np.nan,     95],
-        ]), # - 65 + 1,
+        ])), # - 65 + 1,
 
-        np.array([ # Medial (Posterior) wire bundle to right, viewing from pad side (electrodes down)
+        ArrayInfo(np.array([ # Medial (Posterior) wire bundle to right, viewing from pad side (electrodes down)
             [65, np.nan, 72, np.nan, 85, 91],
             [np.nan, 77, np.nan, 81, np.nan, 92],
             [67, np.nan, 74, np.nan, 87, np.nan],
@@ -136,7 +149,7 @@ class CRS02(ArrayInfoPittChicago):
             [np.nan, 68, np.nan, 83, np.nan, 96],
             [73, np.nan, 80, np.nan, 90, np.nan],
             [75, 70, np.nan, 86, np.nan, 95],
-        ]) #  - 65 + 33
+        ])) #  - 65 + 33
     ]
     # NB: We don't clone sensory like motor bc there's a small diff
 
@@ -144,10 +157,11 @@ class CRS02(ArrayInfoPittChicago):
     blacklist_channels = np.array([113, 115, 117, 119, 121, 123, 125, 127]) + 1
     blacklist_pedestals = np.zeros(8, dtype=int)
 
-class CRS07(ArrayInfoPittChicago):
+class CRS07(SubjectInfoPittChicago):
     # Layout shared across motor channels
+    subject_id = "CRS07"
     motor_arrays = [
-        np.array([ # wire bundle to right, viewing from pad side (electrodes down)
+        ArrayInfo(np.array([ # wire bundle to right, viewing from pad side (electrodes down)
             [np.nan, 38, 50, 59,  6, 23,  22, 101, 111, np.nan,],
                 [33, 40, 46, 64,  9, 25,  24, 102, 113, 128],
                 [35, 43, 56, 61, 17, 21,  26, 103, 112, 114],
@@ -158,10 +172,10 @@ class CRS07(ArrayInfoPittChicago):
                 [34, 44, 57,  4, 19, 29,  99, 108, 123, 124],
                 [36, 51, 62,  7, 10, 31,  98, 109, 125, 126],
             [np.nan, 53, 60,  5, 12, 18, 100, 110, 127, np.nan]
-        ])
+        ]))
     ] * 2
 
-    _sensory_array = np.array([ # wire bundle to right, viewing from pad side (electrodes down).
+    _sensory_array = ArrayInfo(np.array([ # wire bundle to right, viewing from pad side (electrodes down).
             [65, np.nan, 72, np.nan, 85, 91],
             [np.nan, 77, np.nan, 81, np.nan, 92],
             [67, np.nan, 74, np.nan, 87, np.nan,],
@@ -172,17 +186,18 @@ class CRS07(ArrayInfoPittChicago):
             [np.nan, 68, np.nan, 83, np.nan, 96],
             [73, np.nan, 80, np.nan, 90, np.nan,],
             [75, 70, np.nan, 86, np.nan, 95],
-        ])#  - 65 + 1
+    ]))#  - 65 + 1
 
     sensory_arrays = [
         _sensory_array,
         _sensory_array#  + 32
     ]
 
-class BCI02(ArrayInfoPittChicago):
+class BCI02(SubjectInfoPittChicago):
     # No, the floating point isn't a concern
+    subject_id = "BCI02"
     motor_arrays = [
-        np.array([ # Lat Motor
+        ArrayInfo(np.array([ # Lat Motor
             [np.nan, 166., 178., 187., 134., 151., 150., 229., 239., np.nan],
             [161., 168., 174., 192., 137., 153., 152., 230., 241., 256.],
             [163., 171., 184., 189., 145., 149., 154., 231., 240., 242.],
@@ -193,11 +208,11 @@ class BCI02(ArrayInfoPittChicago):
             [162., 172., 185., 132., 147., 157., 227., 236., 251., 252.],
             [164., 179., 190., 135., 138., 159., 226., 237., 253., 254.],
             [np.nan, 181., 188., 133., 140., 146., 228., 238., 255., np.nan]
-        ])
+        ])) # ! I think we need to register an identical medial array?
     ]
 
     sensory_arrays = [
-        np.array([ # Medial Sensory
+        ArrayInfo(np.array([ # Medial Sensory
             [65., np.nan, 72., np.nan, 85., 91.],
             [np.nan, 77., np.nan, 81., np.nan, 92.],
             [67., np.nan, 74., np.nan, 87., np.nan],
@@ -208,9 +223,9 @@ class BCI02(ArrayInfoPittChicago):
             [np.nan, 68., np.nan, 83., np.nan, 96.],
             [73., np.nan, 80., np.nan, 90., np.nan],
             [75., 70., np.nan, 86., np.nan, 95.]
-        ]), #  - 65 + 1, # Stim channels 1-32
+        ])), #  - 65 + 1, # Stim channels 1-32
 
-        np.array([ # LateralSensory
+        ArrayInfo(np.array([ # LateralSensory
             [193.,  np.nan, 200.,  np.nan, 213., 219.],
             [ np.nan, 205.,  np.nan, 209.,  np.nan, 220.],
             [195.,  np.nan, 202.,  np.nan, 215.,  np.nan],
@@ -221,7 +236,7 @@ class BCI02(ArrayInfoPittChicago):
             [ np.nan, 196.,  np.nan, 211.,  np.nan, 224.],
             [201.,  np.nan, 208.,  np.nan, 218.,  np.nan],
             [203., 198.,  np.nan, 214.,  np.nan, 223.]
-        ])#  - 193 + 33 # Stim channels 33-64
+        ]))#  - 193 + 33 # Stim channels 33-64
     ]
 
     blacklist_channels = np.concatenate([
@@ -231,11 +246,49 @@ class BCI02(ArrayInfoPittChicago):
 
     blacklist_pedestals = np.zeros(128 + 32, dtype=int)
 
-subject_to_array: Dict[str, Type[ArrayInfo]] = {
-    "CRS02b": CRS02,
-    "CRS07": CRS07,
-    "BCI02": BCI02,
-}
+
+ArrayID = str
+class SubjectArrayRegistry:
+    instance = None
+    _subject_registry: Dict[str, SubjectInfo] = {}
+    _array_registry: Dict[ArrayID, ArrayInfo] = {}
+
+    def __new__(cls, init_items: List[SubjectInfo]=[]):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super().__new__(cls)
+            cls.instance.register(init_items)
+        return cls.instance
+
+    @staticmethod
+    def wrap_array(cls, subject_id, array_id):
+        return f"{subject_id}-{array_id}"
+
+    def register(self, info: List[SubjectInfo]):
+        for item in info:
+            self.instance._subject_registry[item.subject_id] = item
+            for array_name in item.arrays:
+                self.instance._array_registry[self.wrap_array(item.subject_id, array_name)] = item.arrays[array_name]
+
+    def query_by_array(self, id: ArrayID) -> ArrayInfo:
+        return self._array_registry[id]
+
+    def query_by_subject(self, id: str) -> SubjectInfo:
+        return self._subject_registry[id]
+
+
+subject_array_registry = SubjectArrayRegistry([
+    CRS02(), CRS07(), BCI02()
+])
+
+
+
+
+
+
+
+
+# ==== Defunct
+
 
 def get_channel_pedestal_and_location(
     channel_ids: np.ndarray, # either C or C x 2 (already has pedestal info)
@@ -245,7 +298,7 @@ def get_channel_pedestal_and_location(
     array_label=None, # ! Config should ideally specify what array is used for stim and record, but this API is overkill for now
 ):
     assert mode in ["record", "stim"], f"{mode} location extraction not known"
-    array_cls = subject_to_array[subject]()
+    array_cls = subject_array_registry.query_by_subject(subject)
 
     print(f"Info: Extracting {mode} array locations")
     def extract_pedestal_and_loc_within_array(one_indexed_channel_ids: np.ndarray, group_size: int):
