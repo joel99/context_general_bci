@@ -5,9 +5,11 @@ import pandas as pd
 import numpy as np
 import torch
 
+import logging
+
 from config import DataKey, MetaKey, DatasetConfig
 from context_registry import context_registry
-from array_registry import ArrayID
+from array_registry import ArrayID, CRS02b, CRS07, SubjectArrayRegistry
 
 TrialNum = int
 MetadataKey = str
@@ -94,7 +96,8 @@ def infer_stim_parameters(
         trial_stim_state[timebins, channels, 2] = (trial_stim_samples % bin_samples) / bin_samples - 0.5
     except:
         # Somehow, there are some strange trials where stim is just not recorded properly e.g. only 5 pulses in 1s...?
-        print("Invalid stim attempted, skipping trial.")
+        logging.error("Invalid stim attempted, skipping trial.")
+        import pdb;pdb.set_trace() # figure out what to do with this
         # TODO delete invalid trials from key_df or mark them somehow
     return trial_stim_state
 
@@ -134,21 +137,25 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/prepr
     # Validate
     payload['path'] = []
     meta_info = context_registry.query_by_datapath(path)
-    # `meta_info.arrays` is more static, and should dictate the order arrays are savedi n
-    arrays_to_use = [a for a in meta_info.arrays if a in cfg.passive_icms.arrays]
+    # `meta_info.arrays` is more static, and should dictate the order arrays are cached in (though I expect to overwrite)
+    # TODO review whether we should save the configured subset or configure outside of cache
+    # arrays_to_use = [a for a in meta_info.arrays if a in cfg.passive_icms.arrays] # use config
+    arrays_to_use = meta_info.arrays # ignore config
 
+    def extract_arrays(full_spikes: torch.Tensor, arrays_to_use) -> Dict[ArrayID, torch.Tensor]:
+        r"""
+            The bulk of `icms_modeling` experiments ignore motor data since participant behavior was unconstrained + early recordings had noisy motor banks;
+            Edit this function to save it down.
 
-    # TODO implement extract_and_pad_arrays
-    def extract_and_pad_arrays(arrays_to_use, payload, cfg) -> Dict[ArrayID, torch.Tensor]:
-        # TODO implement
-        # * We now have to reckon with the fact that maybe we want to keep S1 + M1 together because 32 + 96 is awkward to separate
-        # * Or maybe we want units of 32
-        # * And what if other people have weird sorted shapes like 157 units or something...
-        # arrays_to_use needs to be more than just names - it also needs to specify wiring
-        # and somewhere, we need to specify what the ordering of the channels we load from our payload is, in terms of array_registry
-        # and padding needs to come from cfg
-        # returns: Arr x Time x Channel x Feats
-        pass
+            full_spikes: T C H # TODO validate shape
+        """
+        import pdb;pdb.set_trace()
+        if meta_info.subject in [CRS02b.__name__, CRS07.__name__]:
+            info = {}
+            for a in meta_info.arrays:
+                info[a] = full_spikes[:, SubjectArrayRegistry.query_by_array(a).as_indices()]
+            return info
+        raise NotImplementedError
 
     for t in payload[MetaKey.trial]:
         single_payload = {}
@@ -166,7 +173,7 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/prepr
                 single_payload[k] = trial_stim_state
                 # TODO implement in fragmented (but probably not, that's too much work...)
             elif k == DataKey.spikes:
-                single_payload[k] = extract_and_pad_arrays(payload[k][t], arrays_to_use)
+                single_payload[k] = extract_arrays(payload[k][t], arrays_to_use)
             else: # Honestly have no idea what other keys even are
                 single_payload[k] = payload[k][t]
             single_payload[k] = single_payload[k][:, :cfg.max_trial_length] # TODO alignment?

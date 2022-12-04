@@ -11,7 +11,7 @@ import pandas as pd
 from config import ExperimentalTask
 from utils import StimCommand
 
-from array_registry import subject_array_registry, SubjectArrayRegistry
+from array_registry import SubjectArrayRegistry
 r"""
     ContextInfo class is an interface for storing meta-information needed by several consumers, mainly the model, that may not be logged in data from various sources.
     ContextRegistry allows consumers to query for this information from various identifying sources.
@@ -45,11 +45,11 @@ class ContextInfo:
         **kwargs
     ):
         self.session = session
-        assert subject_array_registry.query_by_subject(subject) is not None, f"Subject {subject} not found in SubjectArrayRegistry"
+        assert SubjectArrayRegistry.query_by_subject(subject) is not None, f"Subject {subject} not found in SubjectArrayRegistry"
         self.subject = subject
         self.task = task # TODO build task registry
         if not arrays: # Default to all arrays
-            self._arrays = subject_array_registry.query_by_subject(subject).arrays.values()
+            self._arrays = SubjectArrayRegistry.query_by_subject(subject).arrays.values()
         else:
             self._arrays = arrays
 

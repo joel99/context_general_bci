@@ -5,17 +5,42 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-_PEDESTAL_OFFSET = 500, # num of recording channels per pedestal should be well under this
-
 # Another registry of sorts - holding subject + array info instead of experimental info.
 ArrayID = str
 @dataclass
 class ArrayInfo:
+    r"""
+        Contains some metadata.
+        There is no way to blacklist indices on the fly currently, e.g. if there's an issue in a particular dataset.
+        array: array of electrode indices, possibly reflects the geometry of the implanted array.
+    """
     array: np.ndarray
+
+    # Potentially geometric
+    geometric: bool = False
+    one_indexed: bool = False
+
+    def as_indices(self):
+        r"""
+            return indices where this array's data is typically stored in a broader dataset.
+        """
+        indices = self.array[self.array != np.nan].flatten() if self.geometric else self.array
+        if self.one_indexed:
+            indices = indices - 1
+        return indices
+
 
     def get_channel_count(self):
         return (self.array != np.nan).sum()
 
+@dataclass
+class PittChicagoArrayInfo(ArrayInfo):
+    geometric: bool = True
+    one_indexed: bool = True
+    pedestal_index: int = 0
+
+    def as_indices(self):
+        return super().as_indices() + self.pedestal_index * SubjectInfoPittChicago.channels_per_pedestal
 
 class SubjectInfo:
     r"""
@@ -101,6 +126,7 @@ class SubjectArrayRegistry:
 
 
 # ? Should we be referencing this instance or the class in calls? IDK
+# ? Preferring the class for now as it provides typing
 subject_array_registry = SubjectArrayRegistry()
 
 
@@ -109,6 +135,7 @@ class SubjectInfoPittChicago(SubjectInfo):
     r"""
         Human array subclass. These folks all have 4 arrays, wired to two pedestals
         ? Is it ok that I don't define `arrays`
+        For these human participants, these channels are 1-indexed
     """
     channels_per_pedestal = 128
     channels_per_stim_bank = 32
@@ -183,24 +210,32 @@ class SubjectInfoPittChicago(SubjectInfo):
 @SubjectArrayRegistry.register
 class CRS02b(SubjectInfoPittChicago):
     # Layout shared across motor channels
-    subject_id = "CRS02b"
+
+    _motor_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down)
+        [np.nan, np.nan, 42, 58, 3, 13, 27, 97, np.nan, np.nan],
+        [np.nan, 34, 44, 57, 4, 19, 29, 98, 107, np.nan],
+        [33, 36, 51, 62, 7, 10, 31, 99, 108, 117],
+        [35, 38, 53, 60, 5, 12, 18, 100, 109, 119],
+        [37, 40, 50, 59, 6, 23, 22, 101, 110, 121],
+        [39, 43, 46, 64, 9, 25, 24, 102, 111, 123],
+        [41, 47, 56, 61, 17, 21, 26, 103, 113, 125],
+        [45, 49, 55, 63, 15, 14, 28, 104, 112, 127],
+        [np.nan, 48, 54, 2, 8, 16, 30, 105, 115, np.nan],
+        [np.nan, np.nan, 52, 1, 11, 20, 32, 106, np.nan, np.nan, ]
+    ])
     motor_arrays = [
-        ArrayInfo(np.array([ # wire bundle to right, viewing from pad side (electrodes down)
-            [np.nan, np.nan, 42, 58, 3, 13, 27, 97, np.nan, np.nan],
-            [np.nan, 34, 44, 57, 4, 19, 29, 98, 107, np.nan],
-            [33, 36, 51, 62, 7, 10, 31, 99, 108, 117],
-            [35, 38, 53, 60, 5, 12, 18, 100, 109, 119],
-            [37, 40, 50, 59, 6, 23, 22, 101, 110, 121],
-            [39, 43, 46, 64, 9, 25, 24, 102, 111, 123],
-            [41, 47, 56, 61, 17, 21, 26, 103, 113, 125],
-            [45, 49, 55, 63, 15, 14, 28, 104, 112, 127],
-            [np.nan, 48, 54, 2, 8, 16, 30, 105, 115, np.nan],
-            [np.nan, np.nan, 52, 1, 11, 20, 32, 106, np.nan, np.nan, ]
-        ]))
-    ] * 2 # 2 motor pedestal layouts are the same
+        PittChicagoArrayInfo(_motor_layout),
+        PittChicagoArrayInfo(_motor_layout, pedestal_index=1)
+    ]
+
+    # NB: The last 8 even numbered channels are not wired (but typically recorded with the others to form a full 128 block)
+    # blacklist_channels = np.array([113, 115, 117, 119, 121, 123, 125, 127]) + 1
+    # blacklist_pedestals = np.zeros(8, dtype=int)
+
+
 
     sensory_arrays = [
-        ArrayInfo(np.array([ # Lateral (Anterior), wire bundle to right, viewing from pad side (electrodes down).
+        PittChicagoArrayInfo(np.array([ # Lateral (Anterior), wire bundle to right, viewing from pad side (electrodes down).
             [65,    np.nan,     72,     np.nan,     85,     91],
             [np.nan,    77, np.nan,         81, np.nan,     92],
             [67,    np.nan,     74,     np.nan,     87, np.nan],
@@ -213,7 +248,7 @@ class CRS02b(SubjectInfoPittChicago):
             [75,        70, np.nan,         86, np.nan,     95],
         ])), # - 65 + 1,
 
-        ArrayInfo(np.array([ # Medial (Posterior) wire bundle to right, viewing from pad side (electrodes down)
+        PittChicagoArrayInfo(np.array([ # Medial (Posterior) wire bundle to right, viewing from pad side (electrodes down)
             [65, np.nan, 72, np.nan, 85, 91],
             [np.nan, 77, np.nan, 81, np.nan, 92],
             [67, np.nan, 74, np.nan, 87, np.nan],
@@ -224,34 +259,32 @@ class CRS02b(SubjectInfoPittChicago):
             [np.nan, 68, np.nan, 83, np.nan, 96],
             [73, np.nan, 80, np.nan, 90, np.nan],
             [75, 70, np.nan, 86, np.nan, 95],
-        ])) #  - 65 + 33
+        ]), pedestal_index=1) #  - 65 + 33
     ]
     # NB: We don't clone sensory like motor bc there's a small diff
-
-    # The last 8 even numbered channels are not wired.
-    blacklist_channels = np.array([113, 115, 117, 119, 121, 123, 125, 127]) + 1
-    blacklist_pedestals = np.zeros(8, dtype=int)
 
 @SubjectArrayRegistry.register
 class CRS07(SubjectInfoPittChicago):
     # Layout shared across motor channels
-    subject_id = "CRS07"
-    motor_arrays = [
-        ArrayInfo(np.array([ # wire bundle to right, viewing from pad side (electrodes down)
-            [np.nan, 38, 50, 59,  6, 23,  22, 101, 111, np.nan,],
-                [33, 40, 46, 64,  9, 25,  24, 102, 113, 128],
-                [35, 43, 56, 61, 17, 21,  26, 103, 112, 114],
-                [37, 47, 55, 63, 15, 14,  28, 104, 115, 116],
-                [39, 49, 54,  2,  8, 16,  30, 105, 117, 118],
-                [41, 48, 52,  1, 11, 20,  32, 106, 119, 120],
-                [45, 42, 58,  3, 13, 27,  97, 107, 121, 122],
-                [34, 44, 57,  4, 19, 29,  99, 108, 123, 124],
-                [36, 51, 62,  7, 10, 31,  98, 109, 125, 126],
-            [np.nan, 53, 60,  5, 12, 18, 100, 110, 127, np.nan]
-        ]))
-    ] * 2
 
-    _sensory_array = ArrayInfo(np.array([ # wire bundle to right, viewing from pad side (electrodes down).
+    _motor_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down)
+        [np.nan, 38, 50, 59,  6, 23,  22, 101, 111, np.nan,],
+            [33, 40, 46, 64,  9, 25,  24, 102, 113, 128],
+            [35, 43, 56, 61, 17, 21,  26, 103, 112, 114],
+            [37, 47, 55, 63, 15, 14,  28, 104, 115, 116],
+            [39, 49, 54,  2,  8, 16,  30, 105, 117, 118],
+            [41, 48, 52,  1, 11, 20,  32, 106, 119, 120],
+            [45, 42, 58,  3, 13, 27,  97, 107, 121, 122],
+            [34, 44, 57,  4, 19, 29,  99, 108, 123, 124],
+            [36, 51, 62,  7, 10, 31,  98, 109, 125, 126],
+        [np.nan, 53, 60,  5, 12, 18, 100, 110, 127, np.nan]
+    ])
+    motor_arrays = [
+        PittChicagoArrayInfo(_motor_layout),
+        PittChicagoArrayInfo(_motor_layout, pedestal_index=1)
+    ]
+
+    _sensory_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down).
             [65, np.nan, 72, np.nan, 85, 91],
             [np.nan, 77, np.nan, 81, np.nan, 92],
             [67, np.nan, 74, np.nan, 87, np.nan,],
@@ -262,34 +295,35 @@ class CRS07(SubjectInfoPittChicago):
             [np.nan, 68, np.nan, 83, np.nan, 96],
             [73, np.nan, 80, np.nan, 90, np.nan,],
             [75, 70, np.nan, 86, np.nan, 95],
-    ]))#  - 65 + 1
+    ])#  - 65 + 1
 
     sensory_arrays = [
-        _sensory_array,
-        _sensory_array#  + 32
+        PittChicagoArrayInfo(_sensory_layout),
+        PittChicagoArrayInfo(_sensory_layout, pedestal_index=1)
     ]
 
 @SubjectArrayRegistry.register
 class BCI02(SubjectInfoPittChicago):
     # No, the floating point isn't a concern
-    subject_id = "BCI02"
+    _motor_layout = np.array([ # Lat Motor
+        [np.nan, 166., 178., 187., 134., 151., 150., 229., 239., np.nan],
+        [161., 168., 174., 192., 137., 153., 152., 230., 241., 256.],
+        [163., 171., 184., 189., 145., 149., 154., 231., 240., 242.],
+        [165., 175., 183., 191., 143., 142., 156., 232., 243., 244.],
+        [167., 177., 182., 130., 136., 144., 158., 233., 245., 246.],
+        [169., 176., 180., 129., 139., 148., 160., 234., 247., 248.],
+        [173., 170., 186., 131., 141., 155., 225., 235., 249., 250.],
+        [162., 172., 185., 132., 147., 157., 227., 236., 251., 252.],
+        [164., 179., 190., 135., 138., 159., 226., 237., 253., 254.],
+        [np.nan, 181., 188., 133., 140., 146., 228., 238., 255., np.nan]
+    ])
     motor_arrays = [
-        ArrayInfo(np.array([ # Lat Motor
-            [np.nan, 166., 178., 187., 134., 151., 150., 229., 239., np.nan],
-            [161., 168., 174., 192., 137., 153., 152., 230., 241., 256.],
-            [163., 171., 184., 189., 145., 149., 154., 231., 240., 242.],
-            [165., 175., 183., 191., 143., 142., 156., 232., 243., 244.],
-            [167., 177., 182., 130., 136., 144., 158., 233., 245., 246.],
-            [169., 176., 180., 129., 139., 148., 160., 234., 247., 248.],
-            [173., 170., 186., 131., 141., 155., 225., 235., 249., 250.],
-            [162., 172., 185., 132., 147., 157., 227., 236., 251., 252.],
-            [164., 179., 190., 135., 138., 159., 226., 237., 253., 254.],
-            [np.nan, 181., 188., 133., 140., 146., 228., 238., 255., np.nan]
-        ])) # ! I think we need to register an identical medial array?
+        PittChicagoArrayInfo(_motor_layout), # * BCI02's entire medial array is disabled
+        PittChicagoArrayInfo(_motor_layout, pedestal_index=1)
     ]
 
     sensory_arrays = [
-        ArrayInfo(np.array([ # Medial Sensory
+        PittChicagoArrayInfo(np.array([ # Medial Sensory
             [65., np.nan, 72., np.nan, 85., 91.],
             [np.nan, 77., np.nan, 81., np.nan, 92.],
             [67., np.nan, 74., np.nan, 87., np.nan],
@@ -302,7 +336,7 @@ class BCI02(SubjectInfoPittChicago):
             [75., 70., np.nan, 86., np.nan, 95.]
         ])), #  - 65 + 1, # Stim channels 1-32
 
-        ArrayInfo(np.array([ # LateralSensory
+        PittChicagoArrayInfo(np.array([ # LateralSensory
             [193.,  np.nan, 200.,  np.nan, 213., 219.],
             [ np.nan, 205.,  np.nan, 209.,  np.nan, 220.],
             [195.,  np.nan, 202.,  np.nan, 215.,  np.nan],
@@ -313,7 +347,7 @@ class BCI02(SubjectInfoPittChicago):
             [ np.nan, 196.,  np.nan, 211.,  np.nan, 224.],
             [201.,  np.nan, 208.,  np.nan, 218.,  np.nan],
             [203., 198.,  np.nan, 214.,  np.nan, 223.]
-        ]))#  - 193 + 33 # Stim channels 33-64
+        ]) - 128, pedestal_index=1)#  - 193 + 33 # Stim channels 33-64
     ]
 
     blacklist_channels = np.concatenate([
@@ -323,9 +357,14 @@ class BCI02(SubjectInfoPittChicago):
 
     blacklist_pedestals = np.zeros(128 + 32, dtype=int)
 
-
-
-
+    @property # Order flipped for BCI02
+    def arrays(self):
+        return {
+            'lateral_s1': self.sensory_arrays[1],
+            'medial_s1': self.sensory_arrays[0],
+            'lateral_m1': self.motor_arrays[1],
+            'medial_m1': self.motor_arrays[0],
+        }
 
 
 

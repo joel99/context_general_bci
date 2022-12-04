@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 import pytorch_lightning as pl
 
 from config import DatasetConfig, MetaKey, DataKey
-from array_registry import subject_array_registry
+from array_registry import SubjectArrayRegistry
 from context_registry import context_registry
 
 from tasks.passive_icms import infer_stim_parameters, icms_loader
@@ -34,7 +34,7 @@ r"""
 @dataclass
 class ContextAttrs:
     subject = Optional[List[str]]
-    array = Optional[List[str]] # should be prefixed with subject # TODO (low priority) implement either 2 or 3
+    array = Optional[List[str]] # should be prefixed with subject
     session = Optional[List[str]] # should uniquely identify
     task = Optional[List[str]] # not to be confused with
 
@@ -105,9 +105,15 @@ class SpikingDataset(Dataset):
         if MetaKey.subject in self.cfg.meta_keys:
             unique_subjects = meta_df[MetaKey.subject].unique()
             for s in unique_subjects:
-                assert subject_array_registry.query_by_subject(s) is not None, f"Subject {s} not found registered."
+                assert SubjectArrayRegistry.query_by_subject(s) is not None, f"Subject {s} not found registered."
 
     def load_single_session(self, session_path: Path | str):
+        r"""
+            Data will be pre-cached, typically in a flexible format, so we don't need to regenerate too often.
+            That is, the data and metadata will not adopt specific task configuration at time of cache, but rather try to store down all info available.
+            The exception to this is the crop length.
+            TODO we need to bind task configuration to metadata _here_
+        """
         if isinstance(session_path, str):
             session_path = Path(session_path)
         if not (hash_dir := self.preprocess_path(session_path)).exists():
@@ -117,6 +123,9 @@ class SpikingDataset(Dataset):
             meta.to_csv(hash_dir / 'meta.csv')
         else:
             meta = pd.read_csv(hash_dir / 'meta.csv')
+
+        # Filter arrays using task configuration
+        meta[MetaKey.array] = meta.apply(lambda x: [a for a in x[MetaKey.array] if a in getattr(self.cfg, x[MetaKey.task]).arrays], axis=1)
         return meta
 
     def __getitem__(self, index):
@@ -142,7 +151,7 @@ class SpikingDataset(Dataset):
             if k == DataKey.spikes and self.cfg.max_arrays:
                 data_items[k] = []
                 for alias in trial[MetaKey.array]:
-                    alias_arrays = subject_array_registry.resolve_alias(alias) # list of strs
+                    alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
                     array_group = torch.cat([payload[a] for a in alias_arrays], dim=-2) # T C' H
                     # ! Right now pad channels seems subservient to pad arrays, that doesn't seem to be necessary.
                     if self.cfg.max_channels:
