@@ -286,7 +286,6 @@ subject_array_registry = SubjectArrayRegistry([
 
 
 
-
 # ==== Defunct
 
 

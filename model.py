@@ -92,7 +92,8 @@ class BrainBertInterface(pl.LightningModule):
                 channel_count = sum(subject_array_registry.query_by_id(a).get_channel_count() for a in self.data_attrs.context.array)
                 self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
             elif self.cfg.readin_strategy == EmbedStrat.token:
-                self.array_embed = nn.Embedding(len(self.data_attrs.context.array), self.cfg.array_embed_size)
+                self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)
+                # +1 is for padding (i.e. self.array_embed[-1] = padding)
                 self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
                 # Note in general the data module will be responsible for providing array masks
 

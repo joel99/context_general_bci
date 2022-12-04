@@ -99,6 +99,7 @@ class SpikingDataset(Dataset):
     @staticmethod
     def preprocess_path(cls, cfg: DatasetConfig, session_path: Path) -> Path:
         # TODO assert some sort of versioning system for preprocessing
+        # ! Specifically for `array_length`
         return cfg.root_dir / cfg.preprocess_suffix / session_path.name
 
     def validate_meta(self, meta_df: pd.DataFrame):
@@ -123,11 +124,28 @@ class SpikingDataset(Dataset):
     def __getitem__(self, index):
         trial = self.meta_df.iloc[index]
         # * Potential optimization point to load onto GPU directly
+        meta_items = {}
+        for k in self.cfg.meta_keys:
+            if k == MetaKey.array: # doing string comparisons probably isn't the fastest thing in the world
+                array_indices = torch.full((self.cfg.max_arrays,), len(self.context_index[k]), dtype=torch.long)
+                for i, a in enumerate(trial[k]):
+                    array_indices[i] = self.context_index[k].index(a)
+                meta_items[k] = array_indices
+            else:
+                meta_items[k] = self.context_index[k].index(trial[k])
+
+        data_items = {}
         payload = torch.load(trial.path)
-        return {
-            **{k: payload[k] for k in self.cfg.data_keys},
-            **{k: self.context_index[k].index(trial[k]) for k in self.cfg.meta_keys}
-        }
+        for k in self.cfg.data_keys:
+            if self.cfg.max_arrays:
+                data_items[k] = torch.cat([
+                    payload[k],
+                    torch.zeros(self.cfg.max_arrays - payload[k].shape[0], *payload[k].shape[1:])
+                ])
+            else:
+                data_items[k] = payload[k]
+        # TODO provide a channel mask, array mask, and length mask
+        return {**data_items, **meta_items}
 
     def build_context_index(self):
         logging.info("Building context index; any previous DataAttrs may be invalidated.")

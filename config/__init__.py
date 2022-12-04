@@ -37,21 +37,9 @@ class Output(Enum):
     rates = 'rates'
 
 @dataclass
-class ExperimentalConfig:
-    r"""
-        It seems plausible we'll want to specify the arrays to use from different datasets with some granularity.
-        For example, some stim experiments really only have good sensory array data or motor array data.
-        For now, we will specify this at the level of experimental task.
-        # ! No. Array specification needs to be done at Subject x Task level. TODO how should we resolve this interaction?
-        # Right now we default to using all arrays.
-    """
-    arrays: List[str] = MISSING
-
-
-@dataclass
 class TaskConfig:
     r"""
-        The model will be trained on various tasks.
+        These are _model_ tasks, not experimental tasks.
         For more flexibility, we separate model task requirements from dataset task requirements (see 'keys' args below)
         (but this maybe should be revisited)
     """
@@ -63,9 +51,6 @@ class TaskConfig:
     mask_random_ratio: float = 0.1
 
     metrics: List[Metric] = [Metric.bps]
-
-    # Experimental Task configuration
-    passive_icms: ExperimentalConfig = ExperimentalConfig()
 
 @dataclass
 class TransformerConfig:
@@ -79,7 +64,7 @@ class TransformerConfig:
 
     # Position
     learnable_position: bool = False
-    max_trial_length: int = 1500
+    max_trial_length: int = 1500 # Ideally we can bind this to DatasetConfig.max_trial_length
 
 class EmbedStrat(Enum):
     # Embedding strategies
@@ -155,6 +140,23 @@ class MetaKey(Enum):
     unique = 'unique' # default unique identifier
 
 @dataclass
+class ExperimentalConfig:
+    r"""
+        It seems plausible we'll want to specify the arrays to use from different datasets with some granularity.
+        For example, some stim experiments really only have good sensory array data or motor array data.
+        For now, we will specify this at the level of experimental task.
+        # ! No. Array specification needs to be done at Subject x Task level. TODO how should we resolve this interaction?
+        # Right now we default to using all arrays.
+
+        I will use a compromise strategy for now
+        - Each dataset/subject only provides some arrays (which have subject-specific hashes)
+        - Configured task arrays are keys that indicate which of these arrays should be used
+        - It is assumed that subjects will not have all of these - some of these arrays belong to other subjects
+        - For now we will require all full explicit array names to be specified
+    """
+    arrays: List[str] = MISSING
+
+@dataclass
 class DatasetConfig:
     root_dir: Path = Path("./data")
     preprocess_suffix: str = 'preprocessed'
@@ -174,10 +176,16 @@ class DatasetConfig:
     # ==== Data parsing/processing ====
     bin_size_ms: int = 2
     pad_batches: bool = True # else, trim batches to the shortest trial
-    max_trial_length: int = 1500 # in bins # TODO implement
+    max_trial_length: int = 1500 # in bins
 
+    # Pad to this number of arrays (for meta and data alike)
+    # If set to 0, we will skip padding checks.
+    max_arrays: int = 0
     # TODO think about preprocessing strategies
 
+
+    # Experimental Task configuration
+    passive_icms: ExperimentalConfig = ExperimentalConfig()
 
 @dataclass
 class TrainConfig:

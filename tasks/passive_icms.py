@@ -132,6 +132,22 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/prepr
 
     # Validate
     payload['path'] = []
+    meta_info = context_registry.query_by_datapath(path)
+    # `meta_info.arrays` is more static, and should dictate the order arrays are savedi n
+    arrays_to_use = [a for a in meta_info.arrays if a in cfg.passive_icms.arrays]
+
+    # TODO implement extract_and_pad_arrays
+    def extract_and_pad_arrays(arrays_to_use, payload, cfg) -> torch.Tensor:
+        # TODO implement
+        # * We now have to reckon with the fact that maybe we want to keep S1 + M1 together because 32 + 96 is awkward to separate
+        # * Or maybe we want units of 32
+        # * And what if other people have weird sorted shapes like 157 units or something...
+        # arrays_to_use needs to be more than just names - it also needs to specify wiring
+        # and somewhere, we need to specify what the ordering of the channels we load from our payload is, in terms of array_registry
+        # and padding needs to come from cfg
+        # returns: Arr x Time x Channel x Feats
+        pass
+
     for t in payload[MetaKey.trial]:
         single_payload = {}
         for k in cfg.data_keys:
@@ -146,24 +162,19 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/prepr
                     time_bin_size_s=cfg.bin_size_ms / 1000.,
                 )
                 single_payload[k] = trial_stim_state
-            else:
+            elif k == DataKey.spikes:
+                single_payload[k] = extract_and_pad_arrays(payload[k][t], arrays_to_use)
+            else: # Honestly have no idea what other keys even are
                 single_payload[k] = payload[k][t]
-        # TODO crop length
-        # TODO bind record_channels, stim_channels to meta df (or offload to `array_locations` which can query this)
-
-        single_payload[DataKey.spikes] = subset_record_channels(single_payload[DataKey.spikes])
-        self.subset_record_channels(**self.get_array_config())
-
+            single_payload[k] = single_payload[k][:, :cfg.max_trial_length] # TODO alignment?
         import pdb;pdb.set_trace() # TODO check shape
-        for k in cfg.data_keys:
-            single_payload[k] = payload[k][t]
         payload['path'].append(cache_root / f"{t}.pth")
         torch.save(single_payload, payload['path'])
 
     for k in cfg.data_keys:
         del payload[k]
+    # TODO potentially move this meta query out of task-specific loader
     meta_df = pd.DataFrame(payload)
-    meta_info = context_registry.query_by_datapath(path)
     for k in cfg.meta_keys:
         meta_df[k] = getattr(meta_info, k)
     # TODO consider filtering meta df to be more lightweight
