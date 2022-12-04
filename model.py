@@ -5,11 +5,11 @@ import torch
 from torch import nn, optim
 import pytorch_lightning as pl
 from config import (
-    ModelConfig, Task, Metric, Output, LENGTH, EmbedStrat, DataKey, MetaKey
+    ModelConfig, ModelTask, Metric, Output, LENGTH, EmbedStrat, DataKey, MetaKey
 )
 
 from data import DataAttrs
-from array_locations import subject_to_array
+from array_registry import subject_to_array
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 from backbones import TemporalTransformer
@@ -33,6 +33,11 @@ class BrainBertInterface(pl.LightningModule):
         # (possibly should be in run script)
 
     def bind_io(self, data_attrs: DataAttrs):
+        r"""
+            Add context-specific input/output parameters.
+
+            Ideally, we will just bind embedding layers here, but there may be some MLPs.
+        """
         if self.data_attrs is not None: # IO already exists
             import pdb;pdb.set_trace() # check this named_children call
             # TODO update this to re-assign any preserved io
@@ -70,21 +75,33 @@ class BrainBertInterface(pl.LightningModule):
         else:
             self.context_project = None
 
-        if self.cfg.task.task in [Task.icms_one_step_ahead, Task.infill]:
+        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             # bookmark: multi-array readin should be done here
-            assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
-            # readin = []
-            # for subject in self.data_attrs.context.subject:
-            #     channel_count = subject_to_array[subject].channel_count
-            #     readin.append(nn.Linear(channel_count, self.cfg.hidden_size))
-            #     # for array in self.data_attrs.context.array: # TODO array subselection
-            # self.readin = nn.ModuleList(readin)
-            subject = self.data_attrs.context.subject[0]
-            channel_count = subject_to_array[subject].channel_count
-            self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
+            if self.cfg.readin_strategy == EmbedStrat.project:
+                # * Just project all channels.
+                # Doesn't (yet) support separate array projections.
+                # Doesn't (yet) support task-subject specific readin.
+                # ? I am unclear how Talukder managed to have mixed batch training if different data was shaped different sizes.
+                assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
+                # readin = []
+                # for subject in self.data_attrs.context.subject:
+                #     channel_count = subject_to_array[subject].channel_count
+                #     readin.append(nn.Linear(channel_count, self.cfg.hidden_size))
+                #     # for array in self.data_attrs.context.array: # TODO array subselection
+                # self.readin = nn.ModuleList(readin)
+                subject = self.data_attrs.context.subject[0]
+                # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
+                # * More broadly, arrays should be pulled from context, not some subject lookup.
+                # * A rework will be needed if we want to do this lookup for multiple subjects.
+                channel_count = subject_to_array[subject].get_channel_count(self.data_attrs.context.array)
+                self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
+            elif self.cfg.readin_strategy == EmbedStrat.token:
+                self.array_embed = nn.Embedding(len(self.data_attrs.context.array), self.cfg.array_embed_size)
+                self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
+                # Note in general the data module will be responsible for providing array masks
 
             # TODO add something for the stim array (similar attr)
-            if self.cfg.task.task == Task.icms_one_step_ahead:
+            if self.cfg.task.task == ModelTask.icms_one_step_ahead:
                 raise NotImplementedError
 
             decoder_layers = [
@@ -104,7 +121,7 @@ class BrainBertInterface(pl.LightningModule):
                 static_context: T' x B x H
                 temporal_context: T x B x H
         """
-        if self.cfg.task.task == Task.icms_one_step_ahead:
+        if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             spikes = batch[DataKey.spikes]
             # Remove final timestep, prepend "initial" quiet recording
             state_in = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
@@ -154,7 +171,7 @@ class BrainBertInterface(pl.LightningModule):
             # Leaving for now to see if it happens after padding refactor
             import pdb;pdb.set_trace()
 
-        if self.cfg.task.task in [Task.icms_one_step_ahead, Task.infill]:
+        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             rates = self.out(outputs)
             rates = rates.permute(1, 0, 2) # B T C
             return {
@@ -175,13 +192,13 @@ class BrainBertInterface(pl.LightningModule):
                 stim: B T C H
         """
         # TODO figure out how to wrap this ICMS code in a task abstraction
-        if self.cfg.task.task in [Task.icms_one_step_ahead, Task.infill]:
+        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             spikes = batch[DataKey.spikes]
             target = spikes[..., 0]
 
-        if self.cfg.task.task == Task.icms_one_step_ahead:
+        if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             pass
-        elif self.cfg.task.task == Task.infill:
+        elif self.cfg.task.task == ModelTask.infill:
             is_masked = torch.bernoulli(
                 torch.full((spikes.size(0), spikes.size(1)), self.cfg.task.mask_ratio, device=spikes.device)
             )
@@ -197,7 +214,7 @@ class BrainBertInterface(pl.LightningModule):
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
 
         predict = self(batch) # B T C
-        if self.cfg.task.task in [Task.icms_one_step_ahead, Task.infill]:
+        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             loss = self.loss(predict[Output.rates], target)
 
         loss_mask = torch.ones((loss.size(0), loss.size(1)), dtype=torch.bool, device=loss.device)
@@ -205,7 +222,7 @@ class BrainBertInterface(pl.LightningModule):
             lengths = batch[LENGTH]
             length_mask = torch.arange(spikes.size(1), device=spikes.device)[None, :] < lengths[:, None] # B T
             loss_mask = loss_mask & length_mask
-        if self.cfg.task.task == Task.infill:
+        if self.cfg.task.task == ModelTask.infill:
             loss_mask = loss_mask & is_masked
         loss = loss[loss_mask]
         batch_out = {'loss': loss.mean()}

@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from config import ExperimentalTask
 from utils import StimCommand
 
 r"""
@@ -18,21 +19,26 @@ r"""
 @dataclass
 class ContextInfo:
     r"""
-        Currently designed for holding static (meta) info about ICMS sessions
-        TODO refactor/subclass to be more general
+        Holds static info for a given dataset.
+
+        TODO currently built around ICMS, refactor/subclass to be more general
     """
+    # Context items - this info should be provided in all datasets.
     session: int
-    set: int
     subject: str
-    train_dir: Path
+    task: str
+    arrays: List[str]
+
     stim_banks: Tuple[int]
     stimsync_banks: Tuple[int]
-    task: str
+    set: int = 0
+    train_dir: Path = ""
 
     def __init__(self,
         session: int,
         set: int,
-        task="passive_icms",
+        task: str,
+        arrays: List[str],
         **kwargs
     ):
         self.session = session
@@ -40,7 +46,7 @@ class ContextInfo:
         self.subject
         self.task = task
 
-        if self.task == "passive_icms":
+        if self.task == ExperimentalTask.passive_icms:
             self.build_icms(**kwargs)
         # Task-specific builders are responsible for assigning this
         assert self.datapath is not None and self.subject is not None, "ContextInfo must be built with a valid datapath and subject"
@@ -48,7 +54,7 @@ class ContextInfo:
 
     @property
     def id(self):
-        if self.task == "icms":
+        if self.task == ExperimentalTask.passive_icms:
             return f"{self.subject}_{self.session}_{self.set}"
 
 

@@ -77,6 +77,7 @@ class TemporalTransformer(nn.Module):
                 src_mask
             ], 1)
         output = self.encoder(src, src_mask, src_key_padding_mask=padding_mask)
+
         if len(context) > 0:
             output = output[len(context):]
         output = self.dropout_rate(output)

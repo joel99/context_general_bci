@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 from pathlib import Path
 import pickle
 import pandas as pd

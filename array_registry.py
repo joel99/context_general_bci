@@ -17,8 +17,27 @@ class ArrayInfo:
     # By convention, stim channels 1-32 is anterior 65-96, and 33-64 is posterior 65-96.
     # Is spatially arranged to reflect true geometry of array.
     # ! Note - this info becomes desynced once we subset channels. We can probably keep it synced by making this class track state, but that's work for another day...
+
+    _arrays: Dict[str, np.ndarray] # Registry of array names. ! Should include subject name as well? For easy lookup?
+
+    @property
+    def arrays(self) -> Dict[str, np.ndarray]:
+        return self._arrays
+
+    def get_channel_count(self, arrays: str | List[str] = ""):
+        if isinstance(arrays, str) and arrays:
+            arrays = [arrays]
+        arrays = self.arrays if not arrays else [self.arrays[a] for a in arrays]
+        return sum([(a != np.nan).sum() for a in arrays])
+
+class ArrayInfoPittChicago(ArrayInfo):
+    r"""
+        Human array subclass. These folks all have 4 arrays, wired to two pedestals
+        ? Is it ok that I don't define `arrays`
+    """
     channels_per_pedestal = 128
     channels_per_stim_bank = 32
+
     motor_arrays: List[np.ndarray]
     sensory_arrays: List[np.ndarray]
     # Implicit correspondence - we assume motor_arrays[i] is in same pedestal as sensory_arrays[i]. I'm not sure if this surfaces in any code logic, though.
@@ -29,12 +48,13 @@ class ArrayInfo:
     # Note in general that blacklisting may eventually be turned into a per-session concept, not just a permanent one. Not in the near future.
 
     @property
-    def all_arrays(self):
-        return [*self.motor_arrays, *self.sensory_arrays]
-
-    @property
-    def channel_count(self):
-        return sum([(a != np.nan).sum() for a in self.all_arrays])
+    def arrays(self):
+        return {
+            'lateral_s1': self.sensory_arrays[0],
+            'medial_s1': self.sensory_arrays[1],
+            'lateral_m1': self.motor_arrays[0],
+            'medial_m1': self.motor_arrays[1],
+        }
 
     @property
     def sensory_arrays_as_stim_channels(self):
@@ -74,7 +94,7 @@ class ArrayInfo:
         else:
             return self.blacklist_channels, self.blacklist_pedestals
 
-class CRS02(ArrayInfo):
+class CRS02(ArrayInfoPittChicago):
     # Layout shared across motor channels
     motor_arrays = [
         np.array([ # wire bundle to right, viewing from pad side (electrodes down)
@@ -124,7 +144,7 @@ class CRS02(ArrayInfo):
     blacklist_channels = np.array([113, 115, 117, 119, 121, 123, 125, 127]) + 1
     blacklist_pedestals = np.zeros(8, dtype=int)
 
-class CRS07(ArrayInfo):
+class CRS07(ArrayInfoPittChicago):
     # Layout shared across motor channels
     motor_arrays = [
         np.array([ # wire bundle to right, viewing from pad side (electrodes down)
@@ -159,7 +179,7 @@ class CRS07(ArrayInfo):
         _sensory_array#  + 32
     ]
 
-class BCI02(ArrayInfo):
+class BCI02(ArrayInfoPittChicago):
     # No, the floating point isn't a concern
     motor_arrays = [
         np.array([ # Lat Motor

@@ -13,7 +13,10 @@ LENGTH = 'length'
 class Architecture(Enum):
     ndt = 'ndt'
 
-class Task(Enum):
+class ExperimentalTask(Enum):
+    passive_icms = 'passive_icms'
+
+class ModelTask(Enum):
     icms_one_step_ahead = 'icms_one_step_ahead'
     infill = 'infill'
 
@@ -34,13 +37,25 @@ class Output(Enum):
     rates = 'rates'
 
 @dataclass
+class ExperimentalConfig:
+    r"""
+        It seems plausible we'll want to specify the arrays to use from different datasets with some granularity.
+        For example, some stim experiments really only have good sensory array data or motor array data.
+        For now, we will specify this at the level of experimental task.
+        # ! No. Array specification needs to be done at Subject x Task level. TODO how should we resolve this interaction?
+        # Right now we default to using all arrays.
+    """
+    arrays: List[str] = MISSING
+
+
+@dataclass
 class TaskConfig:
     r"""
         The model will be trained on various tasks.
         For more flexibility, we separate model task requirements from dataset task requirements (see 'keys' args below)
         (but this maybe should be revisited)
     """
-    task: Task = Task.icms_one_step_ahead
+    task: ModelTask = ModelTask.icms_one_step_ahead
 
     # infill
     mask_ratio: float = 0.5
@@ -48,6 +63,9 @@ class TaskConfig:
     mask_random_ratio: float = 0.1
 
     metrics: List[Metric] = [Metric.bps]
+
+    # Experimental Task configuration
+    passive_icms: ExperimentalConfig = ExperimentalConfig()
 
 @dataclass
 class TransformerConfig:
@@ -101,8 +119,16 @@ class ModelConfig:
     task_embed_strategy: str = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
 
     # This needs a separate API from the rest, likely, tied to readin.
-    array_embed_strategy: str = EmbedStrat.none # ? subsumed by subject
+    array_embed_strategy: str = EmbedStrat.none # ? maybe subsumed by subject
+    array_embed_size: int = 256 # TODO can we bind this?
+
+    # Closely related to, but not quite, array embed strategy.
+    # Array embed strategy describes how we should provide information about array
+    # Readin strategy describes IO.
+    # Only when readin strategy is `token` does array embed get used.
     readin_strategy: str = EmbedStrat.project
+
+
 
     # Timestep level
     # "concat" becomes a valid strategy at this point
@@ -142,7 +168,7 @@ class DatasetConfig:
         `data_keys` and `meta_keys` specify the attributes of the dataset are served.
     """
     data_keys: List[DataKey] = [DataKey.spikes]
-    meta_keys: List[MetaKey] = [MetaKey.session]
+    meta_keys: List[MetaKey] = [MetaKey.session, MetaKey.array] # Array info is always needed for readin.
 
     split_key: MetaKey = MetaKey.unique
     # ==== Data parsing/processing ====

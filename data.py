@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 import pytorch_lightning as pl
 
 from config import DatasetConfig, MetaKey, DataKey
-from array_locations import subject_to_array
+from array_registry import subject_to_array
 from context_registry import context_registry
 
 from tasks.passive_icms import infer_stim_parameters, icms_loader
