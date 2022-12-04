@@ -18,7 +18,7 @@ from config import DatasetConfig, MetaKey, DataKey
 from array_registry import SubjectArrayRegistry
 from context_registry import context_registry
 
-from tasks.passive_icms import infer_stim_parameters, icms_loader
+from tasks.passive_icms import icms_loader
 
 r"""
     Stores range of contexts provided by a dataset.

@@ -102,12 +102,12 @@ def infer_stim_parameters(
     return trial_stim_state
 
 # Each loader should be responsible for loading/caching all information in paths
-def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/preprocessed/icms"):
+def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path):
     r"""
         Loader for data from `icms_modeling` project.
         Takes in a payload containing all trials, fragments according to config.
-        TODO
-        2. Preprocess as needed (e.g. trimming max length)
+
+        1. Preprocess as needed (e.g. trimming max length)
         2. Trialize storage
     """
     _CONDITION_KEY = 'raw_condition'
@@ -152,7 +152,7 @@ def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path = "./data/prepr
         import pdb;pdb.set_trace()
         if meta_info.subject in [CRS02b.__name__, CRS07.__name__]:
             info = {}
-            for a in meta_info.arrays:
+            for a in arrays_to_use:
                 info[a] = full_spikes[:, SubjectArrayRegistry.query_by_array(a).as_indices()]
             return info
         raise NotImplementedError
