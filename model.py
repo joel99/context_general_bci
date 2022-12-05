@@ -73,6 +73,12 @@ class BrainBertInterface(pl.LightningModule):
             self.subject_embed = nn.Embedding(len(self.data_attrs.context.subject), self.cfg.subject_embed_size)
             self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
 
+        # TODO array embed
+        # self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)
+        # # +1 is for padding (i.e. self.array_embed[-1] = padding)
+        # self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
+        # Note in general the data module will be responsible for providing array masks
+
         if project_size is not self.cfg.hidden_size:
             self.context_project = nn.Sequential(
                 nn.Linear(project_size, self.cfg.hidden_size),
@@ -91,21 +97,23 @@ class BrainBertInterface(pl.LightningModule):
                 assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
                 # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
                 # * A rework will be needed if we want to do this lookup grouped per subject
-                channel_count = sum(subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array)
-                self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
+                channel_count = sum(
+                    subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
+                ) * self.data_attrs.spike_dim
             elif self.cfg.readin_strategy == EmbedStrat.token: # TODO conflict of interest in the config - should readin strategy be creating these parameters?
-                self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)
-                # +1 is for padding (i.e. self.array_embed[-1] = padding)
-                self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
-                # Note in general the data module will be responsible for providing array masks
+                channel_count = self.data_attrs.max_channel_count
+            else:
+                raise NotImplementedError
+            self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
 
-            # TODO add something for the stim array (similar attr)
+            # TODO add readin for the stim array (similar attr)
             if self.cfg.task.task == ModelTask.icms_one_step_ahead:
                 raise NotImplementedError
 
             decoder_layers = [
                 nn.Linear(self.backbone.out_size, channel_count)
             ]
+
             if not self.cfg.lograte:
                 decoder_layers.append(nn.ReLU())
             self.out = nn.Sequential(*decoder_layers)
@@ -116,12 +124,11 @@ class BrainBertInterface(pl.LightningModule):
         r"""
             Format spikes and context into tokens for backbone.
             In:
-                spikes: B T A C H
+                spikes: B T A C H=1 (features provided on channel dim for principles but functionally useless)
             Returns:
                 state_in: B x T x A x H (A should be flattened in backbone)
                 static_context: List(T') [B x H]
                 temporal_context: List(?) [B x T x H]
-            TODO patch
         """
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             spikes = rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)')
@@ -130,7 +137,6 @@ class BrainBertInterface(pl.LightningModule):
             temporal_context = batch[DataKey.stim]
         else:
             assert False, "Only implemented for ICMS"
-        # TODO we need a feature dim attr (num record dim) and provide it to readin (l95)
         state_in = self.readin(state_in) # b t a h
 
         static_context = []

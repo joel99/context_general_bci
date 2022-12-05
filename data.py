@@ -47,6 +47,8 @@ class ContextAttrs:
 @dataclass
 class DataAttrs:
     bin_size_ms: int
+    spike_dim: int
+    max_channel_count: int
     context: ContextAttrs
 
 
@@ -258,6 +260,8 @@ class SpikingDataset(Dataset):
             self.build_context_index()
         return DataAttrs(
             bin_size_ms=self.cfg.bin_size_ms,
+            max_channel_count=self.cfg.max_channels,
+            spike_dim=1, # Higher dims not supported right now
             context=ContextAttrs(**self.context_index)
         )
 
