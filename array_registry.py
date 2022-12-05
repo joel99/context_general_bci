@@ -79,10 +79,9 @@ class SubjectArrayRegistry:
     _array_registry: Dict[ArrayID, ArrayInfo] = {}
     _alias_registry: Dict[ArrayID, List[str]] = {}
 
-    def __new__(cls, init_items: List[SubjectInfo]=[]):
-        if not hasattr(cls, 'instance'):
+    def __new__(cls):
+        if cls.instance is None:
             cls.instance = super().__new__(cls)
-            cls.instance.register(init_items)
         return cls.instance
 
     @staticmethod

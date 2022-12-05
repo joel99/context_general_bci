@@ -10,6 +10,7 @@ from collections import defaultdict
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import functools
 
 from config import ExperimentalTask
 from utils import StimCommand
@@ -108,7 +109,7 @@ class ContextRegistry:
     search_index = None  # allow multikey querying
 
     def __new__(cls, init_items: List[ContextInfo]=[]):
-        if not hasattr(cls, 'instance'):
+        if cls.instance is None:
             cls.instance = super().__new__(cls)
             cls.search_index = pd.DataFrame()
             cls.instance.register(init_items)
@@ -130,8 +131,9 @@ class ContextRegistry:
             self._registry[item.id] = item
 
     def query(self, **search) -> ContextInfo:
+        import pdb;pdb.set_trace()
         def search_query(df):
-            return all(df[k] == search[k] for k in search)
+            return functools.reduce(lambda a, b: a & b, [df[k] == search[k] for k in search])
         queried = self.search_index.loc[search_query]
         if len(queried) == 0:
             raise ValueError(f"No context found for {search}")
@@ -320,7 +322,6 @@ context_registry = ContextRegistry([
     ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_small'),
     ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt, alias='mc_rtt'),
 ])
-
 
 # ====
 # Archive
