@@ -86,7 +86,7 @@ class SubjectArrayRegistry:
         return cls.instance
 
     @staticmethod
-    def wrap_array(cls, subject_id, array_id):
+    def wrap_array(subject_id, array_id):
         return f"{subject_id}-{array_id}"
 
     # Pattern taken from habitat.core.registry
@@ -103,9 +103,9 @@ class SubjectArrayRegistry:
 
             cls._subject_registry[register_name] = to_register # ? Possibly should refer to singleton instance explicitly
             for array in to_register.arrays:
-                cls._array_registry[cls.wrap_array(register_name, array)] = to_register.arrays[array]
+                cls._array_registry[SubjectArrayRegistry.wrap_array(register_name, array)] = to_register.arrays[array]
             for alias in to_register.aliases:
-                cls._array_registry[cls.wrap_array(register_name, alias)] = to_register.arrays[alias]
+                cls._array_registry[SubjectArrayRegistry.wrap_array(register_name, alias)] = to_register.arrays[alias]
             return to_register
         return wrap(to_register)
 
@@ -148,27 +148,29 @@ class SubjectInfoPittChicago(SubjectInfo):
     # Note that this is not a cross-product, it's paired.
 
     # Note in general that blacklisting may eventually be turned into a per-session concept, not just a permanent one. Not in the near future.
-
+    @classmethod
     @property
-    def arrays(self):
+    def arrays(cls):
         return {
-            'lateral_s1': self.sensory_arrays[0],
-            'medial_s1': self.sensory_arrays[1],
-            'lateral_m1': self.motor_arrays[0],
-            'medial_m1': self.motor_arrays[1],
+            'lateral_s1': cls.sensory_arrays[0],
+            'medial_s1': cls.sensory_arrays[1],
+            'lateral_m1': cls.motor_arrays[0],
+            'medial_m1': cls.motor_arrays[1],
             # We use a simple aliasing system right now, but this abstraction hides the component arrays
             # Which means the data must be stored in groups, since we cannot reconstruct the aliased.
             # To do this correctly, we need to
         }
 
+    @classmethod
     @property
-    def aliases(self):
+    def aliases(cls):
         return {
             'sensory': ['lateral_s1', 'medial_s1'],
             'motor': ['lateral_m1', 'medial_m1'],
             'all': ['lateral_s1', 'medial_s1', 'lateral_m1', 'medial_m1'],
         }
 
+    @classmethod
     @property
     def sensory_arrays_as_stim_channels(self):
         # -64 because sensory arrays typically start in bank C (channel 65)
@@ -176,36 +178,39 @@ class SubjectInfoPittChicago(SubjectInfo):
     # def get_expected_channel_count(self):
         # return len(self.motor_arrays) * self.channels_per_pedestal
 
-    def get_subset_channels(self, pedestals=[], use_motor=True, use_sensory=True) -> np.ndarray:
+    @classmethod
+    def get_subset_channels(cls, pedestals=[], use_motor=True, use_sensory=True) -> np.ndarray:
         # ! Override if needed. Pedestal logic applies for Pitt participants.
         if not pedestals:
-            pedestals = range(len(self.sensory_arrays))
+            pedestals = range(len(cls.sensory_arrays))
         channels = []
         for p in pedestals:
             if use_motor:
-                channels.append(self.motor_arrays[p].flatten() + p * self.channels_per_pedestal)
+                channels.append(cls.motor_arrays[p].array.flatten() + p * cls.channels_per_pedestal)
             if use_sensory:
-                channels.append(self.sensory_arrays[p].flatten() + p * self.channels_per_pedestal)
+                channels.append(cls.sensory_arrays[p].array.flatten() + p * cls.channels_per_pedestal)
         channels = np.concatenate(channels)
         channels = channels[~np.isnan(channels)]
         return np.sort(channels)
 
-    def get_sensory_record(self, pedestals=[]):
+    @classmethod
+    def get_sensory_record(cls, pedestals=[]):
         if not pedestals:
-            pedestals = range(len(self.sensory_arrays))
+            pedestals = range(len(cls.sensory_arrays))
         sensory_indices = np.concatenate([
-            self.sensory_arrays[i].flatten() + i * self.channels_per_pedestal \
+            cls.sensory_arrays[i].flatten() + i * cls.channels_per_pedestal \
                 for i in pedestals
         ])
         sensory_indices = sensory_indices[~np.isnan(sensory_indices)]
         return np.sort(sensory_indices)
 
-    def get_blacklist_channels(self, flatten=True):
+    @classmethod
+    def get_blacklist_channels(cls, flatten=True):
         # ! Override if needed. Pedestal logic only applies for Pitt participants.
         if flatten:
-            return self.blacklist_channels + self.blacklist_pedestals * self.channels_per_pedestal
+            return cls.blacklist_channels + cls.blacklist_pedestals * cls.channels_per_pedestal
         else:
-            return self.blacklist_channels, self.blacklist_pedestals
+            return cls.blacklist_channels, cls.blacklist_pedestals
 
 @SubjectArrayRegistry.register
 class CRS02b(SubjectInfoPittChicago):

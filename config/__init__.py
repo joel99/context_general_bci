@@ -1,7 +1,7 @@
 from typing import List, Optional, Union, Any, Tuple
 from enum import Enum
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
@@ -52,7 +52,7 @@ class TaskConfig:
     mask_token_ratio: float = 0.8
     mask_random_ratio: float = 0.1
 
-    metrics: List[Metric] = [Metric.bps]
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.bps])
 
 @dataclass
 class TransformerConfig:
@@ -171,12 +171,16 @@ class DatasetConfig:
     r"""
         Specifies the source dataset files (or potentially directories)
     """
-    datasets: List[str] = []
+    datasets: List[str] = field(default_factory=lambda: [])
     r"""
         `data_keys` and `meta_keys` specify the attributes of the dataset are served.
     """
-    data_keys: List[DataKey] = [DataKey.spikes]
-    meta_keys: List[MetaKey] = [MetaKey.session, MetaKey.array] # JY recommends providing array meta info, but thinks the system should be designed to not error without.
+    data_keys: List[DataKey] = field(
+        default_factory=lambda: [DataKey.spikes]
+    )
+    meta_keys: List[MetaKey] = field(
+        default_factory=lambda: [MetaKey.session, MetaKey.array]
+    ) # JY recommends providing array meta info, but thinks the system should be designed to not error without.
 
     split_key: MetaKey = MetaKey.unique
     # ==== Data parsing/processing ====

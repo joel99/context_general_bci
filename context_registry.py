@@ -45,15 +45,19 @@ class ContextInfo:
     # Dropping subject handles is intended to be a convenience since these contexts are essentially metadata management. TODO add some safety in case we decide to start adding handles explicitly as well...
     _arrays: List[str] # arrays (without subject handles) that were active in this context. Typically all.
 
+    alias: str
+
     def __init__(self,
         subject: str,
         task: str,
         arrays: List[str] = [],
+        alias: str = "",
         **kwargs
     ):
         assert SubjectArrayRegistry.query_by_subject(subject) is not None, f"Subject {subject} not found in SubjectArrayRegistry"
         self.subject = subject
         self.task = task
+        self.alias = alias
         if not arrays: # Default to all arrays
             self._arrays = SubjectArrayRegistry.query_by_subject(subject).arrays.values()
         else:
@@ -89,7 +93,10 @@ class ContextInfo:
 
     def get_search_index(self):
         # Optional method for allowing searching the registry with these keys
-        return {}
+        return {
+            'alias': self.alias,
+            'subject': self.subject
+        }
 
 
 class ContextRegistry:
@@ -230,6 +237,7 @@ class PassiveICMSContextInfo(ContextInfo):
 
     def get_search_index(self):
         return {
+            **super().get_search_index(),
             'session': self.session,
             'set': self.set,
         }
@@ -272,21 +280,27 @@ class ReachingContextInfo(ContextInfo):
         return f"{self.session}"
 
     @classmethod
-    def build(cls, datapath_str: str, task: ExperimentalTask):
+    def build(cls, datapath_str: str, task: ExperimentalTask, alias: str=""):
         datapath = Path(datapath_str)
         subject = datapath.name.split('-')[-1].lower()
         session = int(datapath.parent.name)
         return ReachingContextInfo(
             subject=subject,
             task=task,
+            alias=alias,
             session=session,
-            datapath=datapath
+            datapath=datapath,
         )
 
     def build_task(self, session: int, datapath: Path):
         self.session = session
         self.datapath = datapath
 
+    def get_search_index(self):
+        return {
+            **super().get_search_index(),
+            'session': self.session,
+        }
 
 
 context_registry = ContextRegistry([
@@ -320,11 +334,11 @@ context_registry = ContextRegistry([
     PassiveICMSContextInfo.build(132, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_1'), # VISUAL DECODING
 
 
-    ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.maze),
-    ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.maze),
-    ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.maze),
-    ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze),
-    ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt),
+    ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze'),
+    ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_large'),
+    ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_medium'),
+    ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_small'),
+    ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt, alias='mc_rtt'),
 ])
 
 
