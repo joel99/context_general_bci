@@ -3,7 +3,7 @@
 # Ideally, this class can be used outside of this specific codebase.
 
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pickle
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
@@ -27,30 +27,28 @@ r"""
     - Subclass ContextInfo and implement the abstract methods
 """
 
-@dataclass
+@dataclass(kw_only=True)
 class ContextInfo:
     r"""
         Base (abstract) class for static info for a given dataset.
         Subclasses should specify identity and datapath
-
-        TODO currently built around ICMS, refactor/subclass to be more general
     """
     # Context items - this info should be provided in all datasets.
     subject: str # These should match what's registered in SubjectArrayRegistry
     task: str
 
-    datapath: Path # path to raws - to be provided by subclass
-
     # These should be provided as denoted in SubjectArrayRegistry WITHOUT subject specific handles.
     # Dropping subject handles is intended to be a convenience since these contexts are essentially metadata management. TODO add some safety in case we decide to start adding handles explicitly as well...
-    _arrays: List[str] # arrays (without subject handles) that were active in this context. Typically all.
+    _arrays: List[str] = field(default_factory=lambda: []) # arrays (without subject handles) that were active in this context. Defaults to all known arrays for subject
 
-    alias: str
+
+    datapath: Path | None = None # path to raws - to be provided by subclass
+    alias: str = ""
 
     def __init__(self,
         subject: str,
         task: str,
-        arrays: List[str] = [],
+        _arrays: List[str] = [],
         alias: str = "",
         **kwargs
     ):
@@ -58,18 +56,17 @@ class ContextInfo:
         self.subject = subject
         self.task = task
         self.alias = alias
-        if not arrays: # Default to all arrays
+        if not _arrays: # Default to all arrays
             self._arrays = SubjectArrayRegistry.query_by_subject(subject).arrays.values()
         else:
             assert all([
-                SubjectArrayRegistry.query_by_array(SubjectArrayRegistry.wrap_array(self.subject, a)) is not None for a in arrays
-                ]), f"Arrays {arrays} not found in SubjectArrayRegistry"
-            self._arrays = arrays
+                SubjectArrayRegistry.query_by_array(SubjectArrayRegistry.wrap_array(self.subject, a)) is not None for a in _arrays
+                ]), f"Arrays {_arrays} not found in SubjectArrayRegistry"
+            self._arrays = _arrays
 
         self.build_task(**kwargs)
         # Task-specific builders are responsible for assigning self.datapath
-        assert self.datapath is not None and self.subject is not None, "ContextInfo must be built with a valid datapath and subject"
-        assert self.datapath.exists(), f"datapath {self.datapath} does not exist"
+        assert self.datapath is not None and self.datapath.exists(), "ContextInfo must be built with a valid datapath"
 
     @property
     def arrays(self):
@@ -87,8 +84,14 @@ class ContextInfo:
     def _id(self):
         raise NotImplementedError
 
-    @classmethod @abc.abstractmethod
-    def build_task(self, **kwargs):
+    @classmethod
+    @abc.abstractmethod
+    def build_task(cls, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def build_task(cls, **kwargs):
         raise NotImplementedError
 
     def get_search_index(self):
@@ -190,16 +193,23 @@ class PassiveICMSContextInfo(ContextInfo):
         return stim_banks
 
     @classmethod
-    def build(cls, session, set, train_dir, stim_banks=None, stimsync_banks=None):
+    def build(cls,
+        session,
+        set,
+        train_dir,
+        stim_banks=None,
+        stimsync_banks=None,
+        stim_train_dir_root=Path("/home/joelye/projects/icms_modeling/data/stim_trains/"),
+    ):
         if stim_banks is None:
-            stim_banks = [cls._bank_to_array_name[sb] for sb in cls.get_stim_banks()]
+            stim_banks = [cls._bank_to_array_name[sb] for sb in cls.get_stim_banks(stim_train_dir_root / train_dir)]
         if stimsync_banks is None:
             stimsync_banks = ["medial_s1", "lateral_s1"]
             # stimsync_banks = stim_banks
         return PassiveICMSContextInfo(
             subject="CRS02b" if session > 500 else "CRS07",
             task=ExperimentalTask.passive_icms,
-            arrays=["medial_s1", "lateral_s1"],
+            _arrays=["medial_s1", "lateral_s1"],
             session=session,
             set=set,
             train_dir=train_dir,
@@ -221,7 +231,6 @@ class PassiveICMSContextInfo(ContextInfo):
     ):
         self.session = session
         self.set = set
-
         if train_dir == "":
             self.train_dir = ""
         else:
@@ -242,39 +251,10 @@ class PassiveICMSContextInfo(ContextInfo):
             'set': self.set,
         }
 
-    def get_stim_banks(self) -> Tuple[int]:
-        bank_path = self.train_dir / "banks.txt"
-        if not bank_path.exists():
-            stim_banks = self.calculate_stim_banks()
-            with open(bank_path, 'w') as f:
-                f.write(" ".join([str(b) for b in stim_banks]))
-            return stim_banks
-        with open(bank_path, 'r') as f:
-            stim_banks = tuple([int(b) for b in f.read().split()])
-        return stim_banks
-
-    def calculate_stim_banks(self) -> Tuple[int]:
-        all_channels = []
-        for stim_train_txt in self.train_dir.iterdir():
-            if 'PULSE_TRAIN_' not in str(stim_train_txt):
-                continue
-            with open(stim_train_txt, 'r') as f:
-                _, command_line, *_ = f.readlines()
-                command_channels = [int(c) for c in command_line.split()[::2]]
-                all_channels.extend(command_channels)
-        all_channels = np.unique(np.array(all_channels))
-        stim_banks = []
-        if ((all_channels >= 1) & (all_channels < 33)).any():
-            stim_banks.append(2)
-        if ((all_channels >= 33) & (all_channels < 65)).any():
-            stim_banks.append(6)
-        return tuple(stim_banks)
-
 @dataclass
 class ReachingContextInfo(ContextInfo):
     # NLB barebones
     session: int
-    datapath: Path
 
     def _id(self):
         return f"{self.session}"

@@ -105,7 +105,7 @@ class SubjectArrayRegistry:
             for array in to_register.arrays:
                 cls._array_registry[SubjectArrayRegistry.wrap_array(register_name, array)] = to_register.arrays[array]
             for alias in to_register.aliases:
-                cls._array_registry[SubjectArrayRegistry.wrap_array(register_name, alias)] = to_register.arrays[alias]
+                cls._array_registry[SubjectArrayRegistry.wrap_array(register_name, alias)] = to_register.aliases[alias]
             return to_register
         return wrap(to_register)
 
@@ -362,13 +362,14 @@ class BCI02(SubjectInfoPittChicago):
 
     blacklist_pedestals = np.zeros(128 + 32, dtype=int)
 
+    @classmethod
     @property # Order flipped for BCI02
-    def arrays(self):
+    def arrays(cls):
         return {
-            'lateral_s1': self.sensory_arrays[1],
-            'medial_s1': self.sensory_arrays[0],
-            'lateral_m1': self.motor_arrays[1],
-            'medial_m1': self.motor_arrays[0],
+            'lateral_s1': cls.sensory_arrays[1],
+            'medial_s1': cls.sensory_arrays[0],
+            'lateral_m1': cls.motor_arrays[1],
+            'medial_m1': cls.motor_arrays[0],
         }
 
 
