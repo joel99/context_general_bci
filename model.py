@@ -4,11 +4,13 @@ import numpy as np
 import torch
 from torch import nn, optim
 import pytorch_lightning as pl
+from einops import rearrange, repeat, reduce, pack, unapck # baby steps...
+
 from config import (
-    ModelConfig, ModelTask, Metric, Output, LENGTH, EmbedStrat, DataKey, MetaKey
+    ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
 )
 
-from data import DataAttrs
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
 from array_registry import subject_array_registry
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
@@ -112,57 +114,68 @@ class BrainBertInterface(pl.LightningModule):
 
     def _prepare_inputs(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         r"""
-            Format spikes and context tokens for backbone. (output T B H)
+            Format spikes and context tokens for backbone.
+            In:
+                spikes: B T A C H
             Returns:
-                state_in: T x B x H
-                static_context: T' x B x H
-                temporal_context: T x B x H
+                state_in: B x T x A x H (A should be flattened in backbone)
+                static_context: B x T' x 1 x H
+                temporal_context: B x T x 1 x H
+            TODO patch
         """
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-            spikes = batch[DataKey.spikes]
+            spikes = rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)')
             # Remove final timestep, prepend "initial" quiet recording
             state_in = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
             temporal_context = batch[DataKey.stim]
         else:
             assert False, "Only implemented for ICMS"
 
+
         static_context = []
-        project_context = []
-        if self.cfg.session_embed_strategy == EmbedStrat.token:
-            session: torch.Tensor = self.session_embed(batch[MetaKey.session])
-            session = session + self.session_flag
-            static_context.append(session.unsqueeze(0))
-        elif self.cfg.session_embed_strategy == EmbedStrat.concat:
-            session = self.session_embed(batch[MetaKey.session]) # B H
-            session = session.unsqueeze(0).repeat(state_in.shape[0], 1, 1) # T B H
-            project_context.append(session)
+        project_context = [] # only for static info
+        if self.cfg.session_embed_strategy is not EmbedStrat.none:
+            session: torch.Tensor = self.session_embed(batch[MetaKey.session]) # B x H
+            if self.cfg.session_embed_strategy == EmbedStrat.token:
+                session = session + self.session_flag
+                static_context.append(rearrange(session, 'b h -> b 1 h'))
+            elif self.cfg.session_embed_strategy == EmbedStrat.concat:
+                session = repeat(session, 'b h -> b t h', t=state_in.shape[1])
+                project_context.append(session)
 
-        if self.cfg.subject_embed_strategy == EmbedStrat.token:
-            subject: torch.Tensor = self.subject_embed(batch[MetaKey.subject])
-            subject = subject + self.subject_flag
-            static_context.append(subject.unsqueeze(0))
-        elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
-            subject = self.subject_embed(batch[MetaKey.subject])
-            subject = subject.unsqueeze(0).repeat(state_in.shape[0], 1, 1)
-            project_context.append(subject)
+        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
+            subject: torch.Tensor = self.subject_embed(batch[MetaKey.subject]) # B x H
+            if self.cfg.subject_embed_strategy == EmbedStrat.token:
+                subject = subject + self.subject_flag
+                static_context.append(rearrange(subject, 'b h -> b 1 h'))
+            elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
+                subject = repeat(subject, 'b h -> b t h', t=state_in.shape[1])
+                project_context.append(subject)
 
-        static_context = torch.cat(static_context) if static_context else None
+        # TODO array embed
+        assert self.cfg.array_embed_strategy is None, "Not implemented"
+
+        # TODO support temporal embed
+        static_context = rearrange(static_context, 'b t0 h -> b t0 1 h') if static_context else None
         if project_context: # someone wanted it
-            state_in = self.context_project(torch.cat([state_in, *project_context], 2))
+            # B T' H, and we want to merge into B T A H (specifically add T' to each token)
+            augmented_tokens, ps = pack([state_in, *project_context], 'b * h')
+            augmented_tokens = self.context_project(augmented_tokens)
+            state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
         return state_in, static_context, temporal_context
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
-        if LENGTH in batch:
-            padding_mask = torch.arange(state_in.size(0), device=state_in.device)[None, :] >= batch[LENGTH][:, None] # -> B T
+        if LENGTH_KEY in batch:
+            padding_mask = torch.arange(state_in.size(0), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
         else:
             padding_mask = None
-        outputs = self.backbone(
+        outputs: torch.Tensor = self.backbone(
             state_in,
             trial_context=trial_context,
             temporal_context=temporal_context,
             padding_mask=padding_mask
-        ) # T x B x H
+        ) # B x T x A x H # TODO satisfy shape
         if outputs.isnan().any(): # I have no idea why, but something in s61 or s62 throws a nan
             # And strangely, I can't repro by invoking forward again.
             # Leaving for now to see if it happens after padding refactor
@@ -170,7 +183,6 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             rates = self.out(outputs)
-            rates = rates.permute(1, 0, 2) # B T C
             return {
                 Output.rates: rates,
             }
@@ -185,9 +197,10 @@ class BrainBertInterface(pl.LightningModule):
             - ?: Ideally the payloads could be mroe strongly typed.
 
             Example shapes:
-                spikes: B T C H=1 (C is electrode channel)
+                spikes: B T A C H=1 (C is electrode channel)
                 stim: B T C H
         """
+        target = None
         # TODO figure out how to wrap this ICMS code in a task abstraction
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             spikes = batch[DataKey.spikes]
@@ -196,6 +209,7 @@ class BrainBertInterface(pl.LightningModule):
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             pass
         elif self.cfg.task.task == ModelTask.infill:
+            # TODO update (T x A should be masked independently)
             is_masked = torch.bernoulli(
                 torch.full((spikes.size(0), spikes.size(1)), self.cfg.task.mask_ratio, device=spikes.device)
             )
@@ -210,27 +224,34 @@ class BrainBertInterface(pl.LightningModule):
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max() + 1)
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
 
-        predict = self(batch) # B T C
+        predict = self(batch) # B T A C
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
-            loss = self.loss(predict[Output.rates], target)
+            loss: torch.Tensor = self.loss(predict[Output.rates], target)
 
-        loss_mask = torch.ones((loss.size(0), loss.size(1)), dtype=torch.bool, device=loss.device)
-        if LENGTH in batch:
-            lengths = batch[LENGTH]
-            length_mask = torch.arange(spikes.size(1), device=spikes.device)[None, :] < lengths[:, None] # B T
+        b, t, a, c = loss.size()
+        loss_mask = torch.ones(loss.size(), dtype=torch.bool, device=loss.device)
+        if LENGTH_KEY in batch: # only some of b x t are valid
+            lengths = batch[LENGTH_KEY] # b of ints < t
+            length_mask = torch.arange(t, device=spikes.device)[None, :] < lengths[:, None] # B T
             loss_mask = loss_mask & length_mask
+            import pdb;pdb.set_trace() # needs testing
+        if CHANNEL_KEY in batch: # only some of b x a x c are valid
+            channels = batch[CHANNEL_KEY] # b x a of ints < c
+            comparison = repeat(torch.arange(c, device=spikes.device), '1 a c', a=a)
+            channel_mask = comparison < rearrange(channels, 'a c -> 1 a c') # B A C
+            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
+            import pdb;pdb.set_trace() # needs testing
         if self.cfg.task.task == ModelTask.infill:
             loss_mask = loss_mask & is_masked
         loss = loss[loss_mask]
         batch_out = {'loss': loss.mean()}
         if Metric.bps in self.cfg.task.metrics:
-            batch_out[Metric.bps] = self.bps(predict[Output.rates], target, length_mask=length_mask)
+            batch_out[Metric.bps] = self.bps(predict[Output.rates], target, length_mask=length_mask, channel_mask=channel_mask)
         return batch_out
 
     @torch.inference_mode()
     def predict(self, x: torch.Tensor):
         return self(x)
-
 
     # =================== Interface IO ===================
     def load_from_checkpoint(self, checkpoint_path: Path | str, data_attrs: DataAttrs, **kwargs):
@@ -268,40 +289,51 @@ class BrainBertInterface(pl.LightningModule):
 
     def bps(
         self, rates: torch.Tensor, spikes: torch.Tensor, is_lograte=True, mean=True, raw=False,
-        length_mask: Optional[torch.Tensor]=None,
+        length_mask: Optional[torch.Tensor]=None, channel_mask: Optional[torch.Tensor]=None
     ) -> torch.Tensor:
-        r""" # tensors B T C
+        r""" # tensors B T A C
             Bits per spike, averaged over channels/trials, summed over time.
             Convert extremely uninterpretable NLL into a slightly more interpretable BPS. (0 == constant prediction for BPS)
             For evaluation.
-            length_mask: multisession, B T
+            length_mask: B T
+            channel_mask: B A C
         """
         # convenience logic for allowing direct passing of record with additional features
         if is_lograte:
             logrates = rates
         else:
             logrates = (rates + 1e-8).log()
-        if spikes.ndim == 4 and logrates.ndim == 3:
+        if spikes.ndim == 5 and logrates.ndim == 4:
             spikes = spikes[..., 0]
         assert spikes.shape == logrates.shape
         nll_model: torch.Tensor = self.loss(logrates, spikes)
-        nll_model[~length_mask] = 0.
-        nll_model = nll_model.sum(1)
-        # import pdb;pdb.set_trace()
+        spikes = spikes.float()
         if length_mask is not None:
-            # take sum and divide by length_mask
-            spikes = spikes.clone() # due to in place op
+            nll_model[~length_mask] = 0.
             spikes[~length_mask] = 0
-            mean_rates = (spikes.float().sum(1) / length_mask.float().sum(1, keepdim=True)).unsqueeze(1) # B C / B
+        if channel_mask is not None:
+            nll_model[~channel_mask.unsqueeze(1)] = 0.
+            spikes[~channel_mask.unsqueeze(1)] = 0
+
+        nll_model = reduce(nll_model, 'b t a c -> b a c', 'sum')
+
+        if length_mask:
+            mean_rates = (spikes.sum(1) / length_mask.float().sum(1, keepdim=True)).unsqueeze(1) # B A C / B -> B T A C
         else:
-            mean_rates = spikes.float().mean(1, keepdim=True)
+            mean_rates = spikes.mean(1, keepdim=True)
         mean_rates = (mean_rates + 1e-8).log()
-        nll_null: torch.Tensor = self.loss(mean_rates, spikes)
+        nll_null: torch.Tensor = self.loss(mean_rates, spikes) # B T A C
+
         if length_mask is not None:
             nll_null[~length_mask] = 0.
-        nll_null = nll_null.sum(1) # 1 1 C -> B C
-        # Note, nanmean used to automatically exclude zero firing trials
+        if channel_mask is not None:
+            nll_null[~channel_mask.unsqueeze(1)] = 0.
+
+        nll_null = nll_null.sum(1) # B A C
+        # Note, nanmean used to automatically exclude zero firing trials. Invalid items should be reported as nan.s here
+        # TODO confirm
         bps_raw: torch.Tensor = ((nll_null - nll_model) / spikes.sum(1) / np.log(2))
+        import pdb;pdb.set_trace()
         if raw:
             return bps_raw
         bps = bps_raw[spikes.sum(1) != 0].detach()

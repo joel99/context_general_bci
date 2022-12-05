@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
 import pytorch_lightning as pl
 
 from config import DatasetConfig, MetaKey, DataKey
@@ -32,6 +33,10 @@ r"""
     These contexts are not independent. In fact, they're almost hierarchical.
     Subject -> Array -> Session, Task -> session.
 """
+
+# Padding tokens
+LENGTH_KEY = 'length'
+CHANNEL_KEY = 'channel_counts'
 @dataclass
 class ContextAttrs:
     subject = Optional[List[str]]
@@ -153,6 +158,12 @@ class SpikingDataset(Dataset):
         return meta
 
     def __getitem__(self, index):
+        r"""
+            dict of arrays
+
+            spikes: torch.Tensor, Batch x Time x Array x Channel x H
+            * we give array dim (as opposed to flattening into channel to make array embeddings possible
+        """
         trial = self.meta_df.iloc[index]
         # * Potential optimization point to load onto GPU directly
         meta_items = {}
@@ -163,7 +174,7 @@ class SpikingDataset(Dataset):
                     array_indices[i] = self.context_index[k].index(a)
                 meta_items[k] = array_indices
             else:
-                meta_items[k] = self.context_index[k].index(trial[k])
+                meta_items[k] = torch.tensor(self.context_index[k].index(trial[k])) # Casting in collater might be faster?
 
         r"""
             Currently we store spikes in a split-array format as a dict of tensors T C H.
@@ -171,6 +182,9 @@ class SpikingDataset(Dataset):
         """
         data_items = {}
         payload = torch.load(trial.path)
+
+        channel_counts = []
+
         for k in self.cfg.data_keys:
             if k == DataKey.spikes and self.cfg.max_arrays:
                 data_items[k] = []
@@ -179,19 +193,47 @@ class SpikingDataset(Dataset):
                     array_group = torch.cat([payload[a] for a in alias_arrays], dim=-2) # T C' H
                     # ! Right now pad channels seems subservient to pad arrays, that doesn't seem to be necessary.
                     if self.cfg.max_channels:
+                        channel_counts.append(array_group.shape[-2])
                         array_group = torch.cat([
                             array_group, torch.zeros((
                                 array_group.shape[0], self.cfg.max_channels - array_group.shape[1], array_group.shape[2]
                             ), dtype=array_group.dtype)
-                        ], 1)
-                data_items[k] = torch.stack([
-                    data_items[k],
-                    torch.zeros(self.cfg.max_arrays - len(data_items[k]), *data_items[k][0].shape[1:])
-                ], 0)
+                        ], 1) # T C H
+                    data_items[k].append(array_group.unsqueeze(1))
+                data_items[k] = torch.cat([
+                    *data_items[k],
+                    torch.zeros(
+                        data_items[k][0].shape[0],
+                        self.cfg.max_arrays - len(data_items[k]),
+                        *data_items[k][0].shape[2:],
+                        dtype=data_items[k][0].dtype
+                    )
+                ], 1) # T A C H
+                channel_counts.extend([0] * self.cfg.max_arrays - len(data_items[k]))
             else:
                 data_items[k] = payload[k]
-        # TODO provide a channel mask, array mask, and length mask
-        return {**data_items, **meta_items}
+        return {
+            **data_items,
+            **meta_items,
+            CHANNEL_KEY: torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
+        }
+
+    def collater_factory(self):
+        if not self.cfg.pad_batches:
+            raise NotImplementedError("Need to implement trimming")
+        def collater(batch):
+            r"""
+                batch: list of dicts
+            """
+            stack_batch = {}
+            for k in batch[0].keys():
+                if k == DataKey.spikes:
+                    stack_batch[LENGTH_KEY] = torch.tensor([b[k].shape[1] for b in batch])
+                    stack_batch[k] = torch.stack(pad_sequence([b[k] for b in batch], batch_first=True))
+                else:
+                    stack_batch[k] = torch.stack([b[k] for b in batch], 0)
+            return stack_batch
+        return collater
 
     def build_context_index(self):
         logging.info("Building context index; any previous DataAttrs may be invalidated.")
@@ -275,4 +317,3 @@ class SpikingDataset(Dataset):
         self.meta_df = self.meta_df.reset_index(drop=True)
         self.build_context_index()
         # TODO think about resetting data attrs - this should be called before any data attr call
-
