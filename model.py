@@ -93,7 +93,7 @@ class BrainBertInterface(pl.LightningModule):
                 # * A rework will be needed if we want to do this lookup grouped per subject
                 channel_count = sum(subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array)
                 self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
-            elif self.cfg.readin_strategy == EmbedStrat.token:
+            elif self.cfg.readin_strategy == EmbedStrat.token: # TODO conflict of interest in the config - should readin strategy be creating these parameters?
                 self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)
                 # +1 is for padding (i.e. self.array_embed[-1] = padding)
                 self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
@@ -114,13 +114,13 @@ class BrainBertInterface(pl.LightningModule):
 
     def _prepare_inputs(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         r"""
-            Format spikes and context tokens for backbone.
+            Format spikes and context into tokens for backbone.
             In:
                 spikes: B T A C H
             Returns:
                 state_in: B x T x A x H (A should be flattened in backbone)
-                static_context: B x T' x 1 x H
-                temporal_context: B x T x 1 x H
+                static_context: List(T') [B x H]
+                temporal_context: List(?) [B x T x H]
             TODO patch
         """
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
@@ -130,7 +130,8 @@ class BrainBertInterface(pl.LightningModule):
             temporal_context = batch[DataKey.stim]
         else:
             assert False, "Only implemented for ICMS"
-
+        # TODO we need a feature dim attr (num record dim) and provide it to readin (l95)
+        state_in = self.readin(state_in) # b t a h
 
         static_context = []
         project_context = [] # only for static info
@@ -155,8 +156,9 @@ class BrainBertInterface(pl.LightningModule):
         # TODO array embed
         assert self.cfg.array_embed_strategy is None, "Not implemented"
 
-        # TODO support temporal embed
-        static_context = rearrange(static_context, 'b t0 h -> b t0 1 h') if static_context else None
+        # TODO support temporal embed + temporal project
+        # Do not concat static context - list default is easier to deal with
+        # static_context = rearrange(static_context, 't0 b h -> b t0 h') if static_context else None
         if project_context: # someone wanted it
             # B T' H, and we want to merge into B T A H (specifically add T' to each token)
             augmented_tokens, ps = pack([state_in, *project_context], 'b * h')
@@ -167,14 +169,21 @@ class BrainBertInterface(pl.LightningModule):
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
-            padding_mask = torch.arange(state_in.size(0), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
+            temporal_padding_mask = torch.arange(state_in.size(0), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
         else:
-            padding_mask = None
+            temporal_padding_mask = None
+
+        # Note that fine-grained channel mask doesn't matter (sub-token padding)
+        # But we do want to mask out fully-padded arrays (for highly heterogenuous batches)
+        if CHANNEL_KEY in batch:
+            array_padding_mask = batch[CHANNEL_KEY] == 0  # b x a of ints < c
+
         outputs: torch.Tensor = self.backbone(
             state_in,
             trial_context=trial_context,
             temporal_context=temporal_context,
-            padding_mask=padding_mask
+            temporal_padding_mask=temporal_padding_mask,
+            array_padding_mask=array_padding_mask
         ) # B x T x A x H # TODO satisfy shape
         if outputs.isnan().any(): # I have no idea why, but something in s61 or s62 throws a nan
             # And strangely, I can't repro by invoking forward again.
