@@ -48,7 +48,7 @@ class ContextInfo:
     def __init__(self,
         subject: str,
         task: str,
-        arrays: List[str],
+        arrays: List[str] = [],
         **kwargs
     ):
         assert SubjectArrayRegistry.query_by_subject(subject) is not None, f"Subject {subject} not found in SubjectArrayRegistry"
@@ -262,6 +262,30 @@ class PassiveICMSContextInfo(ContextInfo):
             stim_banks.append(6)
         return tuple(stim_banks)
 
+@dataclass
+class ReachingContextInfo(ContextInfo):
+    # NLB barebones
+    session: int
+    datapath: Path
+
+    def _id(self):
+        return f"{self.session}"
+
+    @classmethod
+    def build(cls, datapath_str: str, task: ExperimentalTask):
+        datapath = Path(datapath_str)
+        subject = datapath.name.split('-')[-1].lower()
+        session = int(datapath.parent.name)
+        return ReachingContextInfo(
+            subject=subject,
+            task=task,
+            session=session,
+            datapath=datapath
+        )
+
+    def build_task(self, session: int, datapath: Path):
+        self.session = session
+        self.datapath = datapath
 
 
 
@@ -294,6 +318,13 @@ context_registry = ContextRegistry([
     PassiveICMSContextInfo.build(131, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_0'),
     PassiveICMSContextInfo.build(131, 4, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_5'), # VISUAL DECODING
     PassiveICMSContextInfo.build(132, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_1'), # VISUAL DECODING
+
+
+    ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.maze),
+    ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.maze),
+    ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.maze),
+    ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze),
+    ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt),
 ])
 
 

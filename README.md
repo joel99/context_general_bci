@@ -8,3 +8,7 @@ This is a BERT era effort to get large base models on which various BCI tasks wi
 
 
 - For example, to get online decoding; we would need a fine-tuned decoder interface that could run causally.
+
+
+## Admin
+- note that we installed NLB tools via pip and that this constrained our pandas to be <1.34 (whereas it was originally ~1.5). A bit annoying - we should go back and re-add NLB tools dependency at some point.
