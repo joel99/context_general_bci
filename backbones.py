@@ -38,7 +38,7 @@ class TemporalTransformer(nn.Module):
             nn.TransformerEncoderLayer(
                 self.cfg.n_state,
                 self.cfg.n_heads,
-                dim_feedforward=self.cfg.n_state * self.cfg.feedforward_factor,
+                dim_feedforward=int(self.cfg.n_state * self.cfg.feedforward_factor),
                 dropout=self.cfg.dropout,
                 batch_first=False, # we use this to stick to pytorch defaults. Who knows if it's more efficient internally? But closer to docs.
             ),

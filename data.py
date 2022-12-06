@@ -180,12 +180,14 @@ class SpikingDataset(Dataset):
         # * Potential optimization point to load onto GPU directly
         meta_items = {}
         for k in self.cfg.meta_keys:
+            if k == MetaKey.unique:
+                continue # don't serve
             if k == MetaKey.array: # doing string comparisons probably isn't the fastest thing in the world
                 meta_items[k] = torch.tensor([
                     self.context_index[k.name].index(trial[f'array_{i}']) for i in range(self.cfg.max_arrays)
                 ])
             else:
-                meta_items[k] = torch.tensor(self.context_index[k.name].index(trial[k.name])) # Casting in collater might be faster?
+                meta_items[k] = torch.tensor(self.context_index[k.name].index(trial[k])) # Casting in collater might be faster?
 
         r"""
             Currently we store spikes in a split-array format as a dict of tensors T C H.
@@ -193,7 +195,6 @@ class SpikingDataset(Dataset):
         """
         data_items = {}
         payload = torch.load(trial.path)
-
         channel_counts = []
 
         for k in self.cfg.data_keys:
@@ -204,7 +205,7 @@ class SpikingDataset(Dataset):
                     alias = trial[f'array_{i}']
                     alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
                     # ! Right now pad channels seems subservient to pad arrays, that doesn't seem to be necessary.
-                    array_group = torch.cat([payload[a] for a in alias_arrays], dim=-2) # T C' H
+                    array_group = torch.cat([payload[k][a] for a in alias_arrays], dim=-2) # T C' H
                     if self.cfg.max_channels:
                         channel_counts.append(array_group.shape[-2])
                         array_group = torch.cat([
@@ -222,7 +223,7 @@ class SpikingDataset(Dataset):
                         dtype=array_spikes[0].dtype
                     )
                 ], 1) # T A C H
-                channel_counts.extend([0] * self.cfg.max_arrays - len(array_spikes))
+                channel_counts.extend([0] * (self.cfg.max_arrays - len(array_spikes)))
             else:
                 data_items[k] = payload[k]
         return {
@@ -243,9 +244,9 @@ class SpikingDataset(Dataset):
             """
             stack_batch = {}
             for k in batch[0].keys():
-                if k == DataKey.spikes:
-                    stack_batch[LENGTH_KEY] = torch.tensor([b[k].shape[1] for b in batch])
-                    stack_batch[k] = torch.stack(pad_sequence([b[k] for b in batch], batch_first=True))
+                if k == DataKey.spikes: # T A C H
+                    stack_batch[LENGTH_KEY] = torch.tensor([b[k].shape[0] for b in batch])
+                    stack_batch[k] = pad_sequence([b[k] for b in batch], batch_first=True)
                 else:
                     stack_batch[k] = torch.stack([b[k] for b in batch], 0)
             return stack_batch

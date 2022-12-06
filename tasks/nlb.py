@@ -12,7 +12,6 @@ from nlb_tools.make_tensors import make_train_input_tensors
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
-from tasks.task_registry import ExperimentalTaskLoader, ExperimentalTaskRegistry
 TrialNum = int
 MetadataKey = str
 
@@ -61,9 +60,13 @@ class NLBLoader(ExperimentalTaskLoader):
         train_spikes_heldin = torch.tensor(train_spikes_heldin)
         meta_payload = {}
         meta_payload['path'] = []
+
         for trial in range(train_spikes_heldin.shape[0]):
             single_payload = {
-                DataKey.spikes: rearrange(train_spikes_heldin[trial], 't c -> t c 1'),
+                DataKey.spikes: {
+                    # TODO split into PMd and M1
+                    subject.wrap_array(list(subject.arrays.keys())[0]): rearrange(train_spikes_heldin[trial], 't c -> t c 1')
+                },
             }
             single_path = cache_root / f"{trial}.pth"
             meta_payload['path'].append(single_path)

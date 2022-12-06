@@ -27,9 +27,7 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg = cfg
         self.save_hyperparameters(cfg)
 
-        self.backbone = TemporalTransformer(
-            self.cfg.hidden_size, self.cfg.transformer
-        )
+        self.backbone = TemporalTransformer(self.cfg.transformer)
         self.data_attrs = None
         self.bind_io(data_attrs)
 
@@ -59,9 +57,12 @@ class BrainBertInterface(pl.LightningModule):
                     continue
                 del m
         self.data_attrs = data_attrs
-        assert len(self.data_attrs.context.task) == 1, "Only implemented for single task"
-        assert self.cfg.array_embed_strategy == ""
-        assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
+
+        # Guardrails (to remove)
+        assert len(self.data_attrs.context.task) <= 1, "Only tested for single task"
+        assert self.cfg.array_embed_strategy == EmbedStrat.none, "Array embed strategy not yet implemented"
+        assert len(data_attrs.context.subject) <= 1, "Only tested for single subject"
+
 
         project_size = self.cfg.hidden_size
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
@@ -106,7 +107,7 @@ class BrainBertInterface(pl.LightningModule):
                 # Doesn't (yet) support separate array projections.
                 # Doesn't (yet) support task-subject specific readin.
                 # ? I am unclear how Talukder managed to have mixed batch training if different data was shaped different sizes.
-                assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
+                assert len(data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
                 # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
                 # * A rework will be needed if we want to do this lookup grouped per subject
                 channel_count = sum(
@@ -142,13 +143,14 @@ class BrainBertInterface(pl.LightningModule):
                 static_context: List(T') [B x H]
                 temporal_context: List(?) [B x T x H]
         """
+        spikes = rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)')
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-            spikes = rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)')
             # Remove final timestep, prepend "initial" quiet recording
             state_in = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
             temporal_context = batch[DataKey.stim]
         else:
-            assert False, "Only implemented for ICMS"
+            state_in = spikes
+            temporal_context = []
         state_in = self.readin(state_in) # b t a h
 
         static_context = []
@@ -231,14 +233,12 @@ class BrainBertInterface(pl.LightningModule):
         # TODO figure out how to wrap this ICMS code in a task abstraction
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             spikes = batch[DataKey.spikes]
-            target = spikes[..., 0]
 
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-            pass
+            target = spikes[..., 0]
         elif self.cfg.task.task == ModelTask.infill:
-            # TODO update (T x A should be masked independently)
             is_masked = torch.bernoulli(
-                torch.full((spikes.size(0), spikes.size(1)), self.cfg.task.mask_ratio, device=spikes.device)
+                torch.full(spikes.size()[:2], self.cfg.task.mask_ratio, device=spikes.device)
             )
             mask_token = torch.bernoulli(torch.full_like(is_masked, self.cfg.task.mask_token_ratio))
             mask_random = torch.bernoulli(torch.full_like(is_masked, self.cfg.task.mask_random_ratio))
@@ -248,8 +248,9 @@ class BrainBertInterface(pl.LightningModule):
                 mask_random.bool() & is_masked,
             )
             spikes = spikes.clone()
-            spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max() + 1)
+            spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
+            target = spikes[..., 0]
 
         predict = self(batch) # B T A C
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:

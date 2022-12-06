@@ -86,8 +86,8 @@ def run_exp(cfg : RootConfig) -> None:
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
 
     # === Train ===
-    # num_workers = 1
-    num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
+    num_workers = 0
+    # num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
     logging.info("Preparing to fit...")
     trainer.fit(
         model,
@@ -95,13 +95,13 @@ def run_exp(cfg : RootConfig) -> None:
             train, shuffle=True,
             batch_size=cfg.train.batch_size,
             num_workers=num_workers,
-            persistent_workers=True,
+            persistent_workers=num_workers > 0,
             collate_fn=train.collater_factory()
         ),
         DataLoader(val,
             batch_size=cfg.train.batch_size,
             num_workers=num_workers,
-            persistent_workers=True,
+            persistent_workers=num_workers > 0,
             collate_fn=val.collater_factory()
         ),
         ckpt_path=get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None

@@ -94,28 +94,28 @@ class ModelConfig:
     # "" - ignore context
 
     # Trial level
-    session_embed_strategy: str = EmbedStrat.token
+    session_embed_strategy: EmbedStrat = EmbedStrat.token
     session_embed_size: int = 256 # TODO can we bind this?
-    subject_embed_strategy: str = EmbedStrat.none # TODO update this once we consider mixed batches
+    subject_embed_strategy: EmbedStrat = EmbedStrat.none # TODO update this once we consider mixed batches
     subject_embed_size: int = 256 # TODO can we bind this?
-    task_embed_strategy: str = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
+    task_embed_strategy: EmbedStrat = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
 
     # This needs a separate API from the rest, likely, tied to readin.
-    array_embed_strategy: str = EmbedStrat.none # ? maybe subsumed by subject
+    array_embed_strategy: EmbedStrat = EmbedStrat.none # ? maybe subsumed by subject
     array_embed_size: int = 256 # TODO can we bind this?
 
     # Closely related to, but not quite, array embed strategy.
     # Array embed strategy describes how we should provide information about array
     # Readin strategy describes IO.
     # Only when readin strategy is `token` does array embed get used.
-    readin_strategy: str = EmbedStrat.project
+    readin_strategy: EmbedStrat = EmbedStrat.project
 
 
 
     # Timestep level
     # "concat" becomes a valid strategy at this point
-    stim_embed_strategy: str = EmbedStrat.token
-    heldout_neuron_embed_strategy: str = EmbedStrat.token # Not even sure if there's a different way here.
+    stim_embed_strategy: EmbedStrat = EmbedStrat.token
+    heldout_neuron_embed_strategy: EmbedStrat = EmbedStrat.token # Not even sure if there's a different way here.
     # There should maybe be a section for augmentation/ablation, but that is low pri.
 
 class DataKey(Enum):
