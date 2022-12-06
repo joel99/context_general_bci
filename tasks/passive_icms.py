@@ -10,7 +10,7 @@ import logging
 from config import DataKey, MetaKey, DatasetConfig
 from context_registry import context_registry
 from subjects import ArrayID, SubjectName, SubjectArrayRegistry
-from tasks.task_registry import ExperimentalTaskLoader
+from tasks.task_registry import ExperimentalTaskLoader, ExperimentalTaskRegistry
 
 TrialNum = int
 MetadataKey = str
@@ -103,7 +103,10 @@ def infer_stim_parameters(
     return trial_stim_state
 
 # Each loader should be responsible for loading/caching all information in paths
+@ExperimentalTaskRegistry.register
 class ICMSLoader(ExperimentalTaskLoader):
+    name = 'passive_icms'
+
     def load(path: Path, cfg: DatasetConfig, cache_root: Path):
         r"""
             Loader for data from `icms_modeling` project.

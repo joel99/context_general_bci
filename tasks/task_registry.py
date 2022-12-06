@@ -9,6 +9,7 @@ r"""
     # TODO make into an actual registry
 """
 class ExperimentalTaskLoader:
+    name: str
     @classmethod
     def load(cls, path: Path, cfg: DatasetConfig, cache_root: Path) -> pd.DataFrame:
         r"""
@@ -20,3 +21,24 @@ class ExperimentalTaskLoader:
             Each loader should be responsible for loading/caching all information in paths
         """
         raise NotImplementedError
+
+
+class ExperimentalTaskRegistry:
+    _instance = None
+    _loaders: Dict[str, ExperimentalTaskLoader] = {}
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    @classmethod
+    def register(cls, to_register: ExperimentalTaskLoader):
+        def wrap(to_register: ExperimentalTaskLoader):
+            cls._loaders[to_register.name] = to_register
+            return to_register
+        return wrap(to_register)
+
+    @classmethod
+    def get_loader(cls, name: str) -> ExperimentalTaskLoader:
+        return cls._loaders[name]

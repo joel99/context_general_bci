@@ -13,11 +13,6 @@ LENGTH = 'length'
 class Architecture(Enum):
     ndt = 'ndt'
 
-class ExperimentalTask(Enum):
-    passive_icms = 'passive_icms'
-    maze = 'maze'
-    rtt = 'random_target_task'
-
 class ModelTask(Enum):
     icms_one_step_ahead = 'icms_one_step_ahead'
     infill = 'infill'

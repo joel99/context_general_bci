@@ -12,10 +12,10 @@ import numpy as np
 import pandas as pd
 import functools
 
-from config import ExperimentalTask
 from utils import StimCommand
 
 from subjects import SubjectArrayRegistry, SubjectName
+from tasks import ExperimentalTaskRegistry, ExperimentalTask
 r"""
     ContextInfo class is an interface for storing meta-information needed by several consumers, mainly the model, that may not be logged in data from various sources.
     ContextRegistry allows consumers to query for this information from various identifying sources.
@@ -102,6 +102,8 @@ class ContextInfo:
             'subject': self.subject
         }
 
+    def get_loader(self):
+        return ExperimentalTaskRegistry.get_loader(self.task)
 
 class ContextRegistry:
     instance = None
@@ -130,12 +132,12 @@ class ContextRegistry:
         for item in context_info:
             self._registry[item.id] = item
 
-    def query(self, **search) -> ContextInfo:
+    def query(self, **search) -> ContextInfo | None:
         def search_query(df):
             return functools.reduce(lambda a, b: a & b, [df[k] == search[k] for k in search])
         queried = self.search_index.loc[search_query]
         if len(queried) == 0:
-            raise ValueError(f"No context found for {search}")
+            return None
         elif len(queried) > 1:
             raise ValueError(f"Multiple contexts found for {search}")
         return self._registry[queried['id'].values[0]]

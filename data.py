@@ -127,19 +127,30 @@ class SpikingDataset(Dataset):
         return self.preproc_version() != cached_preproc_version
 
 
-    def load_single_session(self, session_path: Path | str):
+    def load_single_session(self, session_path_or_alias: Path | str):
         r"""
             Data will be pre-cached, typically in a flexible format, so we don't need to regenerate too often.
             That is, the data and metadata will not adopt specific task configuration at time of cache, but rather try to store down all info available.
             The exception to this is the crop length.
-            TODO we need to bind task configuration to metadata _here_
         """
-        if isinstance(session_path, str):
-            session_path = Path(session_path)
-        hash_dir = self.preprocess_path(self.cfg, session_path)
+
+        if isinstance(session_path_or_alias, str):
+            # Try alias
+            context_meta = context_registry.query(alias=session_path_or_alias)
+            if context_meta is None:
+                session_path = Path(session_path_or_alias)
+                context_meta = context_registry.query_by_datapath(session_path)
+            else:
+                session_path = context_meta.datapath
+        else:
+            session_path = session_path_or_alias
+            context_meta = context_registry.query_by_datapath(session_path)
+
+        assert session_path.exists(), f"Session path {session_path_or_alias} not found"
+
         if not (hash_dir := self.preprocess_path(session_path)).exists() or \
             self.checksum_diff(hash_dir / 'preprocess_version.json'):
-            loader = get_loader(session_path)
+            loader = context_meta.get_loader()
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
             meta = loader.load(session_path, self.cfg, hash_dir)
             meta.to_csv(hash_dir / 'meta.csv')
@@ -147,9 +158,10 @@ class SpikingDataset(Dataset):
                 json.dump(self.preproc_version(), f)
         else:
             meta = pd.read_csv(hash_dir / 'meta.csv')
-        context_meta = context_registry.query_by_datapath(session_path)
+
         for k in self.cfg.meta_keys:
             meta[k] = getattr(context_meta, k)
+
         self.validate_meta(meta)
 
         # Filter arrays using task configuration
