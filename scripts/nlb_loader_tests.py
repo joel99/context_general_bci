@@ -9,7 +9,7 @@ import h5py
 
 import logging
 
-from context_registry import context_registry
+from contexts import context_registry
 
 dataset_name = 'mc_maze_large' # 122 sorted units
 dataset_name = 'mc_maze_medium' # 114 sorted units

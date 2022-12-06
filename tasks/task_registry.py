@@ -1,17 +1,23 @@
-from typing import Dict, Any, List
+from typing import Dict, List
 from pathlib import Path
 import pandas as pd
 
 from config import DatasetConfig
-
+from subjects import SubjectInfo
 r"""
     Super light wrapper to define task/loader interface.
-    # TODO make into an actual registry
 """
 class ExperimentalTaskLoader:
     name: str
     @classmethod
-    def load(cls, path: Path, cfg: DatasetConfig, cache_root: Path) -> pd.DataFrame:
+    def load(cls,
+        dataset_path: Path,
+        cfg: DatasetConfig,
+        cache_root: Path,
+        subject: SubjectInfo,
+        arrays: List[str],
+        dataset_alias: str,
+    ) -> pd.DataFrame:
         r"""
             Load data from `path` into a dataframe.
             `cfg` contains information about how to load the data.

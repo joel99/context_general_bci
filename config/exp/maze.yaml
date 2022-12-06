@@ -1,6 +1,7 @@
-tag: test
+tag: maze_test
 
 dataset:
+  bin_size_ms: 5
   datasets:
   - mc_maze_small
   data_keys:

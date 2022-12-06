@@ -1,32 +1,15 @@
-# Information about the real world.
-# Includes experimental notes, in lieu of readme
-# Ideally, this class can be used outside of this specific codebase.
-
 import abc
 from dataclasses import dataclass, field
-import pickle
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
 from pathlib import Path
 import numpy as np
-import pandas as pd
-import functools
 
 from utils import StimCommand
 
-from subjects import SubjectArrayRegistry, SubjectName
-from tasks import ExperimentalTaskRegistry, ExperimentalTask
-r"""
-    ContextInfo class is an interface for storing meta-information needed by several consumers, mainly the model, that may not be logged in data from various sources.
-    ContextRegistry allows consumers to query for this information from various identifying sources.
-"""
-
-r"""
-    To support a new task
-    - Add a new enum value to ExperimentalTask
-    - Add experimental config to DatasetConfig
-    - Subclass ContextInfo and implement the abstract methods
-"""
+from config import DatasetConfig
+from subjects import SubjectArrayRegistry, SubjectInfo, SubjectNames
+from tasks import ExperimentalTask, ExperimentalTaskRegistry
 
 @dataclass(kw_only=True)
 class ContextInfo:
@@ -35,8 +18,8 @@ class ContextInfo:
         Subclasses should specify identity and datapath
     """
     # Context items - this info should be provided in all datasets.
-    subject: str # These should match what's registered in SubjectArrayRegistry
-    task: str
+    subject: SubjectInfo # note this is an object/value
+    task: ExperimentalTask # while this is an enum/key, currently
 
     # These should be provided as denoted in SubjectArrayRegistry WITHOUT subject specific handles.
     # Dropping subject handles is intended to be a convenience since these contexts are essentially metadata management. TODO add some safety in case we decide to start adding handles explicitly as well...
@@ -47,22 +30,20 @@ class ContextInfo:
     alias: str = ""
 
     def __init__(self,
-        subject: str,
+        subject: SubjectInfo,
         task: str,
         _arrays: List[str] = [],
         alias: str = "",
         **kwargs
     ):
-        assert SubjectArrayRegistry.query_by_subject(subject) is not None, f"Subject {subject} not found in SubjectArrayRegistry"
         self.subject = subject
         self.task = task
         self.alias = alias
         if not _arrays: # Default to all arrays
-            self._arrays = SubjectArrayRegistry.query_by_subject(subject).arrays.values()
+            self._arrays = self.subject.arrays.keys()
         else:
-            assert all([
-                SubjectArrayRegistry.query_by_array(SubjectArrayRegistry.wrap_array(self.subject, a)) is not None for a in _arrays
-                ]), f"Arrays {_arrays} not found in SubjectArrayRegistry"
+            assert all([self.subject.has_array(a) for a in _arrays]), \
+                f"Arrays {_arrays} not found in SubjectArrayRegistry"
             self._arrays = _arrays
 
         self.build_task(**kwargs)
@@ -75,7 +56,7 @@ class ContextInfo:
             We wrap the regular array ID with the subject so we don't confuse arrays across subjects.
             These IDs will be used to query for array geometry later. `array_registry` should symmetrically register these IDs.
         """
-        return [SubjectArrayRegistry.wrap_array(self.subject, a) for a in self._arrays]
+        return [self.subject.wrap_array(a) for a in self._arrays]
 
     @property
     def id(self):
@@ -102,54 +83,16 @@ class ContextInfo:
             'subject': self.subject
         }
 
-    def get_loader(self):
-        return ExperimentalTaskRegistry.get_loader(self.task)
-
-class ContextRegistry:
-    instance = None
-    _registry: Dict[str, ContextInfo] = {}
-    search_index = None  # allow multikey querying
-
-    def __new__(cls, init_items: List[ContextInfo]=[]):
-        if cls.instance is None:
-            cls.instance = super().__new__(cls)
-            cls.search_index = pd.DataFrame()
-            cls.instance.register(init_items)
-        return cls.instance
-
-    def build_search_index(self, items: List[ContextInfo]):
-        index = [{
-            'id': item.id,
-            'task': item.task,
-            'datapath': item.datapath,
-            **item.get_search_index()
-        } for item in items]
-        return pd.DataFrame(index)
-
-    # ! Note, current pattern is to put all experiments in a big list below; not use this register handle.
-    def register(self, context_info: List[ContextInfo]):
-        self.search_index = pd.concat([self.search_index, self.build_search_index(context_info)])
-        for item in context_info:
-            self._registry[item.id] = item
-
-    def query(self, **search) -> ContextInfo | None:
-        def search_query(df):
-            return functools.reduce(lambda a, b: a & b, [df[k] == search[k] for k in search])
-        queried = self.search_index.loc[search_query]
-        if len(queried) == 0:
-            return None
-        elif len(queried) > 1:
-            raise ValueError(f"Multiple contexts found for {search}")
-        return self._registry[queried['id'].values[0]]
-
-    def query_by_datapath(self, datapath: Path) -> ContextInfo:
-        found = self.search_index[self.search_index.datapath == datapath]
-        assert len(found) == 1
-        return self._registry[found.iloc[0]['id']]
-
-    def query_by_id(self, id: str) -> ContextInfo:
-        return self._registry[id]
-
+    def load(self, cfg: DatasetConfig, cache_root: Path):
+        loader = ExperimentalTaskRegistry.get_loader(self.task)
+        return loader.load(
+            self.datapath,
+            cfg=cfg,
+            cache_root=cache_root,
+            subject=self.subject,
+            arrays=self.arrays,
+            dataset_alias=self.alias
+        )
 
 @dataclass
 class PassiveICMSContextInfo(ContextInfo):
@@ -210,7 +153,7 @@ class PassiveICMSContextInfo(ContextInfo):
             stimsync_banks = ["medial_s1", "lateral_s1"]
             # stimsync_banks = stim_banks
         return PassiveICMSContextInfo(
-            subject=SubjectName.CRS02b if session > 500 else SubjectName.CRS07,
+            subject=SubjectNames.CRS02b if session > 500 else SubjectNames.CRS07,
             task=ExperimentalTask.passive_icms,
             _arrays=["medial_s1", "lateral_s1"],
             session=session,
@@ -286,43 +229,6 @@ class ReachingContextInfo(ContextInfo):
         }
 
 
-context_registry = ContextRegistry([
-    PassiveICMSContextInfo.build(880, 1, 'stim_trains_gen2_chan34-40_80uA_0.5ITI_36cond/'),
-    PassiveICMSContextInfo.build(906, 1, 'stim_trains_gen4-02b-ant_chan14-19-20-25_80uA_0.5ITI_6cond/'),
-
-    PassiveICMSContextInfo.build(980, 4, 'stim_trains_additivity_chan34-36-45-47-49-50-51-52_80uA_0.5ITI_12cond'), # Not yet analyzed
-    PassiveICMSContextInfo.build(985, 1, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_0'),
-
-    PassiveICMSContextInfo.build(48, 1, 'stim_trains_80uA_9rap_9std/', (2, 6)),
-
-    PassiveICMSContextInfo.build(61, 6, 'stim_trains_gen2_post_80uA_0.1ITI_36cond/'), # CRS07Lab
-    PassiveICMSContextInfo.build(67, 1, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_0/'), # CRS07Lab
-    PassiveICMSContextInfo.build(78, 1, 'stim_trains_gen6-07_chan14-19-20-25-10-15-18-12_80uA_0.5ITI_40cond'),
-    PassiveICMSContextInfo.build(79, 3, 'stim_trains_psth-test_chan34-37-40-43_80uA_0.5ITI_2cond'),
-    PassiveICMSContextInfo.build(82, 4, 'stim_trains_gen6-07_chan14-19-20-25-10-15-18-12_80uA_0.5ITI_40cond'),
-    PassiveICMSContextInfo.build(88, 3, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_1/'),
-    PassiveICMSContextInfo.build(91, 4, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_2/'),
-    PassiveICMSContextInfo.build(92, 6, 'stim_trains_scaling-test_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_8cond/'),
-    PassiveICMSContextInfo.build(98, 5, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_3/'),
-    PassiveICMSContextInfo.build(105, 4, 'stim_trains_gen3-07_chan40-45-49-35-42-55-47-50-44_80uA_0.5ITI_8cond'),
-    PassiveICMSContextInfo.build(107, 3, 'stim_trains_gen3-07_chan1-27-5-30-11-31-17-12-19_80uA_0.5ITI_8cond'),
-    PassiveICMSContextInfo.build(120, 3, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_4/'),
-    PassiveICMSContextInfo.build(120, 4, 'stim_trains_single-07-post_chan50-44-56-34_80uA_0.5ITI_4cond'),
-
-    PassiveICMSContextInfo.build(126, 3, "", stim_banks=(6,)), # Not arbitrary stim, detection calibration
-    PassiveICMSContextInfo.build(126, 5, "", stim_banks=(6,)), # Not arbitrary stim, detection decoding (~40 trials),
-    PassiveICMSContextInfo.build(128, 3, 'stim_trains_gen4-07-post_chan46-51-52-57_80uA_0.5ITI_6cond'),
-    PassiveICMSContextInfo.build(131, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_0'),
-    PassiveICMSContextInfo.build(131, 4, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_5'), # VISUAL DECODING
-    PassiveICMSContextInfo.build(132, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_1'), # VISUAL DECODING
-
-
-    ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze'),
-    ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_large'),
-    ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_medium'),
-    ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_small'),
-    ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt, alias='mc_rtt'),
-])
 
 # ====
 # Archive

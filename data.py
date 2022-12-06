@@ -1,4 +1,4 @@
-from typing import Self, List, Any, Optional, Dict
+from typing import List, Any, Optional, Dict
 import copy
 import json
 from pathlib import Path
@@ -17,8 +17,8 @@ import pytorch_lightning as pl
 
 from config import DatasetConfig, MetaKey, DataKey
 from subjects import SubjectArrayRegistry
-from context_registry import context_registry
-import tasks
+from contexts import context_registry, ContextInfo
+from tasks import ExperimentalTaskRegistry
 
 r"""
     Stores range of contexts provided by a dataset.
@@ -48,26 +48,6 @@ class DataAttrs:
     spike_dim: int
     max_channel_count: int
     context: ContextAttrs
-
-
-r"""
-    A heterogenuous dataset needs some way of figuring out how to load data from different sources.
-    We define loaders per data source, and will route using a data registry.
-    Loader is primarily responsible for caching data; the actual metadata returned is trial-specific and mostly noncritical
-    - The critical trial-specific meta is just the cache path
-    This is not really designed with loading diverse data in the same instance; it's for doing so across instances/runs.
-    Loader is responsible for preprocessing as well.
-"""
-def get_loader(path: Path) -> tasks.ExperimentalTaskLoader:
-    if 'passive_icms' in path:
-        return tasks.ICMSLoader
-    if path.is_dir():
-        assert False, "no directory handler yet"
-    if path.suffix == '.nwb': # e.g. nlb
-        assert False, "no NWB handler yet"
-    if path.suffix == '.pth':
-        assert False, "no pth handler yet"
-
 class SpikingDataset(Dataset):
     r"""
         Generic container for spiking data from intracortical microelectrode recordings.
@@ -150,9 +130,8 @@ class SpikingDataset(Dataset):
 
         if not (hash_dir := self.preprocess_path(session_path)).exists() or \
             self.checksum_diff(hash_dir / 'preprocess_version.json'):
-            loader = context_meta.get_loader()
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
-            meta = loader.load(session_path, self.cfg, hash_dir)
+            meta = context_meta.load(self.cfg, hash_dir)
             meta.to_csv(hash_dir / 'meta.csv')
             with open(hash_dir / 'preprocess_version.json', 'w') as f:
                 json.dump(self.preproc_version(), f)
@@ -328,7 +307,7 @@ class SpikingDataset(Dataset):
         val.subset_by_key(val_keys, key=self.cfg.split_key)
         return train, val
 
-    def merge(self, data_other: Self):
+    def merge(self, data_other: Any): # should be type Self but surprisingly this is a 3.11 feature (I thought I used it before?)
         self.meta_df = pd.concat([self.meta_df, data_other.meta_df])
         self.meta_df = self.meta_df.reset_index(drop=True)
         self.build_context_index()

@@ -60,16 +60,25 @@ class AliasArrayInfo(ArrayInfo):
 class SubjectInfo:
     r"""
         Right now, largely a wrapper for potentially capturing multiple arrays.
+        TODO Should be refactored into a singleton, but right now cheating our way through it
+        using just class methods. This is not good python...
+
         ArrayInfo in turn exists largely to report array shape.
         Provides info relating channel ID (1-indexed, a pedestal/interface concept) to location _within_ array (a brain tissue concept).
         This doesn't directly provide location _within_ system tensor, which might have multi-arrays without additional logic! (see hardcoded constants in this class)
         Agnostic to bank info.
     """
+    name: str # This is typically redundant with __name__, but JY doesn't know how to pythonically avoid stating this
+    # without pulling out a full singleton.
+
     # 1 indexed channel in pedestal, for each pedestal with recordings.
     # This is mostly consistent across participants, but with much hardcoded logic...
     # By convention, stim channels 1-32 is anterior 65-96, and 33-64 is posterior 65-96.
     # Is spatially arranged to reflect true geometry of array.
     # ! Note - this info becomes desynced once we subset channels. We can probably keep it synced by making this class track state, but that's work for another day...
+
+    # Subjects hold onto arrays and aliases without subject tags (no particular reason)
+    # These tags are bound to subject ID via wrap array call
     _arrays: Dict[ArrayID, ArrayInfo] = {} # Registry of array names. ! Should include subject name as well? For easy lookup?
     _aliases: Dict[ArrayID, List[str]] = {} # Refers to other arrays (potentially multiple) used for grouping
 
@@ -87,6 +96,15 @@ class SubjectInfo:
         queried = self.arrays.values() if not arrays else [self.arrays[a] for a in arrays]
         return sum([a.get_channel_count() for a in queried])
 
+    @classmethod
+    def wrap_array(cls, array_id: ArrayID):
+        return f"{cls.name}-{array_id}"
+
+    @classmethod
+    def has_array(cls, array_id: ArrayID, unwrapped=True): # unwrapped
+        if unwrapped:
+            return array_id in cls.arrays
+        return array_id.split('-')[-1] in cls.arrays
 
 class SubjectArrayRegistry:
     instance = None
@@ -99,27 +117,21 @@ class SubjectArrayRegistry:
             cls.instance = super().__new__(cls)
         return cls.instance
 
-    @staticmethod
-    def wrap_array(subject_id, array_id):
-        return f"{subject_id}-{array_id}"
-
-    # Pattern taken from habitat.core.registry
+    # Pattern taken from habitat.core.registry, but without optional naming
     @classmethod
-    def register(cls, to_register: SubjectInfo, name: Optional[str]=None, assert_type = SubjectInfo):
-        def wrap(to_register):
+    def register(cls, to_register: SubjectInfo, assert_type = SubjectInfo):
+        def wrap(to_register: SubjectInfo):
             if assert_type is not None:
                 assert issubclass(
                     to_register, assert_type
                 ), "{} must be a subclass of {}".format(
                     to_register, assert_type
                 )
-            register_name = to_register.__name__ if name is None else name
-
-            cls._subject_registry[register_name] = to_register # ? Possibly should refer to singleton instance explicitly
+            cls._subject_registry[to_register.name] = to_register # ? Possibly should refer to singleton instance explicitly
             for array in to_register.arrays:
-                cls._array_registry[SubjectArrayRegistry.wrap_array(register_name, array)] = to_register.arrays[array]
+                cls._array_registry[to_register.wrap_array(array)] = to_register.arrays[array]
             for alias in to_register.aliases:
-                cls._array_registry[SubjectArrayRegistry.wrap_array(register_name, alias)] = to_register.aliases[alias]
+                cls._array_registry[to_register.wrap_array(alias)] = to_register.aliases[alias]
             return to_register
         return wrap(to_register)
 

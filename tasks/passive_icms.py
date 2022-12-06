@@ -8,8 +8,7 @@ import torch
 import logging
 
 from config import DataKey, MetaKey, DatasetConfig
-from context_registry import context_registry
-from subjects import ArrayID, SubjectName, SubjectArrayRegistry
+from subjects import ArrayID, SubjectInfo, SubjectArrayRegistry, SubjectNames
 from tasks.task_registry import ExperimentalTaskLoader, ExperimentalTaskRegistry
 
 TrialNum = int
@@ -106,7 +105,15 @@ def infer_stim_parameters(
 class ICMSLoader(ExperimentalTaskLoader):
     name = 'passive_icms'
 
-    def load(path: Path, cfg: DatasetConfig, cache_root: Path):
+    @classmethod
+    def load(cls,
+        datapath: Path,
+        cfg: DatasetConfig,
+        cache_root: Path,
+        subject: SubjectInfo,
+        context_arrays: List[str],
+        *args
+    ):
         r"""
             Loader for data from `icms_modeling` project.
             Takes in a payload containing all trials, fragments according to config.
@@ -116,7 +123,7 @@ class ICMSLoader(ExperimentalTaskLoader):
         """
         _CONDITION_KEY = 'raw_condition'
         import pdb;pdb.set_trace()
-        data = torch.load(path)
+        data = torch.load(datapath)
         payload = {
             DataKey.spikes : data['spikes'],
             DataKey.stim : data['stim_time'],
@@ -138,12 +145,10 @@ class ICMSLoader(ExperimentalTaskLoader):
                     payload[key] = [exp_info[t][key] for t in payload['trial_num']]
         del data
 
-        # Validate
-        meta_info = context_registry.query_by_datapath(path)
         # `meta_info.arrays` is more static, and should dictate the order arrays are cached in (though I expect to overwrite)
         # TODO review whether we should save the configured subset or configure outside of cache
-        # arrays_to_use = [a for a in meta_info.arrays if a in cfg.passive_icms.arrays] # use config
-        arrays_to_use = meta_info.arrays # ignore config
+        # arrays_to_use = [a for a in context_info.arrays if a in cfg.passive_icms.arrays] # use config
+        arrays_to_use = context_arrays # ignore config
 
         def extract_arrays(full_spikes: torch.Tensor, arrays_to_use: List[str]) -> Dict[ArrayID, torch.Tensor]:
             r"""
@@ -153,7 +158,7 @@ class ICMSLoader(ExperimentalTaskLoader):
                 full_spikes: T C H # TODO validate shape
             """
             import pdb;pdb.set_trace()
-            if meta_info.subject in [SubjectName.CRS02b, SubjectName.CRS07]:
+            if subject.name in [SubjectNames.CRS02b, SubjectNames.CRS07]:
                 info = {}
                 for a in arrays_to_use:
                     info[a] = full_spikes[:, SubjectArrayRegistry.query_by_array_geometric(a).as_indices()]
