@@ -158,8 +158,8 @@ class BrainBertInterface(pl.LightningModule):
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             session: torch.Tensor = self.session_embed(batch[MetaKey.session]) # B x H
             if self.cfg.session_embed_strategy == EmbedStrat.token:
-                session = session + self.session_flag
-                static_context.append(rearrange(session, 'b h -> b 1 h'))
+                session = session + self.session_flag # B x H
+                static_context.append(session)
             elif self.cfg.session_embed_strategy == EmbedStrat.concat:
                 session = repeat(session, 'b h -> b t h', t=state_in.shape[1])
                 project_context.append(session)
@@ -168,13 +168,12 @@ class BrainBertInterface(pl.LightningModule):
             subject: torch.Tensor = self.subject_embed(batch[MetaKey.subject]) # B x H
             if self.cfg.subject_embed_strategy == EmbedStrat.token:
                 subject = subject + self.subject_flag
-                static_context.append(rearrange(subject, 'b h -> b 1 h'))
+                static_context.append(subject)
             elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
                 subject = repeat(subject, 'b h -> b t h', t=state_in.shape[1])
                 project_context.append(subject)
 
-        # TODO array embed
-        assert self.cfg.array_embed_strategy is None, "Not implemented"
+        assert self.cfg.array_embed_strategy is EmbedStrat.none, "Not implemented"
 
         # TODO support temporal embed + temporal project
         # Do not concat static context - list default is easier to deal with
@@ -189,21 +188,21 @@ class BrainBertInterface(pl.LightningModule):
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
-            temporal_padding_mask = torch.arange(state_in.size(0), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
+            temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
         else:
             temporal_padding_mask = None
 
         # Note that fine-grained channel mask doesn't matter (sub-token padding)
         # But we do want to mask out fully-padded arrays (for highly heterogenuous batches)
-        if CHANNEL_KEY in batch:
-            array_padding_mask = batch[CHANNEL_KEY] == 0  # b x a of ints < c
+        array_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
 
         outputs: torch.Tensor = self.backbone(
             state_in,
             trial_context=trial_context,
             temporal_context=temporal_context,
             temporal_padding_mask=temporal_padding_mask,
-            array_padding_mask=array_padding_mask
+            array_padding_mask=array_padding_mask,
+            causal=self.cfg.task.task == ModelTask.icms_one_step_ahead,
         ) # B x T x A x H # TODO satisfy shape
         if outputs.isnan().any(): # I have no idea why, but something in s61 or s62 throws a nan
             # And strangely, I can't repro by invoking forward again.

@@ -1,6 +1,7 @@
 from typing import Optional, List
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 from einops import rearrange, pack, unpack, repeat
 
@@ -20,14 +21,15 @@ class PositionalEncoding(nn.Module):
             div_term = torch.exp(torch.arange(0, cfg.n_state, 2).float() * (-math.log(10000.0) / cfg.n_state))
             pe[:, 0::2] = torch.sin(position * div_term)
             pe[:, 1::2] = torch.cos(position * div_term)
-            pe = pe.unsqueeze(0).transpose(0, 1) # t x 1 x d
+            pe = pe.unsqueeze(1) # t x 1 x d
             self.register_buffer('pe', pe)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, batch_first=True):
         if self.learnable:
-            x = x + self.pos_embedding(self.pe) # t x 1 x d
+            pos_embed = self.pos_embedding(self.pe) # t 1 d
         else:
-            x = x + self.pe[:x.size(0), :] # t x 1 x d, # t x b x d
+            pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
+        x = x + rearrange(pos_embed, 't b d -> b t 1 d' if batch_first else 't b d -> t b 1 d')
         return self.dropout(x)
 
 class TemporalTransformer(nn.Module):
@@ -55,8 +57,8 @@ class TemporalTransformer(nn.Module):
     def forward(
         self,
         src: torch.Tensor, # B T A H
-        trial_context: List[torch.Tensor] = [], # B T' H
-        temporal_context: List[torch.Tensor] = [], # B T H # TODO implement
+        trial_context: List[torch.Tensor] = [], # T' [B H]
+        temporal_context: List[torch.Tensor] = [], # TC' [B T H]
         temporal_padding_mask: Optional[torch.Tensor] = None, # B T
         array_padding_mask: Optional[torch.Tensor] = None, # B A
         causal=True
@@ -97,7 +99,7 @@ class TemporalTransformer(nn.Module):
         # Somewhat redundant code structure is to play nice with typing
         if len(temporal_context) > 0:
             if src_mask is None:
-                src_mask = torch.zeros_like((t * a, (t * a)), dtype=torch.float, device=src.device) # all attending
+                src_mask = torch.zeros((t * a, t * a), dtype=torch.float, device=src.device) # all attending
             # Since temporal context is expected to be used in a causal cases (ICMS)
             # We provide causal masks; technically there may be a case where spikes should attend all temporal context but can only be achieved indirectly in this setup.
             temporal_context: torch.Tensor = rearrange(temporal_context, 'c b t h -> b t c h')
@@ -107,29 +109,23 @@ class TemporalTransformer(nn.Module):
                 repeat(temporal_mask, 't1 t2 -> t1 t2 c1 c2', c1=context_num+a, c2=context_num),
                 't1 t2 c1 c2 -> c1 t1 c2 t2'
             )
-            src_mask = torch.cat([
-                src_mask,
-                torch.full((t * context_num, t * a), float('-inf'), dtype=torch.float, device=src.device),
-            ], dim=0)
+            src_mask = F.pad(src_mask, (0, 0, 0, t * context_num), value=float('-inf'))
+            # src_mask = torch.cat([
+            #     src_mask,
+            #     torch.full((t * context_num, t * a), float('-inf'), dtype=torch.float, device=src.device),
+            # ], dim=0)
             src_mask = torch.cat([
                 src_mask,
                 temporal_mask,
             ], dim=1)
         if len(trial_context) > 0:
             if src_mask is None:
-                src_mask = torch.zeros_like((t * a, (t * a)), dtype=torch.float) # all attending
+                src_mask = torch.zeros((t * a, t * a), dtype=torch.float, device=src.device) # all attending
             trial_context: torch.Tensor = rearrange(trial_context, 't0 b h -> b t0 h')
-            src_mask = torch.cat([
-                src_mask,
-                torch.full((trial_context.size(1), src_mask.size(1)), float('-inf'), device=src_mask.device)
-            ], dim=0)
-            src_mask = torch.cat([
-                src_mask,
-                torch.full((trial_context.size(1), src_mask.size(0)), 0, device=src_mask.device)
-            ], dim=1)
+            src_mask = F.pad(src_mask, (0, 0, 0, trial_context.size(1)), value=float('-inf'))
+            src_mask = F.pad(src_mask, (0, trial_context.size(1)), value=0)
 
         # TODO validate - this mask flattening better match the token flattening
-
 
         # padding mask
         if temporal_padding_mask is not None or array_padding_mask is not None:
@@ -138,13 +134,10 @@ class TemporalTransformer(nn.Module):
             # Update padding mask for context
             # Temporal context can be padded, according to temporal padding mask
             if len(temporal_context) > 0:
-                padding_mask = torch.cat([
-                    padding_mask,
-                    torch.zeros((b, t, context_num), dtype=torch.bool, device=src.device)
-                ], dim=2)
+                padding_mask = F.pad(padding_mask, (0, context_num), value=False)
 
             if temporal_padding_mask is not None:
-                padding_mask |= temporal_padding_mask # B T
+                padding_mask |= rearrange(temporal_padding_mask, 'b t -> b t ()')
 
             if array_padding_mask is not None:
                 padding_mask |= rearrange(array_padding_mask, 'b a -> b () a')
@@ -153,13 +146,9 @@ class TemporalTransformer(nn.Module):
 
             # Trial context is never padded
             if len(trial_context) > 0:
-                padding_mask = torch.cat([
-                    padding_mask,
-                    torch.zeros((b, trial_context.size(1)), dtype=torch.bool, device=padding_mask.device)
-                ])
+                padding_mask = F.pad(padding_mask, (0, trial_context.size(1)), value=False)
         else:
             padding_mask = None
-
         output = self.encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
         output = rearrange(output[: t * a], '(t a) b h -> b t a h', t=t, a=a)
         output = self.dropout_rate(output)

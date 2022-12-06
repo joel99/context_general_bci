@@ -226,11 +226,13 @@ class SpikingDataset(Dataset):
                 channel_counts.extend([0] * (self.cfg.max_arrays - len(array_spikes)))
             else:
                 data_items[k] = payload[k]
-        return {
+        out = {
             **data_items,
             **meta_items,
-            CHANNEL_KEY: torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
         }
+        if self.cfg.max_channels:
+            out[CHANNEL_KEY] = torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
+        return out
 
     def __len__(self):
         return len(self.meta_df)
