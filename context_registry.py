@@ -15,7 +15,7 @@ import functools
 from config import ExperimentalTask
 from utils import StimCommand
 
-from array_registry import SubjectArrayRegistry
+from subjects import SubjectArrayRegistry, SubjectName
 r"""
     ContextInfo class is an interface for storing meta-information needed by several consumers, mainly the model, that may not be logged in data from various sources.
     ContextRegistry allows consumers to query for this information from various identifying sources.
@@ -43,7 +43,7 @@ class ContextInfo:
     _arrays: List[str] = field(default_factory=lambda: []) # arrays (without subject handles) that were active in this context. Defaults to all known arrays for subject
 
 
-    datapath: Path | None = None # path to raws - to be provided by subclass
+    datapath: Path = Path("fake_path") # path to raws - to be provided by subclass (not defaulting to None for typing)
     alias: str = ""
 
     def __init__(self,
@@ -131,7 +131,6 @@ class ContextRegistry:
             self._registry[item.id] = item
 
     def query(self, **search) -> ContextInfo:
-        import pdb;pdb.set_trace()
         def search_query(df):
             return functools.reduce(lambda a, b: a & b, [df[k] == search[k] for k in search])
         queried = self.search_index.loc[search_query]
@@ -209,7 +208,7 @@ class PassiveICMSContextInfo(ContextInfo):
             stimsync_banks = ["medial_s1", "lateral_s1"]
             # stimsync_banks = stim_banks
         return PassiveICMSContextInfo(
-            subject="CRS02b" if session > 500 else "CRS07",
+            subject=SubjectName.CRS02b if session > 500 else SubjectName.CRS07,
             task=ExperimentalTask.passive_icms,
             _arrays=["medial_s1", "lateral_s1"],
             session=session,

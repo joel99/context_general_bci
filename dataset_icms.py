@@ -25,7 +25,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import pytorch_lightning as pl
 
-from array_registry import subject_to_array
+from subjects import subject_to_array
 
 """
 TODO use CRS02 blacklist

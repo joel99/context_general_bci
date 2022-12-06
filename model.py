@@ -11,7 +11,7 @@ from config import (
 )
 
 from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
-from array_registry import subject_array_registry
+from subjects import subject_array_registry
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 from backbones import TemporalTransformer
@@ -57,27 +57,31 @@ class BrainBertInterface(pl.LightningModule):
         assert len(data_attrs.context.subject) == 1, "Only implemented for single subject (likely need padding for mixed batches)"
 
         project_size = self.cfg.hidden_size
-        if self.cfg.session_embed_strategy == EmbedStrat.concat:
+        if self.cfg.session_embed_strategy is not EmbedStrat.none:
             self.session_embed = nn.Embedding(len(self.data_attrs.context.session), self.cfg.session_embed_size)
-            project_size += self.cfg.session_embed_size
-        elif self.cfg.session_embed_strategy == EmbedStrat.token:
-            assert self.cfg.session_embed_size == self.cfg.hidden_size
-            self.session_embed = nn.Embedding(len(self.data_attrs.context.session), self.cfg.session_embed_size)
-            self.session_flag = nn.Parameter(torch.zeros(self.cfg.session_embed_size))
+            if self.cfg.session_embed_strategy == EmbedStrat.concat:
+                project_size += self.cfg.session_embed_size
+            elif self.cfg.session_embed_strategy == EmbedStrat.token:
+                assert self.cfg.session_embed_size == self.cfg.hidden_size
+                self.session_flag = nn.Parameter(torch.zeros(self.cfg.session_embed_size))
 
-        if self.cfg.subject_embed_strategy == EmbedStrat.concat:
+        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
             self.subject_embed = nn.Embedding(len(self.data_attrs.context.subject), self.cfg.subject_embed_size)
-            project_size += self.cfg.subject_embed_size
-        elif self.cfg.subject_embed_strategy == EmbedStrat.token:
-            assert self.cfg.subject_embed_size == self.cfg.hidden_size
-            self.subject_embed = nn.Embedding(len(self.data_attrs.context.subject), self.cfg.subject_embed_size)
-            self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
+            if self.cfg.subject_embed_strategy == EmbedStrat.concat:
+                project_size += self.cfg.subject_embed_size
+            elif self.cfg.subject_embed_strategy == EmbedStrat.token:
+                assert self.cfg.subject_embed_size == self.cfg.hidden_size
+                self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
 
-        # TODO array embed
-        # self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)
-        # # +1 is for padding (i.e. self.array_embed[-1] = padding)
-        # self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
-        # Note in general the data module will be responsible for providing array masks
+        # TODO handle array embed padding
+        if self.cfg.array_embed_strategy is not EmbedStrat.none:
+            self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)
+            # # +1 is for padding (i.e. self.array_embed[-1] = padding)
+            if self.cfg.array_embed_strategy == EmbedStrat.concat:
+                project_size += self.cfg.subject_embed_size
+            elif self.cfg.array_embed_strategy == EmbedStrat.token:
+                assert self.cfg.array_embed_size == self.cfg.hidden_size
+                self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
 
         if project_size is not self.cfg.hidden_size:
             self.context_project = nn.Sequential(
@@ -89,6 +93,7 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             # bookmark: multi-array readin should be done here
+            # Note in general the data module will be responsible for providing array masks
             if self.cfg.readin_strategy == EmbedStrat.project:
                 # * Just project all channels.
                 # Doesn't (yet) support separate array projections.
@@ -100,7 +105,7 @@ class BrainBertInterface(pl.LightningModule):
                 channel_count = sum(
                     subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
                 ) * self.data_attrs.spike_dim
-            elif self.cfg.readin_strategy == EmbedStrat.token: # TODO conflict of interest in the config - should readin strategy be creating these parameters?
+            elif self.cfg.readin_strategy == EmbedStrat.token:
                 channel_count = self.data_attrs.max_channel_count
             else:
                 raise NotImplementedError

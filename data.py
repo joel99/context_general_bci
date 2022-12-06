@@ -1,4 +1,4 @@
-from typing import Callable, Self, List, Any, Optional, Dict
+from typing import Self, List, Any, Optional, Dict
 import copy
 import json
 from pathlib import Path
@@ -8,7 +8,6 @@ from datetime import datetime
 from dataclasses import dataclass
 
 import logging
-import pickle
 import pandas as pd
 import numpy as np
 import torch
@@ -17,10 +16,9 @@ from torch.nn.utils.rnn import pad_sequence
 import pytorch_lightning as pl
 
 from config import DatasetConfig, MetaKey, DataKey
-from array_registry import SubjectArrayRegistry
+from subjects import SubjectArrayRegistry
 from context_registry import context_registry
-
-from tasks.passive_icms import icms_loader
+import tasks
 
 r"""
     Stores range of contexts provided by a dataset.
@@ -60,10 +58,9 @@ r"""
     This is not really designed with loading diverse data in the same instance; it's for doing so across instances/runs.
     Loader is responsible for preprocessing as well.
 """
-SessionLoader = Callable[[Path, DatasetConfig, Path], pd.DataFrame]
-def get_loader(path: Path) -> SessionLoader:
+def get_loader(path: Path) -> tasks.ExperimentalTaskLoader:
     if 'passive_icms' in path:
-        return icms_loader
+        return tasks.ICMSLoader
     if path.is_dir():
         assert False, "no directory handler yet"
     if path.suffix == '.nwb': # e.g. nlb
@@ -144,7 +141,7 @@ class SpikingDataset(Dataset):
             self.checksum_diff(hash_dir / 'preprocess_version.json'):
             loader = get_loader(session_path)
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
-            meta = loader(session_path, self.cfg, hash_dir)
+            meta = loader.load(session_path, self.cfg, hash_dir)
             meta.to_csv(hash_dir / 'meta.csv')
             with open(hash_dir / 'preprocess_version.json', 'w') as f:
                 json.dump(self.preproc_version(), f)
@@ -156,7 +153,10 @@ class SpikingDataset(Dataset):
         self.validate_meta(meta)
 
         # Filter arrays using task configuration
-        meta[MetaKey.array] = meta.apply(lambda x: [a for a in x[MetaKey.array] if a in getattr(self.cfg, x[MetaKey.task]).arrays], axis=1)
+        meta[MetaKey.array] = meta.apply(
+            lambda x: [a for a in x[MetaKey.array] if a in getattr(self.cfg, x[MetaKey.task]).arrays],
+            axis=1
+        )
         return meta
 
     def __getitem__(self, index):

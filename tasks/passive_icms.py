@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 from pathlib import Path
 import pickle
 import pandas as pd
@@ -9,7 +9,8 @@ import logging
 
 from config import DataKey, MetaKey, DatasetConfig
 from context_registry import context_registry
-from array_registry import ArrayID, CRS02b, CRS07, SubjectArrayRegistry
+from subjects import ArrayID, SubjectName, SubjectArrayRegistry
+from tasks.task_registry import ExperimentalTaskLoader
 
 TrialNum = int
 MetadataKey = str
@@ -102,85 +103,86 @@ def infer_stim_parameters(
     return trial_stim_state
 
 # Each loader should be responsible for loading/caching all information in paths
-def icms_loader(path: Path, cfg: DatasetConfig, cache_root: Path):
-    r"""
-        Loader for data from `icms_modeling` project.
-        Takes in a payload containing all trials, fragments according to config.
-
-        1. Preprocess as needed (e.g. trimming max length)
-        2. Trialize storage
-    """
-    _CONDITION_KEY = 'raw_condition'
-    import pdb;pdb.set_trace()
-    data = torch.load(path)
-    payload = {
-        DataKey.spikes : data['spikes'],
-        DataKey.stim : data['stim_time'],
-        MetaKey.trial: data['trial_num'],
-        'src_file': data['src_file'],
-        _CONDITION_KEY: data['condition'],
-        'command_time': [c[0] for c in data['command']], # tuple (time, channel (1-64), amp)
-        'command_channels': [c[1] for c in data['command']], # tuple (time, channel (1-64), amp)
-        'command_current': [c[2] for c in data['command']], # tuple (time, channel (1-64), amp)
-    }
-    for k in cfg.data_keys:
-        assert k in payload, f"Missing {k} in payload"
-    if 'stim_dir' in data and not data.get('ignore_exp_info', False):
-        exp_info = Path(data['stim_dir']) / 'exp_info.pkl'
-        if exp_info.exists():
-            with open(exp_info, 'rb') as f:
-                exp_info: Dict[TrialNum, Dict[MetadataKey, Any]] = pickle.load(f)
-            for key in exp_info[1]: # 1 is arbitrary. Keys included are listed in `generate_stim` in `icms_modeling` -- e.g. `channels`, `train`, `condition`, etc. `condtiion` is the same as `raw_condition` above.
-                payload[key] = [exp_info[t][key] for t in payload['trial_num']]
-    del data
-
-    # Validate
-    meta_info = context_registry.query_by_datapath(path)
-    # `meta_info.arrays` is more static, and should dictate the order arrays are cached in (though I expect to overwrite)
-    # TODO review whether we should save the configured subset or configure outside of cache
-    # arrays_to_use = [a for a in meta_info.arrays if a in cfg.passive_icms.arrays] # use config
-    arrays_to_use = meta_info.arrays # ignore config
-
-    def extract_arrays(full_spikes: torch.Tensor, arrays_to_use) -> Dict[ArrayID, torch.Tensor]:
+class ICMSLoader(ExperimentalTaskLoader):
+    def load(path: Path, cfg: DatasetConfig, cache_root: Path):
         r"""
-            The bulk of `icms_modeling` experiments ignore motor data since participant behavior was unconstrained + early recordings had noisy motor banks;
-            Edit this function to save it down.
+            Loader for data from `icms_modeling` project.
+            Takes in a payload containing all trials, fragments according to config.
 
-            full_spikes: T C H # TODO validate shape
+            1. Preprocess as needed (e.g. trimming max length)
+            2. Trialize storage
         """
+        _CONDITION_KEY = 'raw_condition'
         import pdb;pdb.set_trace()
-        if meta_info.subject in [CRS02b.__name__, CRS07.__name__]:
-            info = {}
-            for a in arrays_to_use:
-                info[a] = full_spikes[:, SubjectArrayRegistry.query_by_array(a).as_indices()]
-            return info
-        raise NotImplementedError
-
-    payload['path'] = []
-    for t in payload[MetaKey.trial]:
-        single_payload = {}
+        data = torch.load(path)
+        payload = {
+            DataKey.spikes : data['spikes'],
+            DataKey.stim : data['stim_time'],
+            MetaKey.trial: data['trial_num'],
+            'src_file': data['src_file'],
+            _CONDITION_KEY: data['condition'],
+            'command_time': [c[0] for c in data['command']], # tuple (time, channel (1-64), amp)
+            'command_channels': [c[1] for c in data['command']], # tuple (time, channel (1-64), amp)
+            'command_current': [c[2] for c in data['command']], # tuple (time, channel (1-64), amp)
+        }
         for k in cfg.data_keys:
-            if k == DataKey.stim:
-                trial_stim_state = infer_stim_parameters(
-                    payload[DataKey.spikes][t],
-                    payload[DataKey.stim][t],
-                    payload['command_time'][t],
-                    payload['command_channels'][t],
-                    payload['command_current'][t],
-                    stim_channels=64, # TODO make configurable
-                    time_bin_size_s=cfg.bin_size_ms / 1000.,
-                )
-                single_payload[k] = trial_stim_state
-                # TODO implement in fragmented (but probably not, that's too much work...)
-            elif k == DataKey.spikes:
-                single_payload[k] = extract_arrays(payload[k][t], arrays_to_use)
-            else: # Honestly have no idea what other keys even are
-                single_payload[k] = payload[k][t]
-            single_payload[k] = single_payload[k][:, :cfg.max_trial_length] # TODO alignment?
-        import pdb;pdb.set_trace() # TODO check shape
-        payload['path'].append(cache_root / f"{t}.pth")
-        torch.save(single_payload, payload['path'])
+            assert k in payload, f"Missing {k} in payload"
+        if 'stim_dir' in data and not data.get('ignore_exp_info', False):
+            exp_info = Path(data['stim_dir']) / 'exp_info.pkl'
+            if exp_info.exists():
+                with open(exp_info, 'rb') as f:
+                    exp_info: Dict[TrialNum, Dict[MetadataKey, Any]] = pickle.load(f)
+                for key in exp_info[1]: # 1 is arbitrary. Keys included are listed in `generate_stim` in `icms_modeling` -- e.g. `channels`, `train`, `condition`, etc. `condtiion` is the same as `raw_condition` above.
+                    payload[key] = [exp_info[t][key] for t in payload['trial_num']]
+        del data
 
-    for k in cfg.data_keys:
-        del payload[k]
-    return pd.DataFrame(payload)
+        # Validate
+        meta_info = context_registry.query_by_datapath(path)
+        # `meta_info.arrays` is more static, and should dictate the order arrays are cached in (though I expect to overwrite)
+        # TODO review whether we should save the configured subset or configure outside of cache
+        # arrays_to_use = [a for a in meta_info.arrays if a in cfg.passive_icms.arrays] # use config
+        arrays_to_use = meta_info.arrays # ignore config
+
+        def extract_arrays(full_spikes: torch.Tensor, arrays_to_use: List[str]) -> Dict[ArrayID, torch.Tensor]:
+            r"""
+                The bulk of `icms_modeling` experiments ignore motor data since participant behavior was unconstrained + early recordings had noisy motor banks;
+                Edit this function to save it down.
+
+                full_spikes: T C H # TODO validate shape
+            """
+            import pdb;pdb.set_trace()
+            if meta_info.subject in [SubjectName.CRS02b, SubjectName.CRS07]:
+                info = {}
+                for a in arrays_to_use:
+                    info[a] = full_spikes[:, SubjectArrayRegistry.query_by_array_geometric(a).as_indices()]
+                return info
+            raise NotImplementedError
+
+        payload['path'] = []
+        for t in payload[MetaKey.trial]:
+            single_payload = {}
+            for k in cfg.data_keys:
+                if k == DataKey.stim:
+                    trial_stim_state = infer_stim_parameters(
+                        payload[DataKey.spikes][t],
+                        payload[DataKey.stim][t],
+                        payload['command_time'][t],
+                        payload['command_channels'][t],
+                        payload['command_current'][t],
+                        stim_channels=64, # TODO make configurable
+                        time_bin_size_s=cfg.bin_size_ms / 1000.,
+                    )
+                    single_payload[k] = trial_stim_state
+                    # TODO implement in fragmented (but probably not, that's too much work...)
+                elif k == DataKey.spikes:
+                    single_payload[k] = extract_arrays(payload[k][t], arrays_to_use)
+                else: # Honestly have no idea what other keys even are
+                    single_payload[k] = payload[k][t]
+                single_payload[k] = single_payload[k][:, :cfg.max_trial_length] # TODO alignment?
+            import pdb;pdb.set_trace() # TODO check shape
+            payload['path'].append(cache_root / f"{t}.pth")
+            torch.save(single_payload, payload['path'])
+
+        for k in cfg.data_keys:
+            del payload[k]
+        return pd.DataFrame(payload)
