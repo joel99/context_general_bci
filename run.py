@@ -95,12 +95,14 @@ def run_exp(cfg : RootConfig) -> None:
             train, shuffle=True,
             batch_size=cfg.train.batch_size,
             num_workers=num_workers,
-            persistent_workers=True
+            persistent_workers=True,
+            collate_fn=train.collater_factory()
         ),
         DataLoader(val,
             batch_size=cfg.train.batch_size,
             num_workers=num_workers,
-            persistent_workers=True
+            persistent_workers=True,
+            collate_fn=val.collater_factory()
         ),
         ckpt_path=get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )

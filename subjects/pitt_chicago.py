@@ -2,8 +2,7 @@ from typing import List
 from dataclasses import dataclass
 import numpy as np
 
-from subjects.array_registry import ArrayInfo, SubjectInfo, GeometricArrayInfo, SubjectArrayRegistry
-
+from subjects import SubjectName, ArrayInfo, SubjectInfo, GeometricArrayInfo, SubjectArrayRegistry
 
 r"""
     For human BCI experiments at Pitt/Chicago sites.
@@ -103,7 +102,7 @@ class SubjectInfoPittChicago(SubjectInfo):
 @SubjectArrayRegistry.register
 class CRS02b(SubjectInfoPittChicago):
     # Layout shared across motor channels
-    name = "CRS02b"
+    name = SubjectName.CRS02b
     _motor_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down)
         [np.nan, np.nan, 42, 58, 3, 13, 27, 97, np.nan, np.nan],
         [np.nan, 34, 44, 57, 4, 19, 29, 98, 107, np.nan],
@@ -159,7 +158,7 @@ class CRS02b(SubjectInfoPittChicago):
 @SubjectArrayRegistry.register
 class CRS07(SubjectInfoPittChicago):
     # Layout shared across motor channels
-    name = "CRS07"
+    name = SubjectName.CRS07
     _motor_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down)
         [np.nan, 38, 50, 59,  6, 23,  22, 101, 111, np.nan,],
             [33, 40, 46, 64,  9, 25,  24, 102, 113, 128],
@@ -197,7 +196,7 @@ class CRS07(SubjectInfoPittChicago):
 
 @SubjectArrayRegistry.register
 class BCI02(SubjectInfoPittChicago):
-    name = "BCI02"
+    name = SubjectName.BCI02
     # No, the floating point isn't a concern
     _motor_layout = np.array([ # Lat Motor
         [np.nan, 166., 178., 187., 134., 151., 150., 229., 239., np.nan],

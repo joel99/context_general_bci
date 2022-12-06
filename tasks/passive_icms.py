@@ -8,8 +8,8 @@ import torch
 import logging
 
 from config import DataKey, MetaKey, DatasetConfig
-from subjects import ArrayID, SubjectInfo, SubjectArrayRegistry, SubjectNames
-from tasks.task_registry import ExperimentalTaskLoader, ExperimentalTaskRegistry
+from subjects import ArrayID, SubjectInfo, SubjectArrayRegistry, SubjectName
+from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 
 TrialNum = int
 MetadataKey = str
@@ -103,7 +103,7 @@ def infer_stim_parameters(
 
 @ExperimentalTaskRegistry.register
 class ICMSLoader(ExperimentalTaskLoader):
-    name = 'passive_icms'
+    name = ExperimentalTask.passive_icms
 
     @classmethod
     def load(cls,
@@ -158,7 +158,7 @@ class ICMSLoader(ExperimentalTaskLoader):
                 full_spikes: T C H # TODO validate shape
             """
             import pdb;pdb.set_trace()
-            if subject.name in [SubjectNames.CRS02b, SubjectNames.CRS07]:
+            if subject.name in [SubjectName.CRS02b, SubjectName.CRS07]:
                 info = {}
                 for a in arrays_to_use:
                     info[a] = full_spikes[:, SubjectArrayRegistry.query_by_array_geometric(a).as_indices()]
@@ -187,8 +187,9 @@ class ICMSLoader(ExperimentalTaskLoader):
                     single_payload[k] = payload[k][t]
                 single_payload[k] = single_payload[k][:, :cfg.max_trial_length] # TODO alignment?
             import pdb;pdb.set_trace() # TODO check shape
-            payload['path'].append(cache_root / f"{t}.pth")
-            torch.save(single_payload, payload['path'])
+            single_path = cache_root / f"{t}.pth"
+            payload['path'].append(single_path)
+            torch.save(single_payload, single_path)
 
         for k in cfg.data_keys:
             del payload[k]

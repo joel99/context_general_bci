@@ -5,11 +5,17 @@ from collections import defaultdict
 from pathlib import Path
 import numpy as np
 
+import logging
+
 from utils import StimCommand
 
 from config import DatasetConfig
-from subjects import SubjectArrayRegistry, SubjectInfo, SubjectNames
+from subjects import SubjectArrayRegistry, SubjectInfo, SubjectName
+from subjects.pitt_chicago import CRS02b, CRS07
 from tasks import ExperimentalTask, ExperimentalTaskRegistry
+
+# FYI: Inherited dataclasses don't call parent's __init__ by default. This is a known issue/feature:
+# https://bugs.python.org/issue43835
 
 @dataclass(kw_only=True)
 class ContextInfo:
@@ -39,19 +45,23 @@ class ContextInfo:
         self.subject = subject
         self.task = task
         self.alias = alias
-        if not _arrays: # Default to all arrays
+        # This is more or less an abstract method; not ever intended to be run directly.
+
+        # self.build_task(**kwargs) # This call is meaningless since base class __init__ isn't called
+        # Task-specific info are responsible for assigning self.datapath
+
+    def __post_init__(self):
+        if not self._arrays: # Default to all arrays
             self._arrays = self.subject.arrays.keys()
         else:
-            assert all([self.subject.has_array(a) for a in _arrays]), \
-                f"Arrays {_arrays} not found in SubjectArrayRegistry"
-            self._arrays = _arrays
-
-        self.build_task(**kwargs)
-        # Task-specific builders are responsible for assigning self.datapath
-        assert self.datapath is not None and self.datapath.exists(), "ContextInfo must be built with a valid datapath"
+            assert all([self.subject.has_array(a) for a in self._arrays]), \
+                f"An array in {self._arrays} not found in SubjectArrayRegistry"
+        assert self.datapath is not Path("fake_path"), "ContextInfo didn't initialize with datapath"
+        if not self.datapath.exists():
+            logging.warn(f"ContextInfo datapath not found ({self.datapath})")
 
     @property
-    def arrays(self):
+    def array(self) -> List[str]:
         r"""
             We wrap the regular array ID with the subject so we don't confuse arrays across subjects.
             These IDs will be used to query for array geometry later. `array_registry` should symmetrically register these IDs.
@@ -60,7 +70,7 @@ class ContextInfo:
 
     @property
     def id(self):
-        return f"{self.task}-{self.subject}-{self._id()}"
+        return f"{self.task}-{self.subject.name}-{self._id()}"
 
     @abc.abstractmethod
     def _id(self):
@@ -90,7 +100,7 @@ class ContextInfo:
             cfg=cfg,
             cache_root=cache_root,
             subject=self.subject,
-            arrays=self.arrays,
+            context_arrays=self.array,
             dataset_alias=self.alias
         )
 
@@ -152,8 +162,8 @@ class PassiveICMSContextInfo(ContextInfo):
         if stimsync_banks is None:
             stimsync_banks = ["medial_s1", "lateral_s1"]
             # stimsync_banks = stim_banks
-        return PassiveICMSContextInfo(
-            subject=SubjectNames.CRS02b if session > 500 else SubjectNames.CRS07,
+        info = PassiveICMSContextInfo(
+            subject=CRS02b if session > 500 else CRS07,
             task=ExperimentalTask.passive_icms,
             _arrays=["medial_s1", "lateral_s1"],
             session=session,
@@ -161,7 +171,17 @@ class PassiveICMSContextInfo(ContextInfo):
             train_dir=train_dir,
             stim_banks=stim_banks,
             stimsync_banks=stimsync_banks,
+            datapath=Path(f"/home/joelye/projects/icms_modeling/data/binned_pth/{session:05d}.Set{set:04d}.full.pth")
         )
+        info.build_task(
+            session=session,
+            set=set,
+            train_dir=train_dir,
+            stim_banks=stim_banks,
+            stimsync_banks=stimsync_banks,
+            stim_train_dir_root=stim_train_dir_root,
+        ) # override
+        return info
 
     def _id(self):
         return f"{self.session}_{self.set}"
@@ -188,7 +208,6 @@ class PassiveICMSContextInfo(ContextInfo):
         self.stimsync_banks = stimsync_banks if stimsync_banks else self.stim_banks
         self.stimsync_banks = (2, 6) # ! Ok. While stimsync technically shouldn't be affecting off-stim (e.g. the cereplexes), something is amiss - validation becomes way oversynced once I register the proper banks. Not worth investigating right now.
         # ! Thus, I will leave it as this. I suspect it's due to estimator failure.
-        self.datapath = Path(f"/home/joelye/projects/icms_modeling/data/binned_pth/{self.session:05d}.Set{self.set:04d}.full.pth")
 
     def get_search_index(self):
         return {
@@ -208,7 +227,9 @@ class ReachingContextInfo(ContextInfo):
     @classmethod
     def build(cls, datapath_str: str, task: ExperimentalTask, alias: str=""):
         datapath = Path(datapath_str)
-        subject = datapath.name.split('-')[-1].lower()
+        subject = SubjectArrayRegistry.query_by_subject(
+            datapath.name.split('-')[-1].lower()
+        )
         session = int(datapath.parent.name)
         return ReachingContextInfo(
             subject=subject,
@@ -218,17 +239,11 @@ class ReachingContextInfo(ContextInfo):
             datapath=datapath,
         )
 
-    def build_task(self, session: int, datapath: Path):
-        self.session = session
-        self.datapath = datapath
-
     def get_search_index(self):
         return {
             **super().get_search_index(),
             'session': self.session,
         }
-
-
 
 # ====
 # Archive

@@ -4,7 +4,9 @@ import numpy as np
 import torch
 from torch import nn, optim
 import pytorch_lightning as pl
-from einops import rearrange, repeat, reduce, pack, unapck # baby steps...
+from einops import rearrange, repeat, reduce, pack # baby steps...
+
+import logging
 
 from config import (
     ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
@@ -39,11 +41,16 @@ class BrainBertInterface(pl.LightningModule):
         """
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.session, "Session embedding strategy requires session in data"
+            if len(data_attrs.context.session) == 1:
+                logging.warn('Using session embedding strategy with only one session. This is probably a mistake.')
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.subject, "Subject embedding strategy requires subject in data"
+            if len(data_attrs.context.subject) == 1:
+                logging.warn('Using subject embedding strategy with only one subject. This is probably a mistake.')
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.array, "Array embedding strategy requires array in data"
-
+            if len(data_attrs.context.array) == 1:
+                logging.warn('Using array embedding strategy with only one array. This is probably a mistake.')
         if self.data_attrs is not None: # IO already exists
             import pdb;pdb.set_trace() # check this named_children call
             # TODO update this to re-assign any preserved io

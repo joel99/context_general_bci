@@ -135,6 +135,7 @@ class MetaKey(Enum):
     task = 'task'
     unique = 'unique' # default unique identifier
 
+
 @dataclass
 class ExperimentalConfig:
     r"""
@@ -155,7 +156,7 @@ class ExperimentalConfig:
         - More tokens, especially for distant arrays, is likely useful. However, memory is quadratic in tokens.
         * TODO Think more about this
     """
-    arrays: List[str] = MISSING
+    arrays: List[str] = field(default_factory=lambda: []) # Empty list means don't filter
 
 @dataclass
 class DatasetConfig:
@@ -174,7 +175,7 @@ class DatasetConfig:
         default_factory=lambda: [DataKey.spikes]
     )
     meta_keys: List[MetaKey] = field(
-        default_factory=lambda: [MetaKey.session, MetaKey.array]
+        default_factory=lambda: [MetaKey.unique, MetaKey.session, MetaKey.array]
     ) # JY recommends providing array meta info, but thinks the system should be designed to not error without.
 
     split_key: MetaKey = MetaKey.unique
@@ -187,12 +188,13 @@ class DatasetConfig:
     # If set to 0, will skip padding checks.
     max_channels: int = 0
 
-    # Pad to this number of arrays (for meta and data alike)
-    # If set to 0, will skip padding checks.
-    max_arrays: int = 0
+    # Pad to this number of arrays (for meta and data alike). Must be >= 1
+    max_arrays: int = 1
 
     # Experimental Task configuration
     passive_icms: ExperimentalConfig = ExperimentalConfig()
+    maze: ExperimentalConfig = ExperimentalConfig()
+    rtt: ExperimentalConfig = ExperimentalConfig()
 
 @dataclass
 class TrainConfig:

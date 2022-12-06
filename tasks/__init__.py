@@ -1,18 +1,19 @@
 from enum import Enum
 
-# Exports
-from .task_registry import ExperimentalTaskLoader, ExperimentalTaskRegistry
-from .passive_icms import ICMSLoader
-from .nlb import MazeLoader, RTTLoader
-
 r"""
     Dependency notes:
-    - ContextInfo stores ExperimentalTask to key into ExperimentalTaskRegistry. (data.py uses this)
-    - ExperimentalTask requires ContextInfo to load. (context info has array info)
-
+    - We define the enum so there's typing available outside of the tasks module
+    - The individual loaders must depend on registry so `register` works
+    - The loader registry must depend on the enum so it can be queried
+    - To avoid cyclical dependency we must make enum declared before individual loaders
+        -  i.e. loader names must be defined in enum rather than enum pulling from loader
 """
-
 class ExperimentalTask(Enum):
-    passive_icms = ICMSLoader.name
-    maze = MazeLoader.name
-    rtt = RTTLoader.name
+    passive_icms = "passive_icms"
+    maze = "maze"
+    rtt = "random_target_task"
+
+from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
+# Exports
+from .passive_icms import ICMSLoader
+from .nlb import MazeLoader, RTTLoader

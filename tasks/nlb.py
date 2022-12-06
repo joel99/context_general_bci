@@ -9,8 +9,9 @@ from einops import rearrange
 from nlb_tools.nwb_interface import NWBDataset
 from nlb_tools.make_tensors import make_train_input_tensors
 
-from config import DataKey, MetaKey, DatasetConfig
+from config import DataKey, DatasetConfig
 from subjects import SubjectInfo
+from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 from tasks.task_registry import ExperimentalTaskLoader, ExperimentalTaskRegistry
 TrialNum = int
 MetadataKey = str
@@ -47,7 +48,6 @@ class NLBLoader(ExperimentalTaskLoader):
             trial_split=train_split,
             save_file=False
         )
-        import pdb;pdb.set_trace()
 
         # Show fields of returned dict
         # print(train_dict.keys())
@@ -58,21 +58,22 @@ class NLBLoader(ExperimentalTaskLoader):
 
         # Print 3d array shape: trials x time x channel
         # print(train_spikes_heldin.shape)
-
+        train_spikes_heldin = torch.tensor(train_spikes_heldin)
         meta_payload = {}
         meta_payload['path'] = []
         for trial in range(train_spikes_heldin.shape[0]):
             single_payload = {
                 DataKey.spikes: rearrange(train_spikes_heldin[trial], 't c -> t c 1'),
             }
-            meta_payload['path'].append(cache_root / f"{trial}.pth")
-            torch.save(single_payload, meta_payload['path'])
+            single_path = cache_root / f"{trial}.pth"
+            meta_payload['path'].append(single_path)
+            torch.save(single_payload, single_path)
         return pd.DataFrame(meta_payload)
 
 @ExperimentalTaskRegistry.register
 class MazeLoader(NLBLoader):
-    name = "maze"
+    name = ExperimentalTask.maze
 
 @ExperimentalTaskRegistry.register
 class RTTLoader(NLBLoader):
-    name = "random_target_task"
+    name = ExperimentalTask.rtt

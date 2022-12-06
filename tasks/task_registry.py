@@ -1,21 +1,25 @@
 from typing import Dict, List
+
+from enum import Enum
 from pathlib import Path
 import pandas as pd
 
 from config import DatasetConfig
 from subjects import SubjectInfo
+from tasks import ExperimentalTask
+
 r"""
     Super light wrapper to define task/loader interface.
 """
 class ExperimentalTaskLoader:
-    name: str
+    name: ExperimentalTask
     @classmethod
     def load(cls,
         dataset_path: Path,
         cfg: DatasetConfig,
         cache_root: Path,
         subject: SubjectInfo,
-        arrays: List[str],
+        context_arrays: List[str],
         dataset_alias: str,
     ) -> pd.DataFrame:
         r"""
@@ -28,10 +32,9 @@ class ExperimentalTaskLoader:
         """
         raise NotImplementedError
 
-
 class ExperimentalTaskRegistry:
     _instance = None
-    _loaders: Dict[str, ExperimentalTaskLoader] = {}
+    _loaders: Dict[ExperimentalTask, ExperimentalTaskLoader] = {}
 
     def __new__(cls):
         if cls._instance is None:
@@ -46,5 +49,6 @@ class ExperimentalTaskRegistry:
         return wrap(to_register)
 
     @classmethod
-    def get_loader(cls, name: str) -> ExperimentalTaskLoader:
+    def get_loader(cls, name: ExperimentalTask) -> ExperimentalTaskLoader:
         return cls._loaders[name]
+    # We cannot make the loader query by Enum because the enum is defined by loader attrs (which is a design decision)

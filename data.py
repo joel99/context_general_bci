@@ -1,11 +1,12 @@
 from typing import List, Any, Optional, Dict
 import copy
 import json
+import os
 from pathlib import Path
 import re
 import itertools
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import logging
 import pandas as pd
@@ -37,10 +38,10 @@ LENGTH_KEY = 'length'
 CHANNEL_KEY = 'channel_counts'
 @dataclass
 class ContextAttrs:
-    subject = Optional[List[str]]
-    array = Optional[List[str]] # should be prefixed with subject
-    session = Optional[List[str]] # should uniquely identify
-    task = Optional[List[str]] # not to be confused with
+    subject: List[str] = field(default_factory=list)
+    array: List[str] = field(default_factory=list) # should be prefixed with subject
+    session: List[str] = field(default_factory=list) # unique ID
+    task: List[str] = field(default_factory=list) # experimental task
 
 @dataclass
 class DataAttrs:
@@ -82,17 +83,19 @@ class SpikingDataset(Dataset):
         self.subsetted = False
 
     @staticmethod
-    def preprocess_path(cls, cfg: DatasetConfig, session_path: Path) -> Path:
-        # TODO assert some sort of versioning system for preprocessing
-        # ! Specifically for `array_length`
-        return cfg.root_dir / cfg.preprocess_suffix / session_path.name
+    def preprocess_path(cfg: DatasetConfig, session_path: Path) -> Path:
+        return cfg.root_dir / cfg.preprocess_suffix / session_path.relative_to(cfg.root_dir)
 
     def validate_meta(self, meta_df: pd.DataFrame):
-        assert all([k in meta_df.columns for k in self.cfg.meta_keys])
-        if MetaKey.subject in self.cfg.meta_keys:
-            unique_subjects = meta_df[MetaKey.subject].unique()
-            for s in unique_subjects:
-                assert SubjectArrayRegistry.query_by_subject(s) is not None, f"Subject {s} not found registered."
+        for k in self.cfg.meta_keys:
+            if k == MetaKey.subject:
+                unique_subjects = meta_df[MetaKey.subject.name].unique()
+                for s in unique_subjects:
+                    assert SubjectArrayRegistry.query_by_subject(s) is not None, f"Subject {s} not found registered."
+            elif k == MetaKey.array:
+                pass # no validation
+            else:
+                assert k in meta_df.columns, f"Requested meta key {k} not loaded in meta_df"
 
     def preproc_version(self):
         return {
@@ -102,6 +105,8 @@ class SpikingDataset(Dataset):
 
     def checksum_diff(self, version_path: Path):
         # load json in session path
+        if not version_path.exists():
+            return True
         with open(version_path, 'r') as f:
             cached_preproc_version = json.load(f)
         return self.preproc_version() != cached_preproc_version
@@ -127,27 +132,41 @@ class SpikingDataset(Dataset):
             context_meta = context_registry.query_by_datapath(session_path)
 
         assert session_path.exists(), f"Session path {session_path_or_alias} not found"
-
-        if not (hash_dir := self.preprocess_path(session_path)).exists() or \
+        if not (hash_dir := self.preprocess_path(self.cfg, session_path)).exists() or \
             self.checksum_diff(hash_dir / 'preprocess_version.json'):
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
+            os.makedirs(hash_dir, exist_ok=True)
             meta = context_meta.load(self.cfg, hash_dir)
             meta.to_csv(hash_dir / 'meta.csv')
             with open(hash_dir / 'preprocess_version.json', 'w') as f:
                 json.dump(self.preproc_version(), f)
         else:
             meta = pd.read_csv(hash_dir / 'meta.csv')
-
+            del meta[f'Unnamed: 0'] # index column
         for k in self.cfg.meta_keys:
-            meta[k] = getattr(context_meta, k)
-
+            if k == MetaKey.array:
+                context_array = getattr(context_meta, k.name)
+                # Filter arrays using task configuration
+                task_arrays = getattr(self.cfg, context_meta.task.name).arrays
+                if task_arrays:
+                    context_array = [a for a in context_array if a in task_arrays]
+                for i in range(self.cfg.max_arrays):
+                    meta[f'array_{i}'] = context_array[i] if i < len(context_array) else ""
+                if len(context_array) > self.cfg.max_arrays:
+                    logging.error(
+                        f"Session {session_path} has more than {self.cfg.max_arrays} arrays."
+                        f"Is this the right session? Or is max array setting to low?"
+                        f"Or did you remember to truncate used arrays in task configuration?"
+                    )
+                    raise Exception()
+            elif k == MetaKey.session:
+                # never conflate sessions
+                meta[k] = context_meta.id
+            elif k == MetaKey.unique:
+                continue # filled below
+        meta[MetaKey.unique] = meta[MetaKey.session] + '-' + meta.index.astype(str)
         self.validate_meta(meta)
 
-        # Filter arrays using task configuration
-        meta[MetaKey.array] = meta.apply(
-            lambda x: [a for a in x[MetaKey.array] if a in getattr(self.cfg, x[MetaKey.task]).arrays],
-            axis=1
-        )
         return meta
 
     def __getitem__(self, index):
@@ -162,12 +181,11 @@ class SpikingDataset(Dataset):
         meta_items = {}
         for k in self.cfg.meta_keys:
             if k == MetaKey.array: # doing string comparisons probably isn't the fastest thing in the world
-                array_indices = torch.full((self.cfg.max_arrays,), len(self.context_index[k]), dtype=torch.long)
-                for i, a in enumerate(trial[k]):
-                    array_indices[i] = self.context_index[k].index(a)
-                meta_items[k] = array_indices
+                meta_items[k] = torch.tensor([
+                    self.context_index[k.name].index(trial[f'array_{i}']) for i in range(self.cfg.max_arrays)
+                ])
             else:
-                meta_items[k] = torch.tensor(self.context_index[k].index(trial[k])) # Casting in collater might be faster?
+                meta_items[k] = torch.tensor(self.context_index[k.name].index(trial[k.name])) # Casting in collater might be faster?
 
         r"""
             Currently we store spikes in a split-array format as a dict of tensors T C H.
@@ -179,30 +197,32 @@ class SpikingDataset(Dataset):
         channel_counts = []
 
         for k in self.cfg.data_keys:
-            if k == DataKey.spikes and self.cfg.max_arrays:
-                data_items[k] = []
-                for alias in trial[MetaKey.array]:
+            if k == DataKey.spikes:
+                array_spikes = []
+                # for alias in trial[MetaKey.array.name]:
+                for i in range(self.cfg.max_arrays):
+                    alias = trial[f'array_{i}']
                     alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
-                    array_group = torch.cat([payload[a] for a in alias_arrays], dim=-2) # T C' H
                     # ! Right now pad channels seems subservient to pad arrays, that doesn't seem to be necessary.
+                    array_group = torch.cat([payload[a] for a in alias_arrays], dim=-2) # T C' H
                     if self.cfg.max_channels:
                         channel_counts.append(array_group.shape[-2])
                         array_group = torch.cat([
                             array_group, torch.zeros((
-                                array_group.shape[0], self.cfg.max_channels - array_group.shape[1], array_group.shape[2]
+                                array_group.shape[0], self.cfg.max_channels - array_group.shape[-2], array_group.shape[2]
                             ), dtype=array_group.dtype)
-                        ], 1) # T C H
-                    data_items[k].append(array_group.unsqueeze(1))
+                        ], -2) # T C H
+                    array_spikes.append(array_group.unsqueeze(1))
                 data_items[k] = torch.cat([
-                    *data_items[k],
+                    *array_spikes,
                     torch.zeros(
-                        data_items[k][0].shape[0],
-                        self.cfg.max_arrays - len(data_items[k]),
-                        *data_items[k][0].shape[2:],
-                        dtype=data_items[k][0].dtype
+                        array_spikes[0].shape[0],
+                        self.cfg.max_arrays - len(array_spikes),
+                        *array_spikes[0].shape[2:],
+                        dtype=array_spikes[0].dtype
                     )
                 ], 1) # T A C H
-                channel_counts.extend([0] * self.cfg.max_arrays - len(data_items[k]))
+                channel_counts.extend([0] * self.cfg.max_arrays - len(array_spikes))
             else:
                 data_items[k] = payload[k]
         return {
@@ -210,6 +230,9 @@ class SpikingDataset(Dataset):
             **meta_items,
             CHANNEL_KEY: torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
         }
+
+    def __len__(self):
+        return len(self.meta_df)
 
     def collater_factory(self):
         if not self.cfg.pad_batches:
@@ -232,11 +255,16 @@ class SpikingDataset(Dataset):
         logging.info("Building context index; any previous DataAttrs may be invalidated.")
         context = {}
         for k in self.cfg.meta_keys:
-            assert k in self.meta_df.columns, f"Key {k} not in metadata"
-            import pdb;pdb.set_trace()
-            context[str(k)] = sorted(self.meta_df[k].unique()) # convert key from enum so we can build contextattrs
-            # TODO not obvious cast is needed
-            # TODO not obvious we can even index meta_df correctly
+            if k == MetaKey.unique:
+                continue # Only used as identifier, never served
+            elif k == MetaKey.array:
+                all_arrays = sorted(
+                    pd.concat(self.meta_df[f'array_{i}'] for i in range(self.cfg.max_arrays)).unique()
+                ) # This automatically includes the padding "" if it's present in df
+                context[MetaKey.array.name] = all_arrays
+            else:
+                assert k in self.meta_df.columns, f"Key {k} not in metadata"
+                context[k.name] = sorted(self.meta_df[k].unique()) # convert key from enum so we can build contextattrs
         self.context_index: Dict[str, List] = context
 
     def get_data_attrs(self):
@@ -264,14 +292,9 @@ class SpikingDataset(Dataset):
     def get_key_indices(self, key_values, key: MetaKey=MetaKey.unique):
         return self.meta_df[self.meta_df[key].isin(key_values)].index
 
-    @property
     def subset_by_key(self, key_values: List[Any], key: MetaKey=MetaKey.unique, allow_second_subset=True):
         r"""
             # ! In place
-            # (Minimum generalization is, same trial, different pulse)
-            # To new trials, likely practical minimum
-            # To new channel, amplitudes, etc. in the future
-            Note - does not update `self.session` as we want to track the source (multi-)sessions to prevent unintended session mixup (see `merge`)
         """
         if len(key_values) == 0:
             logging.info("No keys provided, ignoring subset.")

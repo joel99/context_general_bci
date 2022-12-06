@@ -76,7 +76,6 @@ class ContextRegistry:
         return self._registry[id]
 
 context_registry = ContextRegistry([
-    PassiveICMSContextInfo.build(880, 1, 'stim_trains_gen2_chan34-40_80uA_0.5ITI_36cond/'),
     PassiveICMSContextInfo.build(906, 1, 'stim_trains_gen4-02b-ant_chan14-19-20-25_80uA_0.5ITI_6cond/'),
 
     PassiveICMSContextInfo.build(980, 4, 'stim_trains_additivity_chan34-36-45-47-49-50-51-52_80uA_0.5ITI_12cond'), # Not yet analyzed
