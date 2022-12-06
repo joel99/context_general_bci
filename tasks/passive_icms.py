@@ -102,7 +102,6 @@ def infer_stim_parameters(
         # TODO delete invalid trials from key_df or mark them somehow
     return trial_stim_state
 
-# Each loader should be responsible for loading/caching all information in paths
 @ExperimentalTaskRegistry.register
 class ICMSLoader(ExperimentalTaskLoader):
     name = 'passive_icms'

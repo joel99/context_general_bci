@@ -1,5 +1,4 @@
 #%%
-# Largely pulled from https://github.com/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb
 from nlb_tools.nwb_interface import NWBDataset
 from nlb_tools.make_tensors import make_train_input_tensors, make_eval_input_tensors, make_eval_target_tensors, save_to_h5
 from nlb_tools.evaluation import evaluate
@@ -27,18 +26,3 @@ phase = 'test'
 bin_width = 5
 dataset.resample(bin_width)
 
-# Create suffix for group naming later
-suffix = '' if (bin_width == 5) else f'_{int(bin_width)}'
-
-train_split = 'train' if (phase == 'val') else ['train', 'val']
-train_dict = make_train_input_tensors(dataset, dataset_name=dataset_name, trial_split=train_split, save_file=False)
-
-# Show fields of returned dict
-print(train_dict.keys())
-
-# Unpack data
-train_spikes_heldin = train_dict['train_spikes_heldin']
-train_spikes_heldout = train_dict['train_spikes_heldout']
-
-# Print 3d array shape: trials x time x channel
-print(train_spikes_heldin.shape)
