@@ -1,6 +1,8 @@
 outputs/
 wandb/
 
+# wandb folder
+context_general_bci/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

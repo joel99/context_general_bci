@@ -86,8 +86,8 @@ def run_exp(cfg : RootConfig) -> None:
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
 
     # === Train ===
-    num_workers = 0
-    # num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
+    # num_workers = 0 # for testing
+    num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
     logging.info("Preparing to fit...")
     trainer.fit(
         model,

@@ -1,18 +1,17 @@
 # @package _global_
-tag: maze_full
+tag: maze_no_embed
 
 model:
   task:
     task: ModelTask.infill
-  readin_strategy: EmbedStrat.token
+  session_embed_strategy: EmbedStrat.none
 dataset:
   bin_size_ms: 5
   datasets:
-  - mc_maze
+  - mc_maze_small
   data_keys:
   - "spikes"
 
-  max_channels: 137 # test # TODO
 train:
   epochs: 2000
-  batch_size: 256
+  # max_channels: 140 # test # TODO

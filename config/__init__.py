@@ -186,7 +186,7 @@ class DatasetConfig:
 
     # Pad to this number of channels per array group
     # If set to 0, will skip padding checks.
-    max_channels: int = 0
+    max_channels: int = 0 # ! TODO add smart inference (take max over array reports)
 
     # Pad to this number of arrays (for meta and data alike). Must be >= 1
     max_arrays: int = 1

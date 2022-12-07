@@ -4,8 +4,8 @@ from subjects import SubjectName, SortedArrayInfo, SubjectInfo, SubjectArrayRegi
 class Jenkins(SubjectInfo):
     name = SubjectName.jenkins
     _arrays = {
-        'main': SortedArrayInfo(_max_channels=107) # temp
-        # 'main': SortedArrayInfo(_max_channels=137)
+        # 'main': SortedArrayInfo(_max_channels=107) # temp
+        'main': SortedArrayInfo(_max_channels=137)
     }
 
 @SubjectArrayRegistry.register

@@ -13,7 +13,7 @@ from config import (
 )
 
 from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
-from subjects import subject_array_registry
+from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 from backbones import TemporalTransformer
@@ -102,21 +102,23 @@ class BrainBertInterface(pl.LightningModule):
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             # bookmark: multi-array readin should be done here
             # Note in general the data module will be responsible for providing array masks
-            if self.cfg.readin_strategy == EmbedStrat.project:
+            if self.data_attrs.max_channel_count > 0: # there is padding
+                channel_count = self.data_attrs.max_channel_count
+            else:
                 # * Just project all channels.
                 # Doesn't (yet) support separate array projections.
                 # Doesn't (yet) support task-subject specific readin.
                 # ? I am unclear how Talukder managed to have mixed batch training if different data was shaped different sizes.
-                assert len(data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
                 # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
                 # * A rework will be needed if we want to do this lookup grouped per subject
+                assert self.cfg.readin_strategy == EmbedStrat.project, 'Ragged array readin only implemented for project readin strategy'
+                assert len(data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
+
+                for a in self.data_attrs.context.array:
+                    assert not isinstance(subject_array_registry.query_by_array(a), SortedArrayInfo), "actual mixed readins per session not yet implemented"
                 channel_count = sum(
                     subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
                 ) * self.data_attrs.spike_dim
-            elif self.cfg.readin_strategy == EmbedStrat.token:
-                channel_count = self.data_attrs.max_channel_count
-            else:
-                raise NotImplementedError
             self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
 
             # TODO add readin for the stim array (similar attr)
@@ -237,7 +239,7 @@ class BrainBertInterface(pl.LightningModule):
             target = spikes[..., 0]
         elif self.cfg.task.task == ModelTask.infill:
             is_masked = torch.bernoulli(
-                torch.full(spikes.size()[:2], self.cfg.task.mask_ratio, device=spikes.device)
+                torch.full(spikes.size()[:3], self.cfg.task.mask_ratio, device=spikes.device)
             )
             mask_token = torch.bernoulli(torch.full_like(is_masked, self.cfg.task.mask_token_ratio))
             mask_random = torch.bernoulli(torch.full_like(is_masked, self.cfg.task.mask_random_ratio))
@@ -246,10 +248,11 @@ class BrainBertInterface(pl.LightningModule):
                 mask_token.bool() & is_masked,
                 mask_random.bool() & is_masked,
             )
+            target = spikes[..., 0]
             spikes = spikes.clone()
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
-            target = spikes[..., 0]
+
 
         predict = self(batch) # B T A C
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
@@ -260,20 +263,26 @@ class BrainBertInterface(pl.LightningModule):
         if LENGTH_KEY in batch: # only some of b x t are valid
             lengths = batch[LENGTH_KEY] # b of ints < t
             length_mask = torch.arange(t, device=spikes.device)[None, :] < lengths[:, None] # B T
-            loss_mask = loss_mask & length_mask
-            import pdb;pdb.set_trace() # needs testing
+            loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
+            # import pdb;pdb.set_trace() # TODO needs testing in padding mode
         if CHANNEL_KEY in batch: # only some of b x a x c are valid
             channels = batch[CHANNEL_KEY] # b x a of ints < c
-            comparison = repeat(torch.arange(c, device=spikes.device), '1 a c', a=a)
-            channel_mask = comparison < rearrange(channels, 'a c -> 1 a c') # B A C
+            comparison = repeat(torch.arange(c, device=spikes.device), 'c -> 1 a c', a=a)
+            channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
             loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
-            import pdb;pdb.set_trace() # needs testing
+        else:
+            channel_mask = None
         if self.cfg.task.task == ModelTask.infill:
-            loss_mask = loss_mask & is_masked
+            loss_mask = loss_mask & rearrange(is_masked, 'b t a -> b t a 1')
         loss = loss[loss_mask]
         batch_out = {'loss': loss.mean()}
         if Metric.bps in self.cfg.task.metrics:
-            batch_out[Metric.bps] = self.bps(predict[Output.rates], target, length_mask=length_mask, channel_mask=channel_mask)
+            batch_out[Metric.bps] = self.bps(
+                predict[Output.rates],
+                target,
+                length_mask=length_mask,
+                channel_mask=channel_mask
+            )
         return batch_out
 
     @torch.inference_mode()
@@ -339,12 +348,12 @@ class BrainBertInterface(pl.LightningModule):
             nll_model[~length_mask] = 0.
             spikes[~length_mask] = 0
         if channel_mask is not None:
-            nll_model[~channel_mask.unsqueeze(1)] = 0.
-            spikes[~channel_mask.unsqueeze(1)] = 0
+            nll_model[~channel_mask.unsqueeze(1).expand_as(nll_model)] = 0.
+            spikes[~channel_mask.unsqueeze(1).expand_as(spikes)] = 0
 
         nll_model = reduce(nll_model, 'b t a c -> b a c', 'sum')
 
-        if length_mask:
+        if length_mask is not None:
             mean_rates = (spikes.sum(1) / length_mask.float().sum(1, keepdim=True)).unsqueeze(1) # B A C / B -> B T A C
         else:
             mean_rates = spikes.mean(1, keepdim=True)
@@ -354,16 +363,15 @@ class BrainBertInterface(pl.LightningModule):
         if length_mask is not None:
             nll_null[~length_mask] = 0.
         if channel_mask is not None:
-            nll_null[~channel_mask.unsqueeze(1)] = 0.
+            nll_null[~channel_mask.unsqueeze(1).expand_as(nll_null)] = 0.
 
         nll_null = nll_null.sum(1) # B A C
         # Note, nanmean used to automatically exclude zero firing trials. Invalid items should be reported as nan.s here
         # TODO confirm
         bps_raw: torch.Tensor = ((nll_null - nll_model) / spikes.sum(1) / np.log(2))
-        import pdb;pdb.set_trace()
         if raw:
             return bps_raw
-        bps = bps_raw[spikes.sum(1) != 0].detach()
+        bps = bps_raw[(spikes.sum(1) != 0).expand_as(bps_raw)].detach()
         if mean:
             return bps.mean()
         return bps

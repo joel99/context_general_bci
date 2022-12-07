@@ -331,6 +331,7 @@ class SpikingDataset(Dataset):
         train.subset_by_key(train_keys, key=self.cfg.split_key)
         val = copy.deepcopy(self)
         val.subset_by_key(val_keys, key=self.cfg.split_key)
+        assert train.context_index == val.context_index, "Context index mismatch between train and val (some condition is unavailable, not supported)"
         return train, val
 
     def merge(self, data_other: Any): # should be type Self but surprisingly this is a 3.11 feature (I thought I used it before?)
