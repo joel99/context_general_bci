@@ -194,8 +194,8 @@ class BrainBertInterface(pl.LightningModule):
         else:
             temporal_padding_mask = None
 
-        # Note that fine-grained channel mask doesn't matter (sub-token padding)
-        # But we do want to mask out fully-padded arrays (for highly heterogenuous batches)
+        # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
+        # But we do want to exclude fully-padded arrays from computation
         array_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
 
         outputs: torch.Tensor = self.backbone(
@@ -229,6 +229,7 @@ class BrainBertInterface(pl.LightningModule):
             Example shapes:
                 spikes: B T A C H=1 (C is electrode channel)
                 stim: B T C H
+                channel_counts: B A (counts per array)
         """
         target = None
         # TODO figure out how to wrap this ICMS code in a task abstraction
@@ -237,6 +238,7 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             target = spikes[..., 0]
+            # ! dont' forget a cast to float
         elif self.cfg.task.task == ModelTask.infill:
             is_masked = torch.bernoulli(
                 torch.full(spikes.size()[:3], self.cfg.task.mask_ratio, device=spikes.device)
@@ -254,7 +256,8 @@ class BrainBertInterface(pl.LightningModule):
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
             batch = {
                 **batch,
-                DataKey.spikes: spikes,
+                # DataKey.spikes: spikes,
+                DataKey.spikes: torch.as_tensor(spikes, dtype=torch.float),
             }
 
 

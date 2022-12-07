@@ -144,7 +144,7 @@ class ICMSLoader(ExperimentalTaskLoader):
                 for key in exp_info[1]: # 1 is arbitrary. Keys included are listed in `generate_stim` in `icms_modeling` -- e.g. `channels`, `train`, `condition`, etc. `condtiion` is the same as `raw_condition` above.
                     payload[key] = [exp_info[t][key] for t in payload['trial_num']]
         del data
-
+        # TODO store as uint8
         # `meta_info.arrays` is more static, and should dictate the order arrays are cached in (though I expect to overwrite)
         # TODO review whether we should save the configured subset or configure outside of cache
         # arrays_to_use = [a for a in context_info.arrays if a in cfg.passive_icms.arrays] # use config

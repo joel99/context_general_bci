@@ -57,8 +57,8 @@ class NLBLoader(ExperimentalTaskLoader):
 
         # Print 3d array shape: trials x time x channel
         # print(train_spikes_heldin.shape)
-        train_spikes_heldin = torch.tensor(train_spikes_heldin)
-        # train_spikes_heldin = torch.tensor(train_spikes_heldin, dtype=torch.uint8)
+        # train_spikes_heldin = torch.tensor(train_spikes_heldin)
+        train_spikes_heldin = torch.tensor(train_spikes_heldin, dtype=torch.uint8)
         meta_payload = {}
         meta_payload['path'] = []
 

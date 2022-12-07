@@ -70,7 +70,7 @@ def run_exp(cfg : RootConfig) -> None:
         max_steps=max_steps,
         accelerator='gpu',
         devices=torch.cuda.device_count(),
-        val_check_interval=1.0,
+        check_val_every_n_epoch=10,
         callbacks=callbacks,
         default_root_dir=cfg.default_root_dir,
         track_grad_norm=2 if cfg.train.log_grad else -1,

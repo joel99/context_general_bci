@@ -2,8 +2,8 @@
 #SBATCH --job-name=ndt2
 #SBATCH --gres gpu:1
 #SBATCH -p gpu
-#SBATCH -c 12
-#SBATCH -t 96:00:00
+#SBATCH -c 6
+#SBATCH -t 12:00:00
 #SBATCH --mem 30G
 #SBATCH --output=slurm_logs/%j.out
 

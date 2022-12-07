@@ -1,5 +1,5 @@
 # @package _global_
-tag: maze_full
+tag: maze_multi_embed
 
 model:
   task:
@@ -9,6 +9,9 @@ dataset:
   bin_size_ms: 5
   datasets:
   - mc_maze
+  - mc_maze_large
+  - mc_maze_medium
+  - mc_maze_small
   data_keys:
   - "spikes"
 

@@ -8,7 +8,7 @@ model:
 dataset:
   bin_size_ms: 5
   datasets:
-  - mc_maze
+  - mc_maze_medium
   data_keys:
   - "spikes"
 
