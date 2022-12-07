@@ -185,7 +185,7 @@ class ICMSLoader(ExperimentalTaskLoader):
                     single_payload[k] = extract_arrays(payload[k][t], arrays_to_use)
                 else: # Honestly have no idea what other keys even are
                     single_payload[k] = payload[k][t]
-                single_payload[k] = single_payload[k][:, :cfg.max_trial_length] # TODO alignment?
+                single_payload[k] = single_payload[k][:, :cfg.max_trial_length].clone() # TODO alignment?
             import pdb;pdb.set_trace() # TODO check shape
             single_path = cache_root / f"{t}.pth"
             payload['path'].append(single_path)

@@ -205,6 +205,7 @@ class TrainConfig:
     log_grad: bool = False
     gradient_clip_val: float = 0.0
     accumulate_batches: int = 1
+    profiler: str = ""
 
 @dataclass
 class RootConfig:

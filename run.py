@@ -23,7 +23,7 @@ from utils import get_latest_ckpt_from_wandb_id
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
-    logging.info(f"Running Gelsight, dumping config:")
+    logging.info(f"Running NDT2, dumping config:")
     logging.info(OmegaConf.to_yaml(cfg))
     pl.seed_everything(seed=cfg.seed)
 
@@ -76,7 +76,8 @@ def run_exp(cfg : RootConfig) -> None:
         track_grad_norm=2 if cfg.train.log_grad else -1,
         precision=16 if cfg.model.half_precision else 32,
         gradient_clip_val=cfg.train.gradient_clip_val,
-        accumulate_grad_batches=cfg.train.accumulate_batches
+        accumulate_grad_batches=cfg.train.accumulate_batches,
+        profiler=cfg.train.profiler if cfg.train.profiler else None,
     )
 
     if torch.cuda.device_count() <= 1 or trainer.global_rank == 0:

@@ -252,6 +252,10 @@ class BrainBertInterface(pl.LightningModule):
             spikes = spikes.clone()
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
+            batch = {
+                **batch,
+                DataKey.spikes: spikes,
+            }
 
 
         predict = self(batch) # B T A C

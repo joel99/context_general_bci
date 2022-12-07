@@ -58,6 +58,7 @@ class NLBLoader(ExperimentalTaskLoader):
         # Print 3d array shape: trials x time x channel
         # print(train_spikes_heldin.shape)
         train_spikes_heldin = torch.tensor(train_spikes_heldin)
+        # train_spikes_heldin = torch.tensor(train_spikes_heldin, dtype=torch.uint8)
         meta_payload = {}
         meta_payload['path'] = []
 
@@ -65,7 +66,7 @@ class NLBLoader(ExperimentalTaskLoader):
             single_payload = {
                 DataKey.spikes: {
                     # TODO split into PMd and M1
-                    subject.wrap_array(list(subject.arrays.keys())[0]): rearrange(train_spikes_heldin[trial], 't c -> t c 1')
+                    subject.wrap_array(list(subject.arrays.keys())[0]): rearrange(train_spikes_heldin[trial], 't c -> t c 1').clone()
                 },
             }
             single_path = cache_root / f"{trial}.pth"
