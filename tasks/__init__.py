@@ -12,6 +12,7 @@ class ExperimentalTask(Enum):
     passive_icms = "passive_icms"
     maze = "maze"
     rtt = "random_target_task"
+    churchland_maze = "churchland_maze"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 # Exports

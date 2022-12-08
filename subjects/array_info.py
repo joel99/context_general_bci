@@ -8,11 +8,12 @@ from subjects import SubjectName
 ArrayID = str
 @dataclass
 class ArrayInfo:
-    # is_exact: bool
+    is_exact: bool = False # is_exact becomes synonymous with wheter we can query for indices
 
     @abstractmethod
     def get_channel_count(self) -> int:
         raise NotImplementedError
+
 
 @dataclass
 class GeometricArrayInfo(ArrayInfo):
@@ -22,8 +23,8 @@ class GeometricArrayInfo(ArrayInfo):
         array: array of electrode indices, possibly reflects the geometry of the implanted array.
     """
 
-    array: np.ndarray
-    # is_exact: bool = True
+    array: np.ndarray = np.array([])
+    is_exact: bool = True
     one_indexed: bool = False
 
     def as_indices(self):
@@ -38,13 +39,14 @@ class GeometricArrayInfo(ArrayInfo):
     def get_channel_count(self):
         return (self.array != np.nan).sum()
 
+
 @dataclass
 class SortedArrayInfo(ArrayInfo):
     r"""
         Sorted arrays unfortunately have no consistent interface from session to session.
         We support a simple interface; really readin logic (in `model.__init__`) needs to be queried from session info if we want per session layer
     """
-    # is_exact: bool = False # count is not exact
+    is_exact: bool = False # count is not exact
     _max_channels: int = 140
     def get_channel_count(self):
         return self._max_channels

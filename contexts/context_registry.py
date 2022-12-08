@@ -110,4 +110,7 @@ context_registry = ContextRegistry([
     ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_medium'),
     ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_small'),
     ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt, alias='mc_rtt'),
+
+    *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Jenkins', ExperimentalTask.maze, alias_prefix='churchland_maze_jenkins'),
+    *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Nitschke', ExperimentalTask.maze, alias_prefix='churchland_maze_nitschke'),
 ])

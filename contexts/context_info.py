@@ -225,7 +225,7 @@ class ReachingContextInfo(ContextInfo):
         return f"{self.session}"
 
     @classmethod
-    def build(cls, datapath_str: str, task: ExperimentalTask, alias: str=""):
+    def build(cls, datapath_str: str, task: ExperimentalTask, alias: str="", arrays=["main"]):
         datapath = Path(datapath_str)
         subject = SubjectArrayRegistry.query_by_subject(
             datapath.name.split('-')[-1].lower()
@@ -234,10 +234,32 @@ class ReachingContextInfo(ContextInfo):
         return ReachingContextInfo(
             subject=subject,
             task=task,
+            _arrays=arrays,
             alias=alias,
             session=session,
             datapath=datapath,
         )
+
+    @classmethod
+    def build_several(cls, datapath_folder_str: str, task: ExperimentalTask, alias_prefix: str = "", arrays=["PMd", "M1"]):
+        # designed around churchland reaching data
+        datapath_folder = Path(datapath_folder_str)
+        subject = SubjectArrayRegistry.query_by_subject(
+            datapath_folder.name.split('-')[-1].lower()
+        )
+        session = int(datapath_folder.parent.name)
+        all_info = []
+        for i, path in enumerate(datapath_folder.glob("*.nwb")):
+            alias = f"{alias_prefix}-{i}" if alias_prefix else f"reaching-{subject.name}-{i}"
+            all_info.append(ReachingContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=arrays,
+                alias=alias,
+                session=session,
+                datapath=path,
+            ))
+        return all_info
 
     def get_search_index(self):
         return {

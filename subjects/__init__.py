@@ -16,6 +16,7 @@ class SubjectName:
     BCI02 = "BCI02"
     jenkins = "Jenkins"
     indy = "Indy"
+    nitschke = "Nitschke"
 
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
 from .array_registry import SubjectArrayRegistry

@@ -8,14 +8,16 @@ model:
 dataset:
   bin_size_ms: 5
   datasets:
-  - mc_maze
-  - mc_maze_large
-  - mc_maze_medium
+  # - mc_maze
+  # - mc_maze_large
+  # - mc_maze_medium
   - mc_maze_small
   data_keys:
   - "spikes"
 
   max_channels: 137
 train:
-  epochs: 2000
+  epochs: 100
+  # epochs: 2000
   batch_size: 128
+  profiler: 'simple'

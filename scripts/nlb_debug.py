@@ -11,7 +11,8 @@ from sklearn.preprocessing import StandardScaler
 
 
 ## Load dataset
-dataset = NWBDataset("./data/nlb/000128/sub-Jenkins/", "*train", split_heldout=False)
+dataset = NWBDataset("./data/churchland_reaching/000070/sub-Jenkins/", "sub-Jenkins_ses-200090912")
+# dataset = NWBDataset("./data/nlb/000128/sub-Jenkins/", "*train", split_heldout=False)
 #%%
 print(dataset.data)
 

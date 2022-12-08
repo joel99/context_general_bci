@@ -123,6 +123,7 @@ class DataKey(Enum):
     # What is the right we to specify we want some type of array?
     spikes = 'spikes'
     stim = 'stim' # icms
+    heldout_spikes = 'heldout_spikes' # for co-bps
 
 class MetaKey(Enum):
     r"""
