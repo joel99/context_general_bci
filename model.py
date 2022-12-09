@@ -205,7 +205,7 @@ class BrainBertInterface(pl.LightningModule):
             temporal_padding_mask=temporal_padding_mask,
             array_padding_mask=array_padding_mask,
             causal=self.cfg.task.task == ModelTask.icms_one_step_ahead,
-        ) # B x T x A x H # TODO satisfy shape
+        ) # B x T x A x H
         if outputs.isnan().any(): # I have no idea why, but something in s61 or s62 throws a nan
             # And strangely, I can't repro by invoking forward again.
             # Leaving for now to see if it happens after padding refactor
@@ -330,6 +330,7 @@ class BrainBertInterface(pl.LightningModule):
             out = out / self.data_attrs.bin_size_ms
         return out
 
+    @torch.no_grad()
     def bps(
         self, rates: torch.Tensor, spikes: torch.Tensor, is_lograte=True, mean=True, raw=False,
         length_mask: Optional[torch.Tensor]=None, channel_mask: Optional[torch.Tensor]=None
@@ -361,11 +362,11 @@ class BrainBertInterface(pl.LightningModule):
         nll_model = reduce(nll_model, 'b t a c -> b a c', 'sum')
 
         if length_mask is not None:
-            mean_rates = (spikes.sum(1) / length_mask.float().sum(1, keepdim=True)).unsqueeze(1) # B A C / B -> B T A C
+            mean_rates = reduce(spikes, 'b t a c -> b 1 a c', 'sum') / reduce(length_mask, 'b t -> b 1 1 1', 'sum')
         else:
-            mean_rates = spikes.mean(1, keepdim=True)
+            mean_rates = reduce(spikes, 'b t a c -> b 1 a c')
         mean_rates = (mean_rates + 1e-8).log()
-        nll_null: torch.Tensor = self.loss(mean_rates, spikes) # B T A C
+        nll_null: torch.Tensor = self.loss(mean_rates, spikes)
 
         if length_mask is not None:
             nll_null[~length_mask] = 0.
@@ -374,7 +375,6 @@ class BrainBertInterface(pl.LightningModule):
 
         nll_null = nll_null.sum(1) # B A C
         # Note, nanmean used to automatically exclude zero firing trials. Invalid items should be reported as nan.s here
-        # TODO confirm
         bps_raw: torch.Tensor = ((nll_null - nll_model) / spikes.sum(1) / np.log(2))
         if raw:
             return bps_raw

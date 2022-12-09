@@ -94,11 +94,11 @@ class NLBLoader(ExperimentalTaskLoader):
 
 @ExperimentalTaskRegistry.register
 class MazeLoader(NLBLoader):
-    name = ExperimentalTask.maze
+    name = ExperimentalTask.nlb_maze
 
 @ExperimentalTaskRegistry.register
 class RTTLoader(NLBLoader):
-    name = ExperimentalTask.rtt
+    name = ExperimentalTask.nlb_rtt
 
 
 # === Overrides for Churchland dataset ===
@@ -133,6 +133,7 @@ class NWBDatasetChurchland(NWBDataset):
 
         # ! Overriden to process Churchland dataset more carefully
         # ! Specifically Churchland release units don't appear to all be restrained to `obs_intervals` or even trial times
+        # ! Skips loading of other timeseries
 
         Parameters
         ----------
@@ -170,7 +171,6 @@ class NWBDatasetChurchland(NWBDataset):
             .reset_index()
             .rename({'id': 'trial_id', 'stop_time': 'end_time'}, axis=1))
         units = nwbfile.units.to_dataframe()
-
         # Load descriptions of trial info fields
         descriptions = {}
         for name, info in zip(nwbfile.trials.colnames, nwbfile.trials.columns):
@@ -209,12 +209,53 @@ class NWBDatasetChurchland(NWBDataset):
                             descriptions[name] = field.description
             return ts_dict
         # Create a dictionary containing DataFrames for all time series
-        data_dict = find_timeseries(nwbfile)
+        # data_dict = find_timeseries(nwbfile)
+        data_dict = {}
         # Calculate data index
         start_time = 0.0
         bin_width = 1 # in ms, this will be the case for all provided datasets
         rate = round(1000. / bin_width, 2) # in Hz
         # Use obs_intervals, or last trial to determine data end
+
+        # In Churchland release for Monkey J datasets, trial times are occassionally reset.
+        # We hope it happens fairly infrequently in the following in-place patch
+        def scan_and_adjust_times(trial_info, units, discontinuity_pad_s=1.0):
+            # fields to update in units - `obs_intervals` and `spike_times`
+            spike_idx = np.zeros(len(units), dtype=int) # spike_times aren't grouped by trial, so we need to estimate which trial we're in
+            for i in range(1, len(trial_info)):
+                offset = 0
+                if trial_info['start_time'].iloc[i] < trial_info['end_time'].iloc[i-1]:
+                    print(f"Discontinuity detected at trial {i}!")
+                    offset = trial_info['end_time'].iloc[i-1] - trial_info['start_time'].iloc[i] + discontinuity_pad_s
+                    # Current behavior is to shift all subsequent trials by the difference between the end of the previous trial and the start of the current trial
+                    # However, for small offsets; this might just be actually overlapping trials; we try to skip this
+                    # Hopefully downstream processes take care of those offsets
+                    if offset < 10.0:
+                        offset = 0
+                    else:
+                        for k in trial_info.columns:
+                            if k.endswith('_time'):
+                                trial_info.loc[i:, k] = trial_info.loc[i:, k] + offset
+                                # trial_info[k][i:] = trial_info[k][i:] + offset
+                for j in range(len(units)):
+                    unit_times = units.spike_times[j]
+                    if offset:
+                        units.obs_intervals[j][i:] += offset # shape Trials x 2
+                        if spike_idx[j] + 1 < len(unit_times): # spike_idx[j] tracks the last spike in the previous trial
+                            unit_times[spike_idx[j] + 1:] += offset
+                    # Update pointer to one past last spike in current trial
+                    while spike_idx[j] + 1 < len(unit_times) and \
+                        (unit_times[spike_idx[j]] < trial_info['end_time'].iloc[i]) and \
+                        (unit_times[spike_idx[j]+1] + 10.0 > unit_times[spike_idx[j]]): # kind of blunt but there's going to be a discontunuity next iteration
+                        # (unit_times[spike_idx[j]] >= trial_info['start_time'].iloc[i-1]): # one option - not good if we have spikes outside trials (even if those are discarded)
+                        # Fine that we don't iterate to end - we just want to update times here
+                        # + 10 for same offset
+                        spike_idx[j] += 1
+        # ! Note we don't (for unsupervised pretraining) consider whether to discard trials according to `discard_trial` flag
+        # ! But we should track it if we are interested in decoding kinematics
+
+        scan_and_adjust_times(trial_info, units)
+
         end_time = round(max(units.obs_intervals.apply(lambda x: x[-1][-1])) * rate) * bin_width
         if (end_time < trial_info['end_time'].iloc[-1]):
             print("obs_interval ends before trial end") # TO REMOVE
@@ -250,9 +291,16 @@ class NWBDatasetChurchland(NWBDataset):
 
             # Bin spikes using decimal truncation and np.unique - faster than np.histogram with same results
             for idx, (_, unit) in enumerate(units[mask].iterrows()):
+                # spike_times = unit.spike_times
+                # if np.argmin(spike_times) != 0: # few weird units
+                #     logger.warning(f'Reordering spike times in unit {idx}')
+                #     unit.spike_times = np.sort(spike_times)
                 spike_idx, spike_cnt = np.unique(((unit.spike_times - timestamps[0]) * rate).round(6).astype(int), return_counts=True)
                 # JY patch: restrict to timestamps that are feasible for allocated spike_arr (which is defined wrt obs_interval, which is hopefully defined wrt trials)
                 in_experiment_idx_mask = np.logical_and(spike_idx >= 0, spike_idx < spike_arr.shape[0])
+                if not np.all(in_experiment_idx_mask):
+                    import pdb;pdb.set_trace()
+                    logger.warning(f'Restricting spike times in unit {unit.id}')
                 spike_idx = spike_idx[in_experiment_idx_mask]
                 spike_cnt = spike_cnt[in_experiment_idx_mask]
                 spike_arr[spike_idx, idx] = spike_cnt

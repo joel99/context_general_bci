@@ -113,11 +113,11 @@ context_registry = ContextRegistry([
     PassiveICMSContextInfo.build(132, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_1'), # VISUAL DECODING
 
 
-    ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze'),
-    ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_large'),
-    ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_medium'),
-    ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_small'),
-    ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt, alias='mc_rtt'),
+    ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze'),
+    ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze_large'),
+    ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze_medium'),
+    ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze_small'),
+    ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.nlb_rtt, alias='mc_rtt'),
 
     *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Jenkins', ExperimentalTask.churchland_maze, alias_prefix='churchland_maze_jenkins'),
     *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Nitschke', ExperimentalTask.churchland_maze, alias_prefix='churchland_maze_nitschke'),

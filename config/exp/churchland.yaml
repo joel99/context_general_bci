@@ -8,11 +8,13 @@ model:
 dataset:
   bin_size_ms: 5
   datasets:
-  - mc_maze_medium
+  - churchland_maze_jenkins-0
   data_keys:
   - "spikes"
 
+  max_arrays: 2
   max_channels: 137
 train:
-  epochs: 2000
+  epochs: 100
+  # epochs: 2000
   batch_size: 128

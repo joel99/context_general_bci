@@ -75,12 +75,19 @@ class SpikingDataset(Dataset):
         assert DataKey.spikes in cfg.data_keys, "Must have spikes"
 
         meta_df = []
-        for d in self.cfg.datasets:
-            meta_df.extend(self.load_session(d))
-        self.meta_df = pd.concat(meta_df).reset_index()
+        if self.cfg.datasets:
+            for d in self.cfg.datasets:
+                meta_df.extend(self.load_session(d))
+            self.meta_df = pd.concat(meta_df).reset_index()
+        else:
+            self.meta_df = None
 
         self.context_index = None
         self.subsetted = False
+
+    @property
+    def loaded(self):
+        return self.meta_df is not None
 
     @staticmethod
     def preprocess_path(cfg: DatasetConfig, session_path: Path) -> Path:

@@ -222,7 +222,7 @@ class ReachingContextInfo(ContextInfo):
     session: int
 
     def _id(self):
-        return f"{self.session}"
+        return f"{self.session}-{self.alias}" # All reaching data get alias
 
     @classmethod
     def build(cls, datapath_str: str, task: ExperimentalTask, alias: str="", arrays=["main"]):

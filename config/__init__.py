@@ -198,8 +198,10 @@ class DatasetConfig:
 
     # Experimental Task configuration
     passive_icms: ExperimentalConfig = ExperimentalConfig()
-    maze: ExperimentalConfig = ExperimentalConfig()
-    rtt: ExperimentalConfig = ExperimentalConfig()
+    nlb_maze: ExperimentalConfig = ExperimentalConfig()
+    nlb_rtt: ExperimentalConfig = ExperimentalConfig()
+    churchland_maze: ExperimentalConfig = ExperimentalConfig()
+    odoherty_rtt: ExperimentalConfig = ExperimentalConfig
 
 @dataclass
 class TrainConfig:

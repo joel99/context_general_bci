@@ -71,6 +71,7 @@ class TemporalTransformer(nn.Module):
             We assume that the provided trial and temporal context is consistently shaped. i.e. any context provided is provided for all samples.
             (So attention masks do not vary across batch)
         """
+        # import pdb;pdb.set_trace() # ! TODO need to test mixed multi-array settings
         b, t, a, h = src.size()
         src = src + self.pos_encoder(src) # TODO make relative
         contextualized_src, ps = pack([
@@ -83,6 +84,7 @@ class TemporalTransformer(nn.Module):
 
         # src mask
         if causal:
+            import pdb;pdb.set_trace() # untested codepath
             src_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
             # Add array dimension
             src_mask = rearrange(

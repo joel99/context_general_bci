@@ -10,9 +10,10 @@ r"""
 """
 class ExperimentalTask(Enum):
     passive_icms = "passive_icms"
-    maze = "maze"
-    rtt = "random_target_task"
+    nlb_maze = "maze"
+    nlb_rtt = "random_target_task"
     churchland_maze = "churchland_maze"
+    odoherty_rtt = "odoherty_rtt"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 # Exports
