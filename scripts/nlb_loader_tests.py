@@ -21,13 +21,13 @@ import seaborn as sns
 # dataset_name = 'mc_maze_small' # 107 sorted units
 # dataset_name = 'mc_maze' # 137 sorted units
 dataset_name = 'churchland_maze_jenkins-0'
-# dataset_name = 'churchland_maze_jenkins-1'
+dataset_name = 'churchland_maze_jenkins-1'
 context = context_registry.query(alias=dataset_name)
 
 default_cfg = DatasetConfig()
 default_cfg.bin_size_ms = 5
-default_cfg.max_arrays = 1
-# default_cfg.max_arrays = 2
+# default_cfg.max_arrays = 1
+default_cfg.max_arrays = 2
 dataset = SpikingDataset(default_cfg)
 
 dataset.meta_df = dataset.load_session(dataset_name)[0]

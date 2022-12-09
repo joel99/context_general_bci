@@ -4,6 +4,9 @@ slurm_logs/
 # wandb folder
 context_general_bci/
 
+# Typically debug
+*.pth
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -10,8 +10,15 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 
+#%%
+import torch
+test = torch.load('test2.pth')
+# test = torch.load('test.pth')
+plt.plot(test)
+plt.ylabel('Spike time')
+plt.xlabel('Recorded Spike #')
 ## Load dataset
-dataset = NWBDataset("./data/churchland_reaching/000070/sub-Jenkins/", "sub-Jenkins_ses-200090912")
+# dataset = NWBDataset("./data/churchland_reaching/000070/sub-Jenkins/", "sub-Jenkins_ses-200090912")
 # dataset = NWBDataset("./data/nlb/000128/sub-Jenkins/", "*train", split_heldout=False)
 #%%
 print(dataset.data)

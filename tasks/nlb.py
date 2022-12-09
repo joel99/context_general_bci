@@ -219,30 +219,39 @@ class NWBDatasetChurchland(NWBDataset):
 
         # In Churchland release for Monkey J datasets, trial times are occassionally reset.
         # We hope it happens fairly infrequently in the following in-place patch
+        trial_info['discard_trial_patch'] = False
         def scan_and_adjust_times(trial_info, units, discontinuity_pad_s=1.0):
             # fields to update in units - `obs_intervals` and `spike_times`
             spike_idx = np.zeros(len(units), dtype=int) # spike_times aren't grouped by trial, so we need to estimate which trial we're in
             for i in range(1, len(trial_info)):
-                offset = 0
+                # offset = 0
                 if trial_info['start_time'].iloc[i] < trial_info['end_time'].iloc[i-1]:
-                    print(f"Discontinuity detected at trial {i}!")
-                    offset = trial_info['end_time'].iloc[i-1] - trial_info['start_time'].iloc[i] + discontinuity_pad_s
-                    # Current behavior is to shift all subsequent trials by the difference between the end of the previous trial and the start of the current trial
-                    # However, for small offsets; this might just be actually overlapping trials; we try to skip this
-                    # Hopefully downstream processes take care of those offsets
-                    if offset < 10.0:
-                        offset = 0
-                    else:
-                        for k in trial_info.columns:
-                            if k.endswith('_time'):
-                                trial_info.loc[i:, k] = trial_info.loc[i:, k] + offset
-                                # trial_info[k][i:] = trial_info[k][i:] + offset
+                    print(f"Discontinuity detected at trial {i} of {len(trial_info)}, discard rest!")
+                    trial_info.loc[i:, 'discard_trial_patch'] = True
+                    for j in range(len(units)):
+                        units.spike_times[j] = units.spike_times[j][:spike_idx[j]]
+                        units.obs_intervals[j] = units.obs_intervals[j][:i]
+                    trial_info = trial_info[:i]
+                    break
+                # It's not actually clear what the nature of the discontinuity is, so I can't patch
+                #     offset = trial_info['end_time'].iloc[i-1] - trial_info['start_time'].iloc[i] + discontinuity_pad_s
+                #     # Current behavior is to shift all subsequent trials by the difference between the end of the previous trial and the start of the current trial
+                #     # However, for small offsets; this might just be actually overlapping trials; we try to skip this
+                #     # Hopefully downstream processes take care of those offsets
+                #     if offset < 10.0:
+                #         offset = 0
+                #     else:
+                #         for k in trial_info.columns:
+                #             if k.endswith('_time'):
+                #                 trial_info.loc[i:, k] = trial_info.loc[i:, k] + offset
+                #                 # trial_info[k][i:] = trial_info[k][i:] + offset
                 for j in range(len(units)):
                     unit_times = units.spike_times[j]
-                    if offset:
-                        units.obs_intervals[j][i:] += offset # shape Trials x 2
-                        if spike_idx[j] + 1 < len(unit_times): # spike_idx[j] tracks the last spike in the previous trial
-                            unit_times[spike_idx[j] + 1:] += offset
+                    # if offset:
+                    #     import pdb;pdb.set_trace()
+                    #     units.obs_intervals[j][i:] += offset # shape Trials x 2
+                    #     if spike_idx[j] + 1 < len(unit_times): # spike_idx[j] tracks the last spike in the previous trial
+                    #         unit_times[spike_idx[j] + 1:] += offset
                     # Update pointer to one past last spike in current trial
                     while spike_idx[j] + 1 < len(unit_times) and \
                         (unit_times[spike_idx[j]] < trial_info['end_time'].iloc[i]) and \
@@ -255,6 +264,7 @@ class NWBDatasetChurchland(NWBDataset):
         # ! But we should track it if we are interested in decoding kinematics
 
         scan_and_adjust_times(trial_info, units)
+        # import pdb;pdb.set_trace()
 
         end_time = round(max(units.obs_intervals.apply(lambda x: x[-1][-1])) * rate) * bin_width
         if (end_time < trial_info['end_time'].iloc[-1]):
@@ -299,7 +309,7 @@ class NWBDatasetChurchland(NWBDataset):
                 # JY patch: restrict to timestamps that are feasible for allocated spike_arr (which is defined wrt obs_interval, which is hopefully defined wrt trials)
                 in_experiment_idx_mask = np.logical_and(spike_idx >= 0, spike_idx < spike_arr.shape[0])
                 if not np.all(in_experiment_idx_mask):
-                    import pdb;pdb.set_trace()
+                    import pdb;pdb.set_trace() # this shouldn't ever happen...
                     logger.warning(f'Restricting spike times in unit {unit.id}')
                 spike_idx = spike_idx[in_experiment_idx_mask]
                 spike_cnt = spike_cnt[in_experiment_idx_mask]
@@ -309,7 +319,7 @@ class NWBDatasetChurchland(NWBDataset):
             if 'obs_intervals' in units.columns:
                 neur_mask = make_mask(units[mask].iloc[0].obs_intervals)
                 if np.any(spike_arr[neur_mask]):
-                    logger.warning("Spikes found outside of observed interval.")
+                    logger.warning(f"{spike_arr[neur_mask].sum()} Spikes found outside of observed interval.")
                 spike_arr[neur_mask] = np.nan
 
             # Create DataFrames with spike arrays
