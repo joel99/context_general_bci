@@ -57,14 +57,22 @@ class ContextRegistry:
         for item in context_info:
             self._registry[item.id] = item
 
-    def query(self, **search) -> ContextInfo | None:
+    def query(self, **search) -> ContextInfo | List[ContextInfo] | None:
         def search_query(df):
-            return functools.reduce(lambda a, b: a & b, [df[k] == search[k] for k in search])
+            non_str_search = [k for k in search if k != 'alias']
+            if non_str_search:
+                result = functools.reduce(lambda a, b: a & b, [df[k] == search[k] for k in non_str_search])
+            else:
+                result = pd.Series(True, index=df.index)
+            if 'alias' not in search:
+                return result
+            return result & df['alias'].str.contains(search['alias'])
+
         queried = self.search_index.loc[search_query]
         if len(queried) == 0:
             return None
         elif len(queried) > 1:
-            raise ValueError(f"Multiple contexts found for {search}")
+            return [self._registry[id] for id in queried['id']]
         return self._registry[queried['id'].values[0]]
 
     def query_by_datapath(self, datapath: Path) -> ContextInfo:
@@ -111,6 +119,6 @@ context_registry = ContextRegistry([
     ReachingContextInfo.build('./data/nlb/000140/sub-Jenkins', ExperimentalTask.maze, alias='mc_maze_small'),
     ReachingContextInfo.build('./data/nlb/000129/sub-Indy', ExperimentalTask.rtt, alias='mc_rtt'),
 
-    *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Jenkins', ExperimentalTask.maze, alias_prefix='churchland_maze_jenkins'),
-    *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Nitschke', ExperimentalTask.maze, alias_prefix='churchland_maze_nitschke'),
+    *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Jenkins', ExperimentalTask.churchland_maze, alias_prefix='churchland_maze_jenkins'),
+    *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Nitschke', ExperimentalTask.churchland_maze, alias_prefix='churchland_maze_nitschke'),
 ])

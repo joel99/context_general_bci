@@ -76,7 +76,7 @@ class SpikingDataset(Dataset):
 
         meta_df = []
         for d in self.cfg.datasets:
-            meta_df.append(self.load_single_session(d))
+            meta_df.extend(self.load_session(d))
         self.meta_df = pd.concat(meta_df).reset_index()
 
         self.context_index = None
@@ -112,7 +112,7 @@ class SpikingDataset(Dataset):
         return self.preproc_version() != cached_preproc_version
 
 
-    def load_single_session(self, session_path_or_alias: Path | str):
+    def load_session(self, session_path_or_alias: Path | str) -> List[pd.DataFrame]:
         r"""
             Data will be pre-cached, typically in a flexible format, so we don't need to regenerate too often.
             That is, the data and metadata will not adopt specific task configuration at time of cache, but rather try to store down all info available.
@@ -126,12 +126,16 @@ class SpikingDataset(Dataset):
                 session_path = Path(session_path_or_alias)
                 context_meta = context_registry.query_by_datapath(session_path)
             else:
-                session_path = context_meta.datapath
+                if isinstance(context_meta, list):
+                    logging.info('Multiple contexts found for alias, re-routing to several load calls.')
+                    return [self.load_single_session(c) for c in context_meta]
         else:
             session_path = session_path_or_alias
             context_meta = context_registry.query_by_datapath(session_path)
+        return [self.load_single_session(context_meta)]
 
-        assert session_path.exists(), f"Session path {session_path_or_alias} not found"
+    def load_single_session(self, context_meta: ContextInfo):
+        session_path = context_meta.datapath
         if not (hash_dir := self.preprocess_path(self.cfg, session_path)).exists() or \
             self.checksum_diff(hash_dir / 'preprocess_version.json'):
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)

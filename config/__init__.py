@@ -166,7 +166,11 @@ class DatasetConfig:
 
     dataset_seed: int = 0 # for shuffling/splitting etc
     r"""
-        Specifies the source dataset files (or potentially directories)
+        Specifies the source datasets.
+        - datasets accepts lists of strings that point to registered data files; this pointer can be one of:
+            - paths to data files themselves
+            - aliases (from registration)
+            - lightweight regex for _aliases_ (not paths). Note this is regex, not glob.
     """
     datasets: List[str] = field(default_factory=lambda: [])
     r"""

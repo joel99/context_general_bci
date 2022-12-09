@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Type, Tuple, Optional
 import numpy as np
 
@@ -54,7 +54,8 @@ class SortedArrayInfo(ArrayInfo):
 @dataclass
 class AliasArrayInfo(ArrayInfo):
     # mock some attrs
-    arrays: List[ArrayInfo]
+    arrays: List[ArrayInfo] = field(default_factory=list)
+
     def __init__(self, *arrays: List[ArrayInfo]):
         self.arrays = arrays
 

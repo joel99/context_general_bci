@@ -9,12 +9,19 @@ from einops import rearrange
 from nlb_tools.nwb_interface import NWBDataset
 from nlb_tools.make_tensors import make_train_input_tensors, PARAMS, _prep_mask, make_stacked_array
 
+from pynwb import NWBFile, NWBHDF5IO, TimeSeries, ProcessingModule
+from pynwb.core import MultiContainerInterface, NWBDataInterface
+
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, SubjectName, SubjectArrayRegistry
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 TrialNum = int
 MetadataKey = str
 
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Core loading strategy pulled from https://github.com/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb
 
@@ -119,6 +126,172 @@ class NWBDatasetChurchland(NWBDataset):
         }, axis=1)
 
         self.trial_info['split'] = 'train'
+
+    def load(self, fpath, split_heldout=True, skip_fields=[]):
+        """Loads data from an NWB file into two dataframes,
+        one for trial info and one for time-varying data.
+
+        # ! Overriden to process Churchland dataset more carefully
+        # ! Specifically Churchland release units don't appear to all be restrained to `obs_intervals` or even trial times
+
+        Parameters
+        ----------
+        fpath : str
+            Path to the NWB file
+        split_heldout : bool, optional
+            Whether to load heldin units and heldout units
+            to separate fields or not, by default True
+        skip_fields : list, optional
+            List of field names to skip during loading,
+            which may be useful if memory is an issue.
+            Field names must match the names automatically
+            assigned in the loading process. Spiking data
+            can not be skipped. Field names in the list
+            that are not found in the dataset are
+            ignored
+
+        Returns
+        -------
+        tuple
+            Tuple containing a pd.DataFrame of continuous loaded
+            data, a pd.DataFrame with trial metadata, a dict
+            with descriptions of fields in the DataFrames, and
+            the bin width of the loaded data in ms
+        """
+        logger.info(f"Loading {fpath}")
+
+        # Open NWB file
+        io = NWBHDF5IO(fpath, 'r')
+        nwbfile = io.read()
+
+        # Load trial info and units
+        trial_info = (
+            nwbfile.trials.to_dataframe()
+            .reset_index()
+            .rename({'id': 'trial_id', 'stop_time': 'end_time'}, axis=1))
+        units = nwbfile.units.to_dataframe()
+
+        # Load descriptions of trial info fields
+        descriptions = {}
+        for name, info in zip(nwbfile.trials.colnames, nwbfile.trials.columns):
+            descriptions[name] = info.description
+
+        # Find all timeseries
+        def make_df(ts):
+            """Converts TimeSeries into pandas DataFrame"""
+            if ts.timestamps is not None:
+                index = ts.timestamps[()]
+            else:
+                index = np.arange(ts.data.shape[0]) / ts.rate + ts.starting_time
+            columns = ts.comments.split('[')[-1].split(']')[0].split(',') if 'columns=' in ts.comments else None
+            df = pd.DataFrame(ts.data[()], index=pd.to_timedelta(index, unit='s'), columns=columns)
+            return df
+
+        def find_timeseries(nwbobj):
+            """Recursively searches the NWB file for time series data"""
+            ts_dict = {}
+            for child in nwbobj.children:
+                if isinstance(child, TimeSeries):
+                    if child.name in skip_fields:
+                        continue
+                    ts_dict[child.name] = make_df(child)
+                    descriptions[child.name] = child.description
+                elif isinstance(child, ProcessingModule):
+                    pm_dict = find_timeseries(child)
+                    ts_dict.update(pm_dict)
+                elif isinstance(child, MultiContainerInterface):
+                    for field in child.children:
+                        if isinstance(field, TimeSeries):
+                            name = child.name + "_" + field.name
+                            if name in skip_fields:
+                                continue
+                            ts_dict[name] = make_df(field)
+                            descriptions[name] = field.description
+            return ts_dict
+        # Create a dictionary containing DataFrames for all time series
+        data_dict = find_timeseries(nwbfile)
+        # Calculate data index
+        start_time = 0.0
+        bin_width = 1 # in ms, this will be the case for all provided datasets
+        rate = round(1000. / bin_width, 2) # in Hz
+        # Use obs_intervals, or last trial to determine data end
+        end_time = round(max(units.obs_intervals.apply(lambda x: x[-1][-1])) * rate) * bin_width
+        if (end_time < trial_info['end_time'].iloc[-1]):
+            print("obs_interval ends before trial end") # TO REMOVE
+            end_time = round(trial_info['end_time'].iloc[-1] * rate) * bin_width
+        timestamps = (np.arange(start_time, end_time, bin_width) / 1000).round(6)
+        timestamps_td = pd.to_timedelta(timestamps, unit='s')
+
+        # Check that all timeseries match with calculated timestamps
+        for key, val in list(data_dict.items()):
+            if not np.all(np.isin(np.round(val.index.total_seconds(), 6), timestamps)):
+                logger.warning(f"Dropping {key} due to timestamp mismatch.")
+                data_dict.pop(key)
+
+        def make_mask(obs_intervals):
+            """Creates boolean mask to indicate when spiking data is not in obs_intervals"""
+            mask = np.full(timestamps.shape, True)
+            for start, end in obs_intervals:
+                start_idx = np.ceil(round((start - timestamps[0]) * rate, 6)).astype(int)
+                end_idx = np.floor(round((end - timestamps[0]) * rate, 6)).astype(int)
+                mask[start_idx:end_idx] = False
+            return mask
+
+        # Prepare variables for spike binning
+        masks = [(~units.heldout).to_numpy(), units.heldout.to_numpy()] if split_heldout else [np.full(len(units), True)]
+
+        for mask, name in zip(masks, ['spikes', 'heldout_spikes']):
+            # Check if there are any units
+            if not np.any(mask):
+                continue
+
+            # Allocate array to fill with spikes
+            spike_arr = np.full((len(timestamps), np.sum(mask)), 0.0, dtype='float16')
+
+            # Bin spikes using decimal truncation and np.unique - faster than np.histogram with same results
+            for idx, (_, unit) in enumerate(units[mask].iterrows()):
+                spike_idx, spike_cnt = np.unique(((unit.spike_times - timestamps[0]) * rate).round(6).astype(int), return_counts=True)
+                # JY patch: restrict to timestamps that are feasible for allocated spike_arr (which is defined wrt obs_interval, which is hopefully defined wrt trials)
+                in_experiment_idx_mask = np.logical_and(spike_idx >= 0, spike_idx < spike_arr.shape[0])
+                spike_idx = spike_idx[in_experiment_idx_mask]
+                spike_cnt = spike_cnt[in_experiment_idx_mask]
+                spike_arr[spike_idx, idx] = spike_cnt
+
+            # Replace invalid intervals in spike recordings with NaNs
+            if 'obs_intervals' in units.columns:
+                neur_mask = make_mask(units[mask].iloc[0].obs_intervals)
+                if np.any(spike_arr[neur_mask]):
+                    logger.warning("Spikes found outside of observed interval.")
+                spike_arr[neur_mask] = np.nan
+
+            # Create DataFrames with spike arrays
+            data_dict[name] = pd.DataFrame(spike_arr, index=timestamps_td, columns=units[mask].index).astype('float16', copy=False)
+
+        # Create MultiIndex column names
+        data_list = []
+        for key, val in data_dict.items():
+            chan_names = None if type(val.columns) == pd.RangeIndex else val.columns
+            val.columns = self._make_midx(key, chan_names=chan_names, num_channels=val.shape[1])
+            data_list.append(val)
+
+        # Assign time-varying data to `self.data`
+        data = pd.concat(data_list, axis=1)
+        data.index.name = 'clock_time'
+        data.sort_index(axis=1, inplace=True)
+
+        # Convert time fields in trial info to timedelta
+        # and assign to `self.trial_info`
+        def to_td(x):
+            if x.name.endswith('_time'):
+                return pd.to_timedelta(x, unit='s')
+            else:
+                return x
+        trial_info = trial_info.apply(to_td, axis=0)
+
+        io.close()
+
+        return data, trial_info, descriptions, bin_width
+
 
 def make_input_tensors_simple(dataset, mock_dataset='mc_maze', trial_split=['train'], **kwargs):
     # See `make_train_input_tensors` for documentation

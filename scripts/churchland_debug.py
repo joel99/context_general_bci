@@ -18,7 +18,7 @@ path = Path("./data/churchland_reaching/000070/sub-Nitschke/")
 # path = Path("./data/nlb/000140/sub-Jenkins/")
 exps = list(path.glob("*.nwb"))
 exp = exps[0]
-exp = exps[1]
+# exp = exps[1]
 print(exp)
 
 # TODO want to add array group info to units
