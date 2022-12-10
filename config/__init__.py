@@ -17,8 +17,9 @@ class ModelTask(Enum):
     icms_one_step_ahead = 'icms_one_step_ahead'
     infill = 'infill'
 
-    # Time-varying (and/or encoder-decoder)
-    cobps_decoding = 'cobps_decoding'
+    # Time-varying - these tasks are currently implemented by matching time-varying input shape
+    # But could hypothetically call for enc-dec etc
+    heldout_decoding = 'heldout_decoding'
     kinematic_decoding = 'kinematic_decoding'
 
     # Trial-summarizing
@@ -42,6 +43,7 @@ class TaskConfig:
         These are _model_ tasks, not experimental tasks.
         Beginning experiments will be pretrain -> fine-tune, but we will try to make migrating to multi-task easy.
     """
+    # TODO support multitask tuning (rather, think of a scenario where that would be needed?)
     task: ModelTask = ModelTask.icms_one_step_ahead
 
     # infill
@@ -51,6 +53,8 @@ class TaskConfig:
 
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps])
     outputs: List[Output] = field(default_factory=lambda: [])
+
+    freeze_backbone: bool = False
 
 @dataclass
 class TransformerConfig:

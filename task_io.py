@@ -27,11 +27,30 @@ class TaskPipeline(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
+    def get_temporal_context(self, batch: Dict[str, torch.Tensor]):
+        r"""
+            For task specific temporal _input_. (B T H)
+        """
+        return []
+
+    def get_trial_context(self, batch: Dict[str, torch.Tensor]):
+        r"""
+            For task specific trial _input_. (B H)
+        """
+        raise NotImplementedError # Nothing in main model to use this
+        return []
+
+    def get_trial_query(self, batch: Dict[str, torch.Tensor]):
+        r"""
+            For task specific trial _query_. (B H)
+        """
+        raise NotImplementedError # nothing in main model to use this
+        return []
+
     def forward(self, batch, backbone_features: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
-
-class SelfSupervisedRatePrediction(TaskPipeline):
+class RatePrediction(TaskPipeline):
     def __init__(
         self,
         backbone_out_size: int,
@@ -48,6 +67,9 @@ class SelfSupervisedRatePrediction(TaskPipeline):
         self.out = nn.Sequential(*decoder_layers)
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
         self.cfg = cfg.task
+
+
+class SelfSupervisedInfill(RatePrediction):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
 
@@ -141,8 +163,18 @@ class SelfSupervisedRatePrediction(TaskPipeline):
         return bps
 
 
+class NextStepPrediction(TaskPipeline):
+
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+class ICMSNextStepPrediction(NextStepPrediction):
+    def get_temporal_context(self, batch: Dict[str, torch.Tensor]):
+        parent = super().get_temporal_context(batch)
+        return [*parent, batch[DataKey.stim]]
+
 # TODO convert to registry
 task_modules = {
-    ModelTask.infill: SelfSupervisedRatePrediction,
-    # ModelTask.icms_one_step_ahead: SelfSupervisedRatePrediction, # ! not implemented, above logic is infill specific
+    ModelTask.infill: SelfSupervisedInfill,
+    ModelTask.icms_one_step_ahead: ICMSNextStepPrediction, # ! not implemented, above logic is infill specific
 }

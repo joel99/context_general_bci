@@ -142,13 +142,14 @@ class BrainBertInterface(pl.LightningModule):
                 temporal_context: List(?) [B x T x H]
         """
         spikes = rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)')
+        temporal_context = []
+        for task in [self.cfg.task.task]:
+            temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             # Remove final timestep, prepend "initial" quiet recording
             state_in = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
-            temporal_context = batch[DataKey.stim]
         else:
             state_in = spikes
-            temporal_context = []
         state_in = self.readin(state_in) # b t a h
 
         static_context = []
