@@ -18,6 +18,7 @@ class ModelTask(Enum):
     infill = 'infill'
 
     # Time-varying (and/or encoder-decoder)
+    cobps_decoding = 'cobps_decoding'
     kinematic_decoding = 'kinematic_decoding'
 
     # Trial-summarizing
@@ -30,15 +31,16 @@ class Metric(Enum):
     kinematic_r2 = 'kinematic_r2'
 
 class Output(Enum):
-    # Various keys for different vectors we produce
+    # Various keys for different vectors model produces
     rates = 'rates'
+    poisson_loss = 'poisson_loss'
+    features = 'features'
 
 @dataclass
 class TaskConfig:
     r"""
         These are _model_ tasks, not experimental tasks.
-        For more flexibility, we separate model task requirements from dataset task requirements (see 'keys' args below)
-        (but this maybe should be revisited)
+        Beginning experiments will be pretrain -> fine-tune, but we will try to make migrating to multi-task easy.
     """
     task: ModelTask = ModelTask.icms_one_step_ahead
 
@@ -48,6 +50,7 @@ class TaskConfig:
     mask_random_ratio: float = 0.1
 
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps])
+    outputs: List[Output] = field(default_factory=lambda: [])
 
 @dataclass
 class TransformerConfig:

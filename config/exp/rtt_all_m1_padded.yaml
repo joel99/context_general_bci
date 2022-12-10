@@ -24,5 +24,5 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 train:
-  steps: 10000
+  steps: 50000
   batch_size: 512 # ~10G

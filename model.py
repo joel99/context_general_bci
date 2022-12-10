@@ -17,6 +17,7 @@ from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 from backbones import TemporalTransformer
+from task_io import task_modules
 
 class BrainBertInterface(pl.LightningModule):
     r"""
@@ -123,14 +124,11 @@ class BrainBertInterface(pl.LightningModule):
             if self.cfg.task.task == ModelTask.icms_one_step_ahead:
                 raise NotImplementedError
 
-            decoder_layers = [
-                nn.Linear(self.backbone.out_size, channel_count)
-            ]
-
-            if not self.cfg.lograte:
-                decoder_layers.append(nn.ReLU())
-            self.out = nn.Sequential(*decoder_layers)
-            self.loss = nn.PoissonNLLLoss(reduction='none', log_input=self.cfg.lograte)
+            self.task_pipelines = nn.ModuleDict({
+                k.value: task_modules[k](
+                    self.backbone.out_size, channel_count, self.cfg
+                ) for k in [self.cfg.task.task]
+            })
 
 
     def _prepare_inputs(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -185,7 +183,8 @@ class BrainBertInterface(pl.LightningModule):
             state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
         return state_in, static_context, temporal_context
 
-    def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+        # returns backbone features B T A H
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
             temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
@@ -208,13 +207,7 @@ class BrainBertInterface(pl.LightningModule):
             # And strangely, I can't repro by invoking forward again.
             # Leaving for now to see if it happens after padding refactor
             import pdb;pdb.set_trace()
-
-        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
-            rates = self.out(outputs)
-            return {
-                Output.rates: rates,
-            }
-
+        return outputs
 
     def _step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         r"""
@@ -222,7 +215,12 @@ class BrainBertInterface(pl.LightningModule):
 
             TODO:
             - Fix: targets are keyed/id-ed per task; there is just a single target variable we're hoping is right
-            - ?: Ideally the payloads could be mroe strongly typed.
+            - ?: Ideally the payloads could be more strongly typed.
+
+            We use modules to control the task-specific readouts, but this isn't multi-task first
+            So a shared backbone is assumed. And a single "batch" exists for all paths.
+            And moreover, any task-specific _input_ steps (such as masking/shifting) is not well interfaced right now
+            (currently overloading `batch` variable, think more clearly either by studying HF repo or considering other use cases)
 
             Example shapes:
                 spikes: B T A C H=1 (C is electrode channel)
@@ -230,7 +228,7 @@ class BrainBertInterface(pl.LightningModule):
                 channel_counts: B A (counts per array)
         """
         target = None
-        # TODO figure out how to wrap this ICMS code in a task abstraction
+        # TODO figure out how to wrap this IO/ICMS code in a task abstraction
         if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
             spikes = batch[DataKey.spikes]
 
@@ -254,40 +252,18 @@ class BrainBertInterface(pl.LightningModule):
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
             batch = {
                 **batch,
-                # DataKey.spikes: spikes,
                 DataKey.spikes: torch.as_tensor(spikes, dtype=torch.float),
+                'is_masked': is_masked,
+                'spike_target': target,
             }
 
 
-        predict = self(batch) # B T A C
-        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
-            loss: torch.Tensor = self.loss(predict[Output.rates], target)
+        features = self(batch) # B T A H
 
-        b, t, a, c = loss.size()
-        loss_mask = torch.ones(loss.size(), dtype=torch.bool, device=loss.device)
-        if LENGTH_KEY in batch: # only some of b x t are valid
-            lengths = batch[LENGTH_KEY] # b of ints < t
-            length_mask = torch.arange(t, device=spikes.device)[None, :] < lengths[:, None] # B T
-            loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
-            # import pdb;pdb.set_trace() # TODO needs testing in padding mode
-        if CHANNEL_KEY in batch: # only some of b x a x c are valid
-            channels = batch[CHANNEL_KEY] # b x a of ints < c
-            comparison = repeat(torch.arange(c, device=spikes.device), 'c -> 1 a c', a=a)
-            channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
-            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
-        else:
-            channel_mask = None
-        if self.cfg.task.task == ModelTask.infill:
-            loss_mask = loss_mask & rearrange(is_masked, 'b t a -> b t a 1')
-        loss = loss[loss_mask]
-        batch_out = {'loss': loss.mean()}
-        if Metric.bps in self.cfg.task.metrics:
-            batch_out[Metric.bps] = self.bps(
-                predict[Output.rates],
-                target,
-                length_mask=length_mask,
-                channel_mask=channel_mask
-            )
+        # Create outputs for configured task
+        batch_out: Dict[str, torch.Tensor] = {}
+        for task in [self.cfg.task.task]:
+            batch_out.update(self.task_pipelines[task.value](batch, features))
         return batch_out
 
     @torch.inference_mode()
@@ -328,84 +304,30 @@ class BrainBertInterface(pl.LightningModule):
             out = out / self.data_attrs.bin_size_ms
         return out
 
-    @torch.no_grad()
-    def bps(
-        self, rates: torch.Tensor, spikes: torch.Tensor, is_lograte=True, mean=True, raw=False,
-        length_mask: Optional[torch.Tensor]=None, channel_mask: Optional[torch.Tensor]=None
-    ) -> torch.Tensor:
-        r""" # tensors B T A C
-            Bits per spike, averaged over channels/trials, summed over time.
-            Convert extremely uninterpretable NLL into a slightly more interpretable BPS. (0 == constant prediction for BPS)
-            For evaluation.
-            length_mask: B T
-            channel_mask: B A C
-        """
-        # convenience logic for allowing direct passing of record with additional features
-        if is_lograte:
-            logrates = rates
-        else:
-            logrates = (rates + 1e-8).log()
-        if spikes.ndim == 5 and logrates.ndim == 4:
-            spikes = spikes[..., 0]
-        assert spikes.shape == logrates.shape
-        nll_model: torch.Tensor = self.loss(logrates, spikes)
-        spikes = spikes.float()
-        if length_mask is not None:
-            nll_model[~length_mask] = 0.
-            spikes[~length_mask] = 0
-        if channel_mask is not None:
-            nll_model[~channel_mask.unsqueeze(1).expand_as(nll_model)] = 0.
-            spikes[~channel_mask.unsqueeze(1).expand_as(spikes)] = 0
-
-        nll_model = reduce(nll_model, 'b t a c -> b a c', 'sum')
-
-        if length_mask is not None:
-            mean_rates = reduce(spikes, 'b t a c -> b 1 a c', 'sum') / reduce(length_mask, 'b t -> b 1 1 1', 'sum')
-        else:
-            mean_rates = reduce(spikes, 'b t a c -> b 1 a c')
-        mean_rates = (mean_rates + 1e-8).log()
-        nll_null: torch.Tensor = self.loss(mean_rates, spikes)
-
-        if length_mask is not None:
-            nll_null[~length_mask] = 0.
-        if channel_mask is not None:
-            nll_null[~channel_mask.unsqueeze(1).expand_as(nll_null)] = 0.
-
-        nll_null = nll_null.sum(1) # B A C
-        # Note, nanmean used to automatically exclude zero firing trials. Invalid items should be reported as nan.s here
-        bps_raw: torch.Tensor = ((nll_null - nll_model) / spikes.sum(1) / np.log(2))
-        if raw:
-            return bps_raw
-        bps = bps_raw[(spikes.sum(1) != 0).expand_as(bps_raw)].detach()
-        if mean:
-            return bps.mean()
-        return bps
-
     # ==================== Optimization ====================
     def predict_step(
         self, batch
     ):
         return self.predict(batch)
 
+    def common_log(self, metrics, prefix=''):
+        self.log(f'{prefix}_loss', metrics['loss'])
+        for m in self.cfg.task.metrics:
+            self.log(f'{prefix}_{m}', metrics[m])
+
     def training_step(self, batch, batch_idx):
         metrics = self._step(batch)
-        self.log('train_loss', metrics['loss'])
-        for m in self.cfg.task.metrics:
-            self.log(f'train_{m}', metrics[m])
+        self.common_log(metrics, prefix='train')
         return metrics['loss']
 
     def validation_step(self, batch, batch_idx):
         metrics = self._step(batch)
-        self.log('val_loss', metrics['loss'])
-        for m in self.cfg.task.metrics:
-            self.log(f'val_{m}', metrics[m])
+        self.common_log(metrics, prefix='val')
         return metrics['loss']
 
     def test_step(self, batch, batch_idx):
         metrics = self._step(batch)
-        self.log('test_loss', metrics['loss'])
-        for m in self.cfg.task.metrics:
-            self.log(f'test_{m}', metrics[m])
+        self.common_log(metrics, prefix='test')
         return metrics['loss']
 
     def configure_optimizers(self):

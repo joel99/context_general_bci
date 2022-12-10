@@ -14,4 +14,5 @@ dataset:
 train:
   steps: 10000
   batch_size: 128 # batch size reduced here since there's only ~1K trials
+  patience: 50 # smaller batches
   # batch_size: 512

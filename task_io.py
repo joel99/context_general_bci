@@ -1,0 +1,148 @@
+from typing import Tuple, Dict, List, Optional, Any
+from pathlib import Path
+import numpy as np
+import torch
+from torch import nn, optim
+import pytorch_lightning as pl
+from einops import rearrange, repeat, reduce, pack # baby steps...
+
+import logging
+
+from config import (
+    ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey,
+)
+
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
+from subjects import subject_array_registry, SortedArrayInfo
+# It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
+# through most of data collection (certainly good if we aggregate sensor/sessions)
+
+class TaskPipeline(nn.Module):
+    r"""
+        Task IO - manages decoder layers, loss functions
+        i.e. is responsible for returning loss, decoder outputs, and metrics
+        # TODO manage input
+        # TODO manage additional metrics
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, batch, backbone_features: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+
+class SelfSupervisedRatePrediction(TaskPipeline):
+    def __init__(
+        self,
+        backbone_out_size: int,
+        channel_count: int,
+        cfg: ModelConfig,
+    ):
+        super().__init__()
+        decoder_layers = [
+            nn.Linear(backbone_out_size, channel_count)
+        ]
+
+        if not cfg.lograte:
+            decoder_layers.append(nn.ReLU())
+        self.out = nn.Sequential(*decoder_layers)
+        self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
+        self.cfg = cfg.task
+
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+
+        rates: torch.Tensor = self.out(backbone_features)
+        spikes = batch['spike_target']
+        loss: torch.Tensor = self.loss(rates, spikes)
+
+        b, t, a, c = loss.size()
+        loss_mask = torch.ones(loss.size(), dtype=torch.bool, device=loss.device)
+        if LENGTH_KEY in batch: # only some of b x t are valid
+            lengths = batch[LENGTH_KEY] # b of ints < t
+            length_mask = torch.arange(t, device=spikes.device)[None, :] < lengths[:, None] # B T
+            loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
+            # import pdb;pdb.set_trace() # TODO needs testing in padding mode
+        if CHANNEL_KEY in batch: # only some of b x a x c are valid
+            channels = batch[CHANNEL_KEY] # b x a of ints < c
+            comparison = repeat(torch.arange(c, device=spikes.device), 'c -> 1 a c', a=a)
+            channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
+            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
+        else:
+            channel_mask = None
+
+        # Infill update mask
+        loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')
+        loss = loss[loss_mask]
+        batch_out = {
+            'loss': loss.mean()
+        }
+        if Metric.bps in self.cfg.metrics:
+            batch_out[Metric.bps] = self.bps(
+                rates, spikes,
+                length_mask=length_mask,
+                channel_mask=channel_mask
+            )
+
+        if Output.rates in self.cfg.outputs:
+            batch_out[Output.rates] = rates
+        return batch_out
+
+    @torch.no_grad()
+    def bps(
+        self, rates: torch.Tensor, spikes: torch.Tensor, is_lograte=True, mean=True, raw=False,
+        length_mask: Optional[torch.Tensor]=None, channel_mask: Optional[torch.Tensor]=None
+    ) -> torch.Tensor:
+        r""" # tensors B T A C
+            Bits per spike, averaged over channels/trials, summed over time.
+            Convert extremely uninterpretable NLL into a slightly more interpretable BPS. (0 == constant prediction for BPS)
+            For evaluation.
+            length_mask: B T
+            channel_mask: B A C
+        """
+        # convenience logic for allowing direct passing of record with additional features
+        if is_lograte:
+            logrates = rates
+        else:
+            logrates = (rates + 1e-8).log()
+        if spikes.ndim == 5 and logrates.ndim == 4:
+            spikes = spikes[..., 0]
+        assert spikes.shape == logrates.shape
+        nll_model: torch.Tensor = self.loss(logrates, spikes)
+        spikes = spikes.float()
+        if length_mask is not None:
+            nll_model[~length_mask] = 0.
+            spikes[~length_mask] = 0
+        if channel_mask is not None:
+            nll_model[~channel_mask.unsqueeze(1).expand_as(nll_model)] = 0.
+            spikes[~channel_mask.unsqueeze(1).expand_as(spikes)] = 0
+
+        nll_model = reduce(nll_model, 'b t a c -> b a c', 'sum')
+
+        if length_mask is not None:
+            mean_rates = reduce(spikes, 'b t a c -> b 1 a c', 'sum') / reduce(length_mask, 'b t -> b 1 1 1', 'sum')
+        else:
+            mean_rates = reduce(spikes, 'b t a c -> b 1 a c')
+        mean_rates = (mean_rates + 1e-8).log()
+        nll_null: torch.Tensor = self.loss(mean_rates, spikes)
+
+        if length_mask is not None:
+            nll_null[~length_mask] = 0.
+        if channel_mask is not None:
+            nll_null[~channel_mask.unsqueeze(1).expand_as(nll_null)] = 0.
+
+        nll_null = nll_null.sum(1) # B A C
+        # Note, nanmean used to automatically exclude zero firing trials. Invalid items should be reported as nan.s here
+        bps_raw: torch.Tensor = ((nll_null - nll_model) / spikes.sum(1) / np.log(2))
+        if raw:
+            return bps_raw
+        bps = bps_raw[(spikes.sum(1) != 0).expand_as(bps_raw)].detach()
+        if mean:
+            return bps.mean()
+        return bps
+
+
+# TODO convert to registry
+task_modules = {
+    ModelTask.infill: SelfSupervisedRatePrediction,
+    # ModelTask.icms_one_step_ahead: SelfSupervisedRatePrediction, # ! not implemented, above logic is infill specific
+}

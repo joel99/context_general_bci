@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: rtt_nlb
 
 model:
   task:
@@ -8,21 +8,11 @@ model:
 dataset:
   bin_size_ms: 5
   datasets:
-  - odoherty_rtt-Indy.*
-  - odoherty_rtt-Loco.*
-  # - './data/odoherty_rtt/indy_20160407_02.mat'
-  # - churchland_maze_nitschke-0
-  # - mc_maze_medium
-  data_keys:
-  - "spikes"
-
-  # This config will probably change per
-  odoherty_rtt:
-    arrays:
-    - Indy-M1
-    - Loco-M1
-  max_channels: 137
+  - mc_rtt
+  max_channels: 98
   max_arrays: 1
 train:
-  epochs: 2000
-  batch_size: 128
+  steps: 10000
+  batch_size: 128 # batch size reduced here since there's only ~1K trials
+  patience: 50 # smaller batches
+  # batch_size: 512
