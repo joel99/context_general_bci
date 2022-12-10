@@ -160,6 +160,11 @@ class ExperimentalConfig:
     arrays: List[str] = field(default_factory=lambda: []) # Empty list means don't filter
 
 @dataclass
+class RTTConfig(ExperimentalConfig):
+    chop_size_ms: int = 1000
+    load_covariates: bool = False
+
+@dataclass
 class DatasetConfig:
     root_dir: Path = Path("./data")
     preprocess_suffix: str = 'preprocessed'
@@ -201,7 +206,7 @@ class DatasetConfig:
     nlb_maze: ExperimentalConfig = ExperimentalConfig()
     nlb_rtt: ExperimentalConfig = ExperimentalConfig()
     churchland_maze: ExperimentalConfig = ExperimentalConfig()
-    odoherty_rtt: ExperimentalConfig = ExperimentalConfig
+    odoherty_rtt: RTTConfig = RTTConfig()
 
 @dataclass
 class TrainConfig:

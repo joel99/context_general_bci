@@ -1,0 +1,16 @@
+# @package _global_
+tag: rtt_nlb
+
+model:
+  task:
+    task: ModelTask.infill
+  readin_strategy: EmbedStrat.token
+dataset:
+  bin_size_ms: 5
+  datasets:
+  - mc_rtt
+  max_channels: 98
+  max_arrays: 1
+train:
+  epochs: 2000
+  batch_size: 128

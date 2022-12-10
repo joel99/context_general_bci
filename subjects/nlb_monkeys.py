@@ -28,5 +28,15 @@ class Nitschke(SubjectInfo):
 class Indy(SubjectInfo):
     name = SubjectName.indy
     _arrays = {
-        'main': SortedArrayInfo(_max_channels=137) # TODO
+        'main': SortedArrayInfo(_max_channels=98), # For NLB
+        'M1': GeometricArrayInfo(array=np.arange(96)),
+        'S1': GeometricArrayInfo(array=np.arange(96) + 96),
+    }
+
+@SubjectArrayRegistry.register
+class Loco(SubjectInfo): # RTT https://zenodo.org/record/3854034
+    name = SubjectName.loco
+    _arrays = {
+        'M1': GeometricArrayInfo(array=np.arange(96)),
+        'S1': GeometricArrayInfo(array=np.arange(96) + 96),
     }

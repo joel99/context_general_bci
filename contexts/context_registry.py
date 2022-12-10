@@ -9,7 +9,13 @@ import numpy as np
 import pandas as pd
 import functools
 
-from .context_info import ContextInfo, ReachingContextInfo, PassiveICMSContextInfo
+from .context_info import (
+    ContextInfo,
+    ReachingContextInfo,
+    PassiveICMSContextInfo,
+    RTTContextInfo
+)
+
 from tasks import ExperimentalTask
 r"""
     ContextInfo class is an interface for storing meta-information needed by several consumers, mainly the model, that may not be logged in data from various sources.
@@ -46,7 +52,7 @@ class ContextRegistry:
         index = [{
             'id': item.id,
             'task': item.task,
-            'datapath': item.datapath,
+            'datapath': item.datapath.resolve(),
             **item.get_search_index()
         } for item in items]
         return pd.DataFrame(index)
@@ -75,8 +81,10 @@ class ContextRegistry:
             return [self._registry[id] for id in queried['id']]
         return self._registry[queried['id'].values[0]]
 
-    def query_by_datapath(self, datapath: Path) -> ContextInfo:
-        found = self.search_index[self.search_index.datapath == datapath]
+    def query_by_datapath(self, datapath: Path | str) -> ContextInfo:
+        if not isinstance(datapath, Path):
+            datapath = Path(datapath)
+        found = self.search_index[self.search_index.datapath == datapath.resolve()]
         assert len(found) == 1
         return self._registry[found.iloc[0]['id']]
 
@@ -121,4 +129,6 @@ context_registry = ContextRegistry([
 
     *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Jenkins', ExperimentalTask.churchland_maze, alias_prefix='churchland_maze_jenkins'),
     *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Nitschke', ExperimentalTask.churchland_maze, alias_prefix='churchland_maze_nitschke'),
+
+    *RTTContextInfo.build_several('./data/odoherty_rtt/', alias_prefix='odoherty_rtt'),
 ])

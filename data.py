@@ -36,6 +36,8 @@ r"""
 # Padding tokens
 LENGTH_KEY = 'length'
 CHANNEL_KEY = 'channel_counts'
+
+logger = logging.getLogger(__name__)
 @dataclass
 class ContextAttrs:
     subject: List[str] = field(default_factory=list)
@@ -49,6 +51,7 @@ class DataAttrs:
     spike_dim: int
     max_channel_count: int
     context: ContextAttrs
+
 class SpikingDataset(Dataset):
     r"""
         Generic container for spiking data from intracortical microelectrode recordings.
@@ -61,6 +64,8 @@ class SpikingDataset(Dataset):
         # ? Will it be important to have a preprocessed cache? If trials are exploded, and we have distinct padding requirements, we might need per-trial processing. We might just store exploded values after preprocessing. But then, what if we need to update preprocessing?
         - Then we need to re-process + update exploded values. Simple as that.
 
+        Some notes on metadata:
+        - MetaKey.Subject column stores SubjectName (OrderedEnum), so that we can vet subjects exist before starting training. May work with SubjectInfo classes
 
         TODO implement. Should span several task settings.
         - ICMS
@@ -96,7 +101,7 @@ class SpikingDataset(Dataset):
     def validate_meta(self, meta_df: pd.DataFrame):
         for k in self.cfg.meta_keys:
             if k == MetaKey.subject:
-                unique_subjects = meta_df[MetaKey.subject.name].unique()
+                unique_subjects = meta_df[MetaKey.subject].unique()
                 for s in unique_subjects:
                     assert SubjectArrayRegistry.query_by_subject(s) is not None, f"Subject {s} not found registered."
             elif k == MetaKey.array:
@@ -105,6 +110,7 @@ class SpikingDataset(Dataset):
                 assert k in meta_df.columns, f"Requested meta key {k} not loaded in meta_df"
 
     def preproc_version(self):
+        # TODO should register other subtask configs
         return {
             'max_trial_length': self.cfg.max_trial_length,
             'bin_size_ms': self.cfg.bin_size_ms
@@ -125,7 +131,6 @@ class SpikingDataset(Dataset):
             That is, the data and metadata will not adopt specific task configuration at time of cache, but rather try to store down all info available.
             The exception to this is the crop length.
         """
-
         if isinstance(session_path_or_alias, str):
             # Try alias
             context_meta = context_registry.query(alias=session_path_or_alias)
@@ -148,6 +153,9 @@ class SpikingDataset(Dataset):
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
             os.makedirs(hash_dir, exist_ok=True)
             meta = context_meta.load(self.cfg, hash_dir)
+            if meta is None:
+                logger.info('No metadata loaded, assuming debug mode. Continuing...')
+                return None
             meta.to_csv(hash_dir / 'meta.csv')
             with open(hash_dir / 'preprocess_version.json', 'w') as f:
                 json.dump(self.preproc_version(), f)
@@ -161,6 +169,11 @@ class SpikingDataset(Dataset):
                 task_arrays = getattr(self.cfg, context_meta.task.name).arrays
                 if task_arrays:
                     context_array = [a for a in context_array if a in task_arrays]
+                    if len(context_array) == 0:
+                        raise Exception(
+                            f"Session {session_path} has arrays {context_array} which has no elements in task configuration {task_arrays}.\n"
+                            f"Remove or reconfigure (did you remember to add subject handle)?"
+                        )
                 for i in range(self.cfg.max_arrays):
                     meta[f'array_{i}'] = context_array[i] if i < len(context_array) else ""
                 if len(context_array) > self.cfg.max_arrays:
@@ -175,6 +188,10 @@ class SpikingDataset(Dataset):
                 meta[k] = context_meta.id
             elif k == MetaKey.unique:
                 continue # filled below
+            elif k == MetaKey.subject:
+                meta[k] = context_meta.subject.name
+            else:
+                meta[k] = getattr(context_meta, k.name)
         meta[MetaKey.unique] = meta[MetaKey.session] + '-' + meta.index.astype(str)
         self.validate_meta(meta)
 

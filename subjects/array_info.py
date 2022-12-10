@@ -105,7 +105,7 @@ class SubjectInfo:
 
     @classmethod
     def wrap_array(cls, array_id: ArrayID):
-        return f"{cls.name}-{array_id}"
+        return f"{cls.name.value}-{array_id}"
 
     @classmethod
     def has_array(cls, array_id: ArrayID, unwrapped=True): # unwrapped

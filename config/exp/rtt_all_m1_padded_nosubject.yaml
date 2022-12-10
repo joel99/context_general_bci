@@ -1,0 +1,28 @@
+# @package _global_
+tag: rtt_all_m1_padded_nosubject
+
+model:
+  task:
+    task: ModelTask.infill
+  readin_strategy: EmbedStrat.token
+  session_embed_strategy: EmbedStrat.token
+  subject_embed_strategy: EmbedStrat.none
+dataset:
+  bin_size_ms: 5
+  datasets:
+  - mc_rtt
+  - odoherty_rtt.*
+  odoherty_rtt:
+    arrays:
+    - Indy-M1
+    - Loco-M1
+  max_channels: 98
+  max_arrays: 1
+  meta_keys:
+  - MetaKey.unique
+  - MetaKey.session
+  - MetaKey.array
+  # - MetaKey.subject
+train:
+  epochs: 2000
+  batch_size: 128

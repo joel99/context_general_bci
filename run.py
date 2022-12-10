@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from pprint import pformat
 import logging # we use top level logging since most actual diagnostic info is in libs
 import hydra
 from omegaconf import OmegaConf
@@ -23,15 +24,18 @@ from utils import get_latest_ckpt_from_wandb_id
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
-    logging.info(f"Running NDT2, dumping config:")
-    logging.info(OmegaConf.to_yaml(cfg))
+    logger = logging.getLogger(__name__)
+    logger.info(f"Running NDT2, dumping config:")
+    logger.info(OmegaConf.to_yaml(cfg))
     pl.seed_everything(seed=cfg.seed)
 
     dataset = SpikingDataset(cfg.dataset)
     train, val = dataset.create_tv_datasets()
-    logging.info(f"Training on {len(train)} examples")
+    logger.info(f"Training on {len(train)} examples")
 
-    model = BrainBertInterface(cfg.model, dataset.get_data_attrs())
+    data_attrs = dataset.get_data_attrs()
+    logger.info(pformat(f"Data attributes: {data_attrs}"))
+    model = BrainBertInterface(cfg.model, data_attrs)
 
     epochs = cfg.train.epochs
     callbacks=[
@@ -89,7 +93,7 @@ def run_exp(cfg : RootConfig) -> None:
     # === Train ===
     # num_workers = 0 # for testing
     num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
-    logging.info("Preparing to fit...")
+    logger.info("Preparing to fit...")
     trainer.fit(
         model,
         DataLoader(
@@ -107,7 +111,7 @@ def run_exp(cfg : RootConfig) -> None:
         ),
         ckpt_path=get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )
-    logging.info('Run complete')
+    logger.info('Run complete')
 
 if __name__ == '__main__':
     run_exp()

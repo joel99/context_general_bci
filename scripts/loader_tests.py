@@ -20,17 +20,20 @@ import seaborn as sns
 # dataset_name = 'mc_maze_medium' # 114 sorted units
 # dataset_name = 'mc_maze_small' # 107 sorted units
 # dataset_name = 'mc_maze' # 137 sorted units
-dataset_name = 'churchland_maze_jenkins-0'
-dataset_name = 'churchland_maze_jenkins-1'
+# dataset_name = 'churchland_maze_jenkins-0'
+# dataset_name = 'churchland_maze_jenkins-1'
+dataset_name = 'mc_rtt'
 context = context_registry.query(alias=dataset_name)
+
+datapath = './data/odoherty_rtt/indy_20160407_02.mat'
+context = context_registry.query_by_datapath(datapath)
 
 default_cfg = DatasetConfig()
 default_cfg.bin_size_ms = 5
-# default_cfg.max_arrays = 1
-default_cfg.max_arrays = 2
-dataset = SpikingDataset(default_cfg)
+default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 
-dataset.meta_df = dataset.load_session(dataset_name)[0]
+dataset = SpikingDataset(default_cfg)
+dataset.meta_df = dataset.load_session(context.alias)[0]
 dataset.build_context_index()
 # dataset = NWBDataset(context.datapath)
 
@@ -41,6 +44,8 @@ pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
 pop_spikes = pop_spikes.flatten(1, 2)
 print(pop_spikes.shape)
+# print(pop_spikes.sum(0) / 0.6)
+# print(pop_spikes.sum(0))
 # Build raster scatter plot of pop_spikes
 def plot_spikes(spikes, ax=None, vert_space=1):
 
@@ -62,7 +67,7 @@ def plot_spikes(spikes, ax=None, vert_space=1):
     time_lim = spikes.shape[0] * dataset.cfg.bin_size_ms
     ax.set_xticks(np.linspace(0, spikes.shape[0], 5))
     ax.set_xticklabels(np.linspace(0, time_lim, 5))
-    ax.set_title(dataset_name)
+    ax.set_title(context.alias)
     ax.set_xlabel('Time (ms)')
     ax.set_yticks([])
     return ax

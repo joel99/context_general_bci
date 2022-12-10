@@ -1,4 +1,5 @@
-from enum import Enum
+# from enum import Enum
+from ordered_enum import OrderedEnum
 
 r"""
     Dependency notes:
@@ -9,13 +10,14 @@ r"""
         -  i.e. loader names must be defined in enum rather than enum pulling from loader
 """
 
-class SubjectName:
+class SubjectName(OrderedEnum):
     # We refer to names instead of classes to make converting to singleton pattern easier
     CRS02b = "CRS02b"
     CRS07 = "CRS07"
     BCI02 = "BCI02"
     jenkins = "Jenkins"
     indy = "Indy"
+    loco = "Loco"
     nitschke = "Nitschke"
 
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
