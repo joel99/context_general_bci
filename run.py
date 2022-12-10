@@ -44,7 +44,8 @@ def run_exp(cfg : RootConfig) -> None:
             filename='val-{epoch:02d}-{val_loss:.4f}',
             save_top_k=2,
             mode='min',
-            every_n_train_steps=cfg.train.val_check_interval,
+            every_n_epochs=1,
+            # every_n_train_steps=cfg.train.val_check_interval,
             dirpath=None
         )
     ]
@@ -74,8 +75,8 @@ def run_exp(cfg : RootConfig) -> None:
         max_steps=max_steps,
         accelerator='gpu',
         devices=torch.cuda.device_count(),
-        # check_val_every_n_epoch=10,
-        val_check_interval=cfg.train.val_check_interval,
+        check_val_every_n_epoch=1,
+        # val_check_interval=cfg.train.val_check_interval,
         callbacks=callbacks,
         default_root_dir=cfg.default_root_dir,
         track_grad_norm=2 if cfg.train.log_grad else -1,

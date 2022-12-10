@@ -211,14 +211,14 @@ class DatasetConfig:
 @dataclass
 class TrainConfig:
     epochs: int = 0
-    steps: int = 10000 # Prefer to specify steps over epochs
+    steps: int = 10000 # Prefer to specify steps over epochs for FLOP consistency (pretty loose), but most other training settings are on epochs
     batch_size: int = 64
-    patience: int = 10 # these are in units of val checks
+    patience: int = 10 # these are in units of val checks (epochs)
     log_grad: bool = False
     gradient_clip_val: float = 0.0
     accumulate_batches: int = 1
     profiler: str = ""
-    val_check_interval: int = 100 # these are in steps
+    val_check_interval: int = 100 # these are in steps, but mostly isn't used # TODO deprecate
 
 @dataclass
 class RootConfig:

@@ -70,7 +70,7 @@ class ContextInfo:
 
     @property
     def id(self):
-        return f"{self.task}-{self.subject.name}-{self._id()}"
+        return f"{self.task}-{self.subject.name.value}-{self._id()}"
 
     @abc.abstractmethod
     def _id(self):
@@ -328,7 +328,7 @@ class RTTContextInfo(ContextInfo):
                 subject=subject,
                 task=ExperimentalTask.odoherty_rtt,
                 _arrays=_arrays,
-                alias=f"{alias_prefix}-{subject.name}-{date_hash}",
+                alias=f"{alias_prefix}-{subject.name.value}-{date_hash}",
                 date_hash=date_hash,
                 datapath=path,
             )
