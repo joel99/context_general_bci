@@ -12,5 +12,6 @@ dataset:
   max_channels: 98
   max_arrays: 1
 train:
-  epochs: 2000
-  batch_size: 128
+  steps: 10000
+  batch_size: 128 # batch size reduced here since there's only ~1K trials
+  # batch_size: 512

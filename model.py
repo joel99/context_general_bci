@@ -61,8 +61,6 @@ class BrainBertInterface(pl.LightningModule):
         # Guardrails (to remove)
         assert len(self.data_attrs.context.task) <= 1, "Only tested for single task"
         assert self.cfg.array_embed_strategy == EmbedStrat.none, "Array embed strategy not yet implemented"
-        assert len(data_attrs.context.subject) <= 1, "Only tested for single subject"
-
 
         project_size = self.cfg.hidden_size
         if self.cfg.session_embed_strategy is not EmbedStrat.none:

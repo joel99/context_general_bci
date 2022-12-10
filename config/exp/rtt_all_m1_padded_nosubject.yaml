@@ -24,5 +24,6 @@ dataset:
   - MetaKey.array
   # - MetaKey.subject
 train:
-  epochs: 2000
-  batch_size: 128
+  steps: 10000
+  batch_size: 512 # ~10G
+

@@ -53,7 +53,7 @@ class TaskConfig:
 class TransformerConfig:
     n_state: int = 256
     n_heads: int = 4
-    n_layers: int = 4
+    n_layers: int = 6
     feedforward_factor: float = 1.
     dropout: float = 0.2 # applies generically
 
@@ -210,14 +210,15 @@ class DatasetConfig:
 
 @dataclass
 class TrainConfig:
-    epochs: int = 200
-    steps: int = 0
+    epochs: int = 0
+    steps: int = 10000 # Prefer to specify steps over epochs
     batch_size: int = 64
-    patience: int = 500
+    patience: int = 10 # these are in units of val checks
     log_grad: bool = False
     gradient_clip_val: float = 0.0
     accumulate_batches: int = 1
     profiler: str = ""
+    val_check_interval: int = 100 # these are in steps
 
 @dataclass
 class RootConfig:
