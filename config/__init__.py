@@ -90,8 +90,8 @@ class ModelConfig:
     lr_schedule: str = 'linear_warmup'
     # one of 'fixed' (default), 'cosine_warmup', 'linear_warmup'
     lr_ramp_init_factor: float = 0.1
-    lr_ramp_steps: int = 10 # epochs
-    lr_decay_steps: int = 500 # epochs (for cosine)
+    lr_ramp_steps: int = 50 # epochs # targeting ~10k steps, so this highly depends on bsz/batches per epoch. If we're under 100K items though, 50 is a lower bound.
+    lr_decay_steps: int = 1000 # epochs (for cosine)
     lr_min: float = 1e-6
 
     activation: str = 'relu' # gelu
