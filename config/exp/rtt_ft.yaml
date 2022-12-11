@@ -5,6 +5,10 @@ model:
   task:
     task: ModelTask.heldout_decoding
     freeze_backbone: false
+    metrics:
+    - Metric.co_bps
+    outputs:
+    - Output.heldout_rates
   readin_strategy: EmbedStrat.token
   session_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.token
@@ -19,6 +23,9 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+  data_keys:
+  - DataKey.spikes
+  - DataKey.heldout_spikes
 train:
   steps: 1000
   batch_size: 128

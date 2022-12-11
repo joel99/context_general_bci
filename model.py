@@ -219,7 +219,10 @@ class BrainBertInterface(pl.LightningModule):
                 static_context: List(T') [B x H]
                 temporal_context: List(?) [B x T x H]
         """
-        spikes = rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)')
+        spikes = torch.as_tensor(
+            rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)'),
+            dtype=torch.float
+        )
         temporal_context = []
         for task in [self.cfg.task.task]:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
@@ -264,7 +267,6 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T A H
-        import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
             temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
@@ -307,15 +309,12 @@ class BrainBertInterface(pl.LightningModule):
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
-        target = None
         # TODO figure out how to wrap this IO/ICMS code in a task abstraction
-        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
-            spikes = batch[DataKey.spikes]
-
+        # ? this logic should maybe be in forward, not separate _step.
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-            target = spikes[..., 0]
-            # ! dont' forget a cast to float
+            pass
         elif self.cfg.task.task == ModelTask.infill:
+            spikes = batch[DataKey.spikes]
             is_masked = torch.bernoulli(
                 torch.full(spikes.size()[:3], self.cfg.task.mask_ratio, device=spikes.device)
             )
@@ -332,11 +331,12 @@ class BrainBertInterface(pl.LightningModule):
             spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
             batch = {
                 **batch,
-                DataKey.spikes: torch.as_tensor(spikes, dtype=torch.float),
+                DataKey.spikes: spikes,
                 'is_masked': is_masked,
                 'spike_target': target,
             }
-
+        elif self.cfg.task.task == ModelTask.heldout_decoding:
+            pass
 
         features = self(batch) # B T A H
 

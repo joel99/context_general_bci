@@ -12,7 +12,7 @@ from config import (
     ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey,
 )
 
-from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
@@ -68,46 +68,25 @@ class RatePrediction(TaskPipeline):
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
         self.cfg = cfg.task
 
-
-class SelfSupervisedInfill(RatePrediction):
-
-    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
-
-        rates: torch.Tensor = self.out(backbone_features)
-        spikes = batch['spike_target']
-        loss: torch.Tensor = self.loss(rates, spikes)
-
+    def get_masks(self, loss: torch.Tensor, batch, channel_key=CHANNEL_KEY):
         b, t, a, c = loss.size()
         loss_mask = torch.ones(loss.size(), dtype=torch.bool, device=loss.device)
         if LENGTH_KEY in batch: # only some of b x t are valid
             lengths = batch[LENGTH_KEY] # b of ints < t
-            length_mask = torch.arange(t, device=spikes.device)[None, :] < lengths[:, None] # B T
+            length_mask = torch.arange(t, device=loss.device)[None, :] < lengths[:, None] # B T
             loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
             # import pdb;pdb.set_trace() # TODO needs testing in padding mode
-        if CHANNEL_KEY in batch: # only some of b x a x c are valid
-            channels = batch[CHANNEL_KEY] # b x a of ints < c
-            comparison = repeat(torch.arange(c, device=spikes.device), 'c -> 1 a c', a=a)
+        else:
+            length_mask = None
+        if channel_key in batch: # only some of b x a x c are valid
+            channels = batch[channel_key] # b x a of ints < c
+            comparison = repeat(torch.arange(c, device=loss.device), 'c -> 1 a c', a=a)
             channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
             loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
         else:
             channel_mask = None
+        return loss_mask, length_mask, channel_mask
 
-        # Infill update mask
-        loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')
-        loss = loss[loss_mask]
-        batch_out = {
-            'loss': loss.mean()
-        }
-        if Metric.bps in self.cfg.metrics:
-            batch_out[Metric.bps] = self.bps(
-                rates, spikes,
-                length_mask=length_mask,
-                channel_mask=channel_mask
-            )
-
-        if Output.rates in self.cfg.outputs:
-            batch_out[Output.rates] = rates
-        return batch_out
 
     @torch.no_grad()
     def bps(
@@ -162,6 +141,33 @@ class SelfSupervisedInfill(RatePrediction):
             return bps.mean()
         return bps
 
+class SelfSupervisedInfill(RatePrediction):
+
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+
+        rates: torch.Tensor = self.out(backbone_features)
+        spikes = batch['spike_target']
+        loss: torch.Tensor = self.loss(rates, spikes)
+
+        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
+
+        # Infill update mask
+        loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')
+        loss = loss[loss_mask]
+        batch_out = {
+            'loss': loss.mean()
+        }
+        if Metric.bps in self.cfg.metrics:
+            batch_out[Metric.bps] = self.bps(
+                rates, spikes,
+                length_mask=length_mask,
+                channel_mask=channel_mask
+            )
+
+        if Output.rates in self.cfg.outputs:
+            batch_out[Output.rates] = rates
+        return batch_out
+
 
 class NextStepPrediction(TaskPipeline):
 
@@ -173,8 +179,42 @@ class ICMSNextStepPrediction(NextStepPrediction):
         parent = super().get_temporal_context(batch)
         return [*parent, batch[DataKey.stim]]
 
+
+class HeldoutPrediction(RatePrediction):
+    r"""
+        Regression for co-smoothing
+    """
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+
+        rates: torch.Tensor = self.out(backbone_features)
+        rates = rearrange(rates, 'b t a c -> b t (a c)')
+        spikes = torch.as_tensor(batch[DataKey.heldout_spikes][..., 0], dtype=torch.float)
+        loss: torch.Tensor = self.loss(rates, spikes)
+        # re-expand array dimension to match API expectation for array dim
+        loss = rearrange(loss, 'b t c -> b t 1 c')
+        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch, channel_key=HELDOUT_CHANNEL_KEY)
+        loss = loss[loss_mask]
+
+        batch_out = {
+            'loss': loss.mean()
+        }
+
+        if Metric.co_bps in self.cfg.metrics:
+            batch_out[Metric.co_bps] = self.bps(
+                rates, spikes,
+                length_mask=length_mask,
+                channel_mask=channel_mask
+            )
+
+        if Output.heldout_rates in self.cfg.outputs:
+            batch_out[Output.heldout_rates] = rates
+        return batch_out
+
+
+
 # TODO convert to registry
 task_modules = {
     ModelTask.infill: SelfSupervisedInfill,
     ModelTask.icms_one_step_ahead: ICMSNextStepPrediction, # ! not implemented, above logic is infill specific
+    ModelTask.heldout_decoding: HeldoutPrediction,
 }

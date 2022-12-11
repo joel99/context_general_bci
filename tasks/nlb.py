@@ -62,12 +62,13 @@ class NLBLoader(ExperimentalTaskLoader):
 
         # Unpack data
         train_spikes_heldin = train_dict['train_spikes_heldin']
-        # train_spikes_heldout = train_dict['train_spikes_heldout']
+        train_spikes_heldout = train_dict['train_spikes_heldout']
 
         # Print 3d array shape: trials x time x channel
         # print(train_spikes_heldin.shape)
-        # train_spikes_heldin = torch.tensor(train_spikes_heldin)
         train_spikes_heldin = torch.tensor(train_spikes_heldin, dtype=torch.uint8)
+        train_spikes_heldout = torch.tensor(train_spikes_heldout, dtype=torch.uint8)
+
         meta_payload = {}
         meta_payload['path'] = []
 
@@ -75,6 +76,7 @@ class NLBLoader(ExperimentalTaskLoader):
 
         for trial in range(train_spikes_heldin.shape[0]):
             spikes = rearrange(train_spikes_heldin[trial], 't c -> t c 1')
+            heldout_spikes = rearrange(train_spikes_heldout[trial], 't c -> t c 1')
             spike_payload = {}
             for a in arrays_to_use:
                 array = SubjectArrayRegistry.query_by_array(a)
@@ -85,7 +87,8 @@ class NLBLoader(ExperimentalTaskLoader):
                     assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
                     spike_payload[a] = spikes.clone()
             single_payload = {
-                DataKey.spikes: spike_payload
+                DataKey.spikes: spike_payload,
+                DataKey.heldout_spikes: heldout_spikes.clone()
             }
             single_path = cache_root / f"{trial}.pth"
             meta_payload['path'].append(single_path)

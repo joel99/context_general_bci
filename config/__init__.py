@@ -34,6 +34,7 @@ class Metric(Enum):
 class Output(Enum):
     # Various keys for different vectors model produces
     rates = 'rates'
+    heldout_rates = 'heldout_rates'
     poisson_loss = 'poisson_loss'
     features = 'features'
 
