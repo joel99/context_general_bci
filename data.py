@@ -57,6 +57,7 @@ class DataAttrs:
     spike_dim: int
     max_channel_count: int
     context: ContextAttrs
+    max_arrays: int = 1 # patch, todo remove default
 
 class SpikingDataset(Dataset):
     r"""
@@ -332,6 +333,7 @@ class SpikingDataset(Dataset):
         return DataAttrs(
             bin_size_ms=self.cfg.bin_size_ms,
             max_channel_count=self.cfg.max_channels,
+            max_arrays=self.cfg.max_arrays,
             spike_dim=1, # Higher dims not supported right now
             context=ContextAttrs(**self.context_index)
         )

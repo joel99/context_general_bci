@@ -17,6 +17,6 @@ dataset:
   max_channels: 98
   max_arrays: 1
 train:
-  steps: 50000
   batch_size: 512
 
+load_from_id: rtt_indy_m1_padded-25xpt6oo

@@ -64,7 +64,7 @@ class TransformerConfig:
     n_layers: int = 6
     feedforward_factor: float = 1.
     dropout: float = 0.2 # applies generically
-
+    activation: str = 'gelu'
     # causal: bool = True # Pretty sure this should be passed in by task, not configured
 
     # Position
@@ -86,7 +86,16 @@ class ModelConfig:
     transformer: TransformerConfig = TransformerConfig()
 
     half_precision: bool = True
-    lr_init: float = 0.0001
+    lr_init: float = 0.0005 # be careful of interxn with bsz
+    lr_schedule: str = 'linear_warmup'
+    # one of 'fixed' (default), 'cosine_warmup', 'linear_warmup'
+    lr_ramp_init_factor: float = 0.1
+    lr_ramp_steps: int = 10 # epochs
+    lr_decay_steps: int = 500 # epochs (for cosine)
+    lr_min: float = 1e-6
+
+    activation: str = 'relu' # gelu
+
     weight_decay: float = 0.0
 
     # The objective. Not intended to be multitask right now; intent is pretrain/fine-tune.
@@ -218,10 +227,10 @@ class DatasetConfig:
 
 @dataclass
 class TrainConfig:
-    epochs: int = 0
-    steps: int = 10000 # Prefer to specify steps over epochs for FLOP consistency (pretty loose), but most other training settings are on epochs
+    epochs: int = 1000
+    steps: int = 0 # Prefer to specify steps over epochs for FLOP consistency (pretty loose), but most other training settings are on epochs
     batch_size: int = 64
-    patience: int = 10 # these are in units of val checks (epochs)
+    patience: int = 25 # these are in units of val checks (epochs)
     log_grad: bool = False
     gradient_clip_val: float = 0.0
     accumulate_batches: int = 1

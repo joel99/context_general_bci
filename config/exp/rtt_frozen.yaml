@@ -1,10 +1,10 @@
 # @package _global_
-tag: rtt_ft
+tag: rtt_frozen
 
 model:
   task:
     task: ModelTask.heldout_decoding
-    freeze_backbone: false
+    freeze_backbone: true
     metrics:
     - Metric.co_bps
     outputs:
@@ -12,6 +12,8 @@ model:
   readin_strategy: EmbedStrat.token
   session_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.token
+
+  weight_decay: 1e-3
 dataset:
   bin_size_ms: 5
   datasets:

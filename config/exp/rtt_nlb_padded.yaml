@@ -5,6 +5,8 @@ model:
   task:
     task: ModelTask.infill
   readin_strategy: EmbedStrat.token
+  lr_schedule: 'cosine_warmup'
+  lr_init: 5e-4
 dataset:
   bin_size_ms: 5
   datasets:

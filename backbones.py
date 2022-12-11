@@ -43,6 +43,7 @@ class TemporalTransformer(nn.Module):
                 dim_feedforward=int(self.cfg.n_state * self.cfg.feedforward_factor),
                 dropout=self.cfg.dropout,
                 batch_first=False, # we use this to stick to pytorch defaults. Who knows if it's more efficient internally? But closer to docs.
+                activation=self.cfg.activation,
             ),
             self.cfg.n_layers,
         )

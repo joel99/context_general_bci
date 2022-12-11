@@ -11,7 +11,8 @@ from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
-    EarlyStopping
+    EarlyStopping,
+    LearningRateMonitor
 )
 
 from pytorch_lightning.loggers import WandbLogger
@@ -45,6 +46,8 @@ def run_exp(cfg : RootConfig) -> None:
         model.bind_io(data_attrs, cfg.model.task) # Bind new IO
     else:
         model = BrainBertInterface(cfg.model, data_attrs)
+    if cfg.model.task.freeze_backbone:
+        model.freeze_backbone()
 
     epochs = cfg.train.epochs
     callbacks=[
@@ -67,6 +70,11 @@ def run_exp(cfg : RootConfig) -> None:
                 min_delta=0.00005, # we can tune this lower to squeeze a bit more..
             )
         )
+
+    lr_monitor = LearningRateMonitor(logging_interval='step')
+    if cfg.model.lr_schedule != "fixed":
+        callbacks.append(lr_monitor)
+
 
     wandb_logger = WandbLogger(project=cfg.wandb_project)
 

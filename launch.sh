@@ -3,7 +3,8 @@
 #SBATCH --gres gpu:1
 #SBATCH -p gpu
 #SBATCH -c 6
-#SBATCH -t 12:00:00
+#SBATCH -x mind-1-34
+#SBATCH -t 18:00:00
 #SBATCH --mem 30G
 #SBATCH --output=slurm_logs/%j.out
 

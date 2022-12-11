@@ -24,7 +24,13 @@ class TaskPipeline(nn.Module):
         # TODO manage input
         # TODO manage additional metrics
     """
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        backbone_out_size: int,
+        channel_count: int,
+        cfg: ModelConfig,
+        data_attrs: DataAttrs,
+    ) -> None:
         super().__init__()
 
     def get_temporal_context(self, batch: Dict[str, torch.Tensor]):
@@ -56,8 +62,14 @@ class RatePrediction(TaskPipeline):
         backbone_out_size: int,
         channel_count: int,
         cfg: ModelConfig,
+        data_attrs: DataAttrs
     ):
-        super().__init__()
+        super().__init__(
+            backbone_out_size=backbone_out_size,
+            channel_count=channel_count,
+            cfg=cfg,
+            data_attrs=data_attrs
+        )
         decoder_layers = [
             nn.Linear(backbone_out_size, channel_count)
         ]
@@ -184,24 +196,34 @@ class HeldoutPrediction(RatePrediction):
     r"""
         Regression for co-smoothing
     """
-    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+    def __init__(
+        self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
+    ):
+        super().__init__(
+            backbone_out_size=backbone_out_size * data_attrs.max_arrays,
+            channel_count=channel_count,
+            cfg=cfg,
+            data_attrs=data_attrs
+        )
 
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+        # torch.autograd.set_detect_anomaly(True)
+        backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
+        # backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')
         rates: torch.Tensor = self.out(backbone_features)
-        rates = rearrange(rates, 'b t a c -> b t (a c)')
-        spikes = torch.as_tensor(batch[DataKey.heldout_spikes][..., 0], dtype=torch.float)
+        spikes = batch[DataKey.heldout_spikes][..., 0]
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
         loss = rearrange(loss, 'b t c -> b t 1 c')
         loss_mask, length_mask, channel_mask = self.get_masks(loss, batch, channel_key=HELDOUT_CHANNEL_KEY)
         loss = loss[loss_mask]
-
         batch_out = {
             'loss': loss.mean()
         }
 
         if Metric.co_bps in self.cfg.metrics:
             batch_out[Metric.co_bps] = self.bps(
-                rates, spikes,
+                rates.unsqueeze(-2), spikes.unsqueeze(-2),
                 length_mask=length_mask,
                 channel_mask=channel_mask
             )

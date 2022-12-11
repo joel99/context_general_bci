@@ -35,12 +35,15 @@ class BrainBertInterface(pl.LightningModule):
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
-            Check if cfg is different from current cfg (used when loading)
+            Check if cfg is different from current cfg (used when initing)
         """
         self_copy = self.cfg.copy()
         ref_copy = cfg.copy()
+        # Things that are allowed to change on init
         self_copy.task = TaskConfig()
         ref_copy.task = TaskConfig()
+        self_copy.weight_decay = 0
+        ref_copy.weight_decay = 0
         return self_copy != ref_copy
 
     def bind_io(self, data_attrs: DataAttrs, task_cfg: Optional[TaskConfig] = None):
@@ -165,7 +168,7 @@ class BrainBertInterface(pl.LightningModule):
         if project_size is not self.cfg.hidden_size:
             self.context_project = nn.Sequential(
                 nn.Linear(project_size, self.cfg.hidden_size),
-                nn.ReLU()
+                nn.ReLU() if self.cfg.nonlinearity == 'relu' else nn.GELU(),
             )
         else:
             self.context_project = None
@@ -199,7 +202,7 @@ class BrainBertInterface(pl.LightningModule):
 
         task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
-                self.backbone.out_size, channel_count, self.cfg
+                self.backbone.out_size, channel_count, self.cfg, self.data_attrs
             ) for k in [self.cfg.task.task]
         })
         if hasattr(self, 'task_pipelines'):
@@ -208,6 +211,11 @@ class BrainBertInterface(pl.LightningModule):
                     task_pipelines[k].load_state_dict(self.task_pipelines[k].state_dict())
         self.task_pipelines = task_pipelines
 
+    def freeze_backbone(self):
+        logger.info("Freezing backbone.")
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+        self.backbone.eval()
 
     def _prepare_inputs(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         r"""
@@ -399,11 +407,35 @@ class BrainBertInterface(pl.LightningModule):
         return metrics['loss']
 
     def configure_optimizers(self):
-        return {
-            'optimizer': optim.AdamW(
-                self.parameters(),
-                lr=self.cfg.lr_init,
-                weight_decay=self.cfg.weight_decay
-            ),
+        scheduler = None
+        optimizer = optim.AdamW(
+            self.parameters(),
+            lr=self.cfg.lr_init,
+            weight_decay=self.cfg.weight_decay
+        )
+        if self.cfg.lr_schedule == 'linear_warmup':
+            scheduler = optim.lr_scheduler.LinearLR(
+                optimizer,
+                start_factor=self.cfg.lr_ramp_init_factor,
+                total_iters=self.cfg.lr_ramp_steps
+            )
+        elif self.cfg.lr_schedule == 'cosine_warmup':
+            scheduler = optim.lr_scheduler.ChainedScheduler([
+                optim.lr_scheduler.LinearLR(
+                    optimizer,
+                    start_factor=self.cfg.lr_ramp_init_factor,
+                    total_iters=self.cfg.lr_ramp_steps
+                ),
+                optim.lr_scheduler.CosineAnnealingLR(
+                    optimizer,
+                    T_max=self.cfg.lr_decay_steps,
+                    eta_min=self.cfg.lr_min
+                ),
+            ])
+        out = {
+            'optimizer': optimizer,
             'monitor': 'val_loss'
         }
+        if scheduler is not None:
+            out['lr_scheduler'] = scheduler
+        return out
