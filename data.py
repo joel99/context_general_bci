@@ -40,6 +40,9 @@ CHANNEL_KEY = 'channel_counts'
 logger = logging.getLogger(__name__)
 @dataclass
 class ContextAttrs:
+    r"""
+        Each of these can potentially be embedded
+    """
     subject: List[str] = field(default_factory=list)
     array: List[str] = field(default_factory=list) # should be prefixed with subject
     session: List[str] = field(default_factory=list) # unique ID

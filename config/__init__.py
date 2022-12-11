@@ -239,7 +239,9 @@ class RootConfig:
     dataset: DatasetConfig = DatasetConfig()
     train: TrainConfig = TrainConfig()
 
-    load_from_id: str = ""
+    # wandb ids
+    init_from_id: str = "" # for initializing weights
+    load_from_id: str = "" # for resuming training. takes precedent over init_from_id
 
     exp: Any = MISSING # delta config, provide via yaml and on CLI as `+exp=<test>.yaml`
 

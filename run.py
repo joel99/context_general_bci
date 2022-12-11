@@ -35,7 +35,16 @@ def run_exp(cfg : RootConfig) -> None:
 
     data_attrs = dataset.get_data_attrs()
     logger.info(pformat(f"Data attributes: {data_attrs}"))
-    model = BrainBertInterface(cfg.model, data_attrs)
+    if cfg.init_from_id:
+        init_ckpt = get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.init_from_id)
+        logger.info(f"Initializing from {init_ckpt}")
+        model = BrainBertInterface.load_from_checkpoint(init_ckpt)
+        if model.diff_cfg(cfg.model):
+            # logger.warn("Config differs from one loaded from checkpoint. OLD config will be used")
+            raise Exception('Unsupported config diff.')
+        model.bind_io(data_attrs, cfg.model.task) # Bind new IO
+    else:
+        model = BrainBertInterface(cfg.model, data_attrs)
 
     epochs = cfg.train.epochs
     callbacks=[

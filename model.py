@@ -1,5 +1,5 @@
 from typing import Tuple, Dict, List, Optional, Any
-from pathlib import Path
+import dataclasses
 import numpy as np
 import torch
 from torch import nn, optim
@@ -9,7 +9,7 @@ from einops import rearrange, repeat, reduce, pack # baby steps...
 import logging
 
 from config import (
-    ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
+    ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey, TaskConfig
 )
 
 from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
@@ -19,76 +19,148 @@ from subjects import subject_array_registry, SortedArrayInfo
 from backbones import TemporalTransformer
 from task_io import task_modules
 
+logger = logging.getLogger(__name__)
+
 class BrainBertInterface(pl.LightningModule):
     r"""
         I know I'll end up regretting this name.
     """
     def __init__(self, cfg: ModelConfig, data_attrs: DataAttrs):
         super().__init__() # store cfg
+        self.save_hyperparameters()
         self.cfg = cfg
-        self.save_hyperparameters(cfg)
-
         self.backbone = TemporalTransformer(self.cfg.transformer)
         self.data_attrs = None
         self.bind_io(data_attrs)
 
-    def bind_io(self, data_attrs: DataAttrs):
+    def diff_cfg(self, cfg: ModelConfig):
+        r"""
+            Check if cfg is different from current cfg (used when loading)
+        """
+        self_copy = self.cfg.copy()
+        ref_copy = cfg.copy()
+        self_copy.task = TaskConfig()
+        ref_copy.task = TaskConfig()
+        return self_copy != ref_copy
+
+    def bind_io(self, data_attrs: DataAttrs, task_cfg: Optional[TaskConfig] = None):
         r"""
             Add context-specific input/output parameters.
+            Has support for re-binding IO, but does _not_ check for shapes, which are assumed to be correct.
+            This means we rebind
+            - embeddings
+            - flags
+            - task_modules
+            Shapes are hidden sizes for flags/embeddings, and are configured via cfg.
+            From this "same cfg" assumption - we will assume that
+            `context_project` and `readin` are the same.
+
 
             Ideally, we will just bind embedding layers here, but there may be some MLPs.
         """
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.session, "Session embedding strategy requires session in data"
             if len(data_attrs.context.session) == 1:
-                logging.warn('Using session embedding strategy with only one session. This is probably a mistake.')
+                logger.warn('Using session embedding strategy with only one session. Expected only if tuning.')
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.subject, "Subject embedding strategy requires subject in data"
             if len(data_attrs.context.subject) == 1:
-                logging.warn('Using subject embedding strategy with only one subject. This is probably a mistake.')
+                logger.warn('Using subject embedding strategy with only one subject. Expected only if tuning.')
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.array, "Array embedding strategy requires array in data"
             if len(data_attrs.context.array) == 1:
-                logging.warn('Using array embedding strategy with only one array. This is probably a mistake.')
+                logger.warn('Using array embedding strategy with only one array. Expected only if tuning.')
+        old_attrs = None
         if self.data_attrs is not None: # IO already exists
-            import pdb;pdb.set_trace() # check this named_children call
-            # TODO update this to re-assign any preserved io
-            for n, m in self.named_children(): # clean old io
-                if n == 'backbone':
-                    continue
-                del m
+            if self.data_attrs == data_attrs:
+                logger.info('Identical IO detected, skipping IO rebind')
+            else:
+                r"""
+                    The other modules are: flags, embedding modules, readin, context_project, task_pipelines.
+                    TODO address in turn
+                """
+                logger.info("Rebinding IO...")
+                old_attrs = self.data_attrs
+
         self.data_attrs = data_attrs
 
         # Guardrails (to remove)
         assert len(self.data_attrs.context.task) <= 1, "Only tested for single task"
         assert self.cfg.array_embed_strategy == EmbedStrat.none, "Array embed strategy not yet implemented"
 
+        def init_and_maybe_transfer_embed(
+            new_attrs: List[str],
+            embed_size: int,
+            embed_name: str, # Used for looking up possibly existing attribute
+            old_attrs: List[str] | None = None,
+        ) -> nn.Embedding:
+            if new_attrs == old_attrs:
+                logger.info(f'Identical {embed_name} detected, skipping rebind.')
+                assert getattr(self, embed_name) is not None
+
+            embed = nn.Embedding(len(new_attrs) + int(embed_name == 'array_embed'), embed_size)
+            # # +1 is for padding (i.e. self.array_embed[-1] = padding)
+
+            if not hasattr(self, embed_name):
+                logger.info(f'Initializing {embed_name} from scratch.')
+                return embed
+
+            num_reassigned = 0
+            for n_idx, target in enumerate(new_attrs):
+                if target in old_attrs:
+                    embed.weight.data[n_idx] = getattr(self, embed_name).weight.data[old_attrs.index(target)]
+                    num_reassigned += 1
+            logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
+            if num_reassigned == 0:
+                logger.error(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
+            if embed_name == 'array_embed':
+                embed.weight.data[-1] = getattr(self, embed_name).weight.data[-1] # padding
+            return embed
+
+        def init_or_transfer_flag(flag_size, flag_name):
+            return getattr(self, flag_name, nn.Parameter(torch.zeros(flag_size)))
+
+        # We write the following repetitive logic explicitly to maintain typing
         project_size = self.cfg.hidden_size
+
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            self.session_embed = nn.Embedding(len(self.data_attrs.context.session), self.cfg.session_embed_size)
+            self.session_embed = init_and_maybe_transfer_embed(
+                self.data_attrs.context.session,
+                self.cfg.session_embed_size,
+                'session_embed',
+                old_attrs.context.session if old_attrs else None,
+            )
             if self.cfg.session_embed_strategy == EmbedStrat.concat:
                 project_size += self.cfg.session_embed_size
             elif self.cfg.session_embed_strategy == EmbedStrat.token:
                 assert self.cfg.session_embed_size == self.cfg.hidden_size
-                self.session_flag = nn.Parameter(torch.zeros(self.cfg.session_embed_size))
+                self.session_flag = init_or_transfer_flag(self.cfg.session_embed_size, 'session_flag')
 
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
-            self.subject_embed = nn.Embedding(len(self.data_attrs.context.subject), self.cfg.subject_embed_size)
+            self.subject_embed = init_and_maybe_transfer_embed(
+                self.data_attrs.context.subject,
+                self.cfg.subject_embed_size,
+                'subject_embed',
+                old_attrs.context.subject if old_attrs else None,
+            )
             if self.cfg.subject_embed_strategy == EmbedStrat.concat:
                 project_size += self.cfg.subject_embed_size
             elif self.cfg.subject_embed_strategy == EmbedStrat.token:
                 assert self.cfg.subject_embed_size == self.cfg.hidden_size
-                self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
+                self.subject_flag = init_or_transfer_flag(self.cfg.subject_embed_size, 'subject_flag')
 
-        # TODO handle array embed padding
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size)
-            # # +1 is for padding (i.e. self.array_embed[-1] = padding)
+            self.array_embed = init_and_maybe_transfer_embed(
+                self.data_attrs.context.array,
+                self.cfg.array_embed_size,
+                'array_embed',
+                old_attrs.context.array if old_attrs else None,
+            )
             if self.cfg.array_embed_strategy == EmbedStrat.concat:
                 project_size += self.cfg.subject_embed_size
             elif self.cfg.array_embed_strategy == EmbedStrat.token:
                 assert self.cfg.array_embed_size == self.cfg.hidden_size
-                self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
+                self.array_flag = init_or_transfer_flag(self.cfg.array_embed_size, 'array_flag')
 
         if project_size is not self.cfg.hidden_size:
             self.context_project = nn.Sequential(
@@ -98,37 +170,43 @@ class BrainBertInterface(pl.LightningModule):
         else:
             self.context_project = None
 
-        if self.cfg.task.task in [ModelTask.icms_one_step_ahead, ModelTask.infill]:
-            # bookmark: multi-array readin should be done here
-            # Note in general the data module will be responsible for providing array masks
-            if self.data_attrs.max_channel_count > 0: # there is padding
-                channel_count = self.data_attrs.max_channel_count
-            else:
-                # * Just project all channels.
-                # Doesn't (yet) support separate array projections.
-                # Doesn't (yet) support task-subject specific readin.
-                # ? I am unclear how Talukder managed to have mixed batch training if different data was shaped different sizes.
-                # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
-                # * A rework will be needed if we want to do this lookup grouped per subject
-                assert self.cfg.readin_strategy == EmbedStrat.project, 'Ragged array readin only implemented for project readin strategy'
-                assert len(data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
+        if self.data_attrs.max_channel_count > 0: # there is padding
+            channel_count = self.data_attrs.max_channel_count
+        else:
+            # * Just project all channels.
+            # Doesn't (yet) support separate array projections.
+            # Doesn't (yet) support task-subject specific readin.
+            # ? I am unclear how Talukder managed to have mixed batch training if different data was shaped different sizes.
+            # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
+            # * A rework will be needed if we want to do this lookup grouped per subject
+            assert self.cfg.readin_strategy == EmbedStrat.project, 'Ragged array readin only implemented for project readin strategy'
+            assert len(data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
 
-                for a in self.data_attrs.context.array:
-                    assert not isinstance(subject_array_registry.query_by_array(a), SortedArrayInfo), "actual mixed readins per session not yet implemented"
-                channel_count = sum(
-                    subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
-                ) * self.data_attrs.spike_dim
-            self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
+            for a in self.data_attrs.context.array:
+                assert not isinstance(subject_array_registry.query_by_array(a), SortedArrayInfo), "actual mixed readins per session not yet implemented"
+            channel_count = sum(
+                subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
+            ) * self.data_attrs.spike_dim
+        self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
 
+        if task_cfg is not None and self.cfg.task != task_cfg:
+            logger.info(f'Updating task config from {self.cfg.task} to {task_cfg}')
+            self.cfg.task = task_cfg
+
+        if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             # TODO add readin for the stim array (similar attr)
-            if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-                raise NotImplementedError
+            raise NotImplementedError
 
-            self.task_pipelines = nn.ModuleDict({
-                k.value: task_modules[k](
-                    self.backbone.out_size, channel_count, self.cfg
-                ) for k in [self.cfg.task.task]
-            })
+        task_pipelines = nn.ModuleDict({
+            k.value: task_modules[k](
+                self.backbone.out_size, channel_count, self.cfg
+            ) for k in [self.cfg.task.task]
+        })
+        if hasattr(self, 'task_pipelines'):
+            for k in task_pipelines:
+                if k in self.task_pipelines:
+                    task_pipelines[k].load_state_dict(self.task_pipelines[k].state_dict())
+        self.task_pipelines = task_pipelines
 
 
     def _prepare_inputs(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -186,6 +264,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T A H
+        import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
             temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
@@ -270,18 +349,6 @@ class BrainBertInterface(pl.LightningModule):
     @torch.inference_mode()
     def predict(self, x: torch.Tensor):
         return self(x)
-
-    # =================== Interface IO ===================
-    def load_from_checkpoint(self, checkpoint_path: Path | str, data_attrs: DataAttrs, **kwargs):
-        r"""
-            Load backbone, and determine which parts of the rest of the model to load based on `data_attrs`
-        """
-        ckpt = torch.load(checkpoint_path, map_location='cpu')
-        ckpt_data_attrs = ckpt['data_attrs']
-        super().load_from_checkpoint(checkpoint_path, ckpt_data_attrs, **kwargs)
-        self.bind_io(data_attrs)
-        import pdb;pdb.set_trace()
-        raise NotImplementedError # Not tested, look through
 
     # ==================== Utilities ====================
     def transform_rates(

@@ -23,4 +23,4 @@ train:
   steps: 1000
   batch_size: 128
 
-load_from_id: "rtt_indy_m1_padded-s0xo376n"
+init_from_id: "rtt_all_m1_padded-3sguwwiv"
