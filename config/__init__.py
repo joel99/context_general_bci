@@ -97,7 +97,7 @@ class ModelConfig:
     activation: str = 'relu' # gelu
 
     weight_decay: float = 0.0
-
+    dropout: float = 0.2 # not inherited by transformer (typically just for model IO)
     # The objective. Not intended to be multitask right now; intent is pretrain/fine-tune.
     task: TaskConfig = TaskConfig()
 

@@ -94,15 +94,11 @@ class ContextRegistry:
 context_registry = ContextRegistry([
     PassiveICMSContextInfo.build(906, 1, 'stim_trains_gen4-02b-ant_chan14-19-20-25_80uA_0.5ITI_6cond/'),
 
-    PassiveICMSContextInfo.build(980, 4, 'stim_trains_additivity_chan34-36-45-47-49-50-51-52_80uA_0.5ITI_12cond'), # Not yet analyzed
-    PassiveICMSContextInfo.build(985, 1, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_0'),
-
     PassiveICMSContextInfo.build(48, 1, 'stim_trains_80uA_9rap_9std/', (2, 6)),
 
     PassiveICMSContextInfo.build(61, 6, 'stim_trains_gen2_post_80uA_0.1ITI_36cond/'), # CRS07Lab
     PassiveICMSContextInfo.build(67, 1, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_0/'), # CRS07Lab
     PassiveICMSContextInfo.build(78, 1, 'stim_trains_gen6-07_chan14-19-20-25-10-15-18-12_80uA_0.5ITI_40cond'),
-    PassiveICMSContextInfo.build(79, 3, 'stim_trains_psth-test_chan34-37-40-43_80uA_0.5ITI_2cond'),
     PassiveICMSContextInfo.build(82, 4, 'stim_trains_gen6-07_chan14-19-20-25-10-15-18-12_80uA_0.5ITI_40cond'),
     PassiveICMSContextInfo.build(88, 3, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_1/'),
     PassiveICMSContextInfo.build(91, 4, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_2/'),
@@ -113,12 +109,12 @@ context_registry = ContextRegistry([
     PassiveICMSContextInfo.build(120, 3, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_4/'),
     PassiveICMSContextInfo.build(120, 4, 'stim_trains_single-07-post_chan50-44-56-34_80uA_0.5ITI_4cond'),
 
-    PassiveICMSContextInfo.build(126, 3, "", stim_banks=(6,)), # Not arbitrary stim, detection calibration
-    PassiveICMSContextInfo.build(126, 5, "", stim_banks=(6,)), # Not arbitrary stim, detection decoding (~40 trials),
-    PassiveICMSContextInfo.build(128, 3, 'stim_trains_gen4-07-post_chan46-51-52-57_80uA_0.5ITI_6cond'),
-    PassiveICMSContextInfo.build(131, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_0'),
-    PassiveICMSContextInfo.build(131, 4, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_5'), # VISUAL DECODING
-    PassiveICMSContextInfo.build(132, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_1'), # VISUAL DECODING
+    # PassiveICMSContextInfo.build(126, 3, "", stim_banks=(6,)), # Not arbitrary stim, detection calibration
+    # PassiveICMSContextInfo.build(126, 5, "", stim_banks=(6,)), # Not arbitrary stim, detection decoding (~40 trials),
+    # PassiveICMSContextInfo.build(128, 3, 'stim_trains_gen4-07-post_chan46-51-52-57_80uA_0.5ITI_6cond'),
+    # PassiveICMSContextInfo.build(131, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_0'),
+    # PassiveICMSContextInfo.build(131, 4, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_5'), # VISUAL DECODING
+    # PassiveICMSContextInfo.build(132, 3, 'stim_trains_scaling-train_chan2-4-10-12-14-15-18-19-20-23-24-25_80uA_0.5ITI_1cond/block_1'), # VISUAL DECODING
 
 
     ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze'),

@@ -62,7 +62,8 @@ class RatePrediction(TaskPipeline):
         backbone_out_size: int,
         channel_count: int,
         cfg: ModelConfig,
-        data_attrs: DataAttrs
+        data_attrs: DataAttrs,
+        use_dropout=False
     ):
         super().__init__(
             backbone_out_size=backbone_out_size,
@@ -73,6 +74,8 @@ class RatePrediction(TaskPipeline):
         decoder_layers = [
             nn.Linear(backbone_out_size, channel_count)
         ]
+        if use_dropout:
+            decoder_layers.insert(0, nn.Dropout(cfg.dropout))
 
         if not cfg.lograte:
             decoder_layers.append(nn.ReLU())
@@ -203,7 +206,8 @@ class HeldoutPrediction(RatePrediction):
             backbone_out_size=backbone_out_size * data_attrs.max_arrays,
             channel_count=channel_count,
             cfg=cfg,
-            data_attrs=data_attrs
+            data_attrs=data_attrs,
+            use_dropout=True # we need _heavy_ regularization
         )
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:

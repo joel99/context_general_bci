@@ -43,7 +43,10 @@ def run_exp(cfg : RootConfig) -> None:
         if model.diff_cfg(cfg.model):
             # logger.warn("Config differs from one loaded from checkpoint. OLD config will be used")
             raise Exception('Unsupported config diff.')
-        model.bind_io(data_attrs, cfg.model.task) # Bind new IO
+        # Inject new configuration so things like new regularization params + train schedule are loaded
+        # TODO not a lot of safety on the weights actually loaded
+        model = BrainBertInterface.load_from_checkpoint(init_ckpt, cfg=cfg.model, strict=False)
+        model.bind_io(data_attrs, cfg.model) # Bind new IO
     else:
         model = BrainBertInterface(cfg.model, data_attrs)
     if cfg.model.task.freeze_backbone:
