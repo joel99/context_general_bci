@@ -8,21 +8,89 @@ import matplotlib.pyplot as plt
 import wandb
 import scipy.signal as signal
 import torch
+import itertools
 
 # Some types
 StimCommand = NamedTuple("StimCommand", times=np.ndarray, channels=np.ndarray, current=np.ndarray)
 CommandPayload = Dict[Path, StimCommand]
 
-def get_newest_ckpt_in_dir(ckpt_dir: Path):
+def get_newest_ckpt_in_dir(ckpt_dir: Path, tag="val-"):
     # Newest is best since we have early stopping callback, and modelcheckpoint only saves early stopped checkpoints (not e.g. latest)
-    return sorted(ckpt_dir.glob("*.ckpt"), key=osp.getmtime)[-1]
+    res = sorted(ckpt_dir.glob("*.ckpt"), key=osp.getmtime)
+    res = [r for r in res if tag in r.name]
+    return res[-1]
 
 def get_latest_ckpt_from_wandb_id(
-        wandb_project, wandb_id, wandb_user="joelye9"
+        wandb_project,
+        wandb_id,
+        tag = ""
     ):
     wandb_id = wandb_id.split('-')[-1]
     ckpt_dir = Path(wandb_project) / wandb_id / "checkpoints" # curious, something about checkpoint dumping isn't right
-    return get_newest_ckpt_in_dir(ckpt_dir)
+    return get_newest_ckpt_in_dir(ckpt_dir, tag=tag)
+
+def get_wandb_run(wandb_project, wandb_id, wandb_user="joelye9"):
+    wandb_id = wandb_id.split('-')[-1]
+    api = wandb.Api()
+    return api.run(f"{wandb_user}/{wandb_project}/{wandb_id}")
+
+
+# TODO update these
+def wandb_query_latest(
+    name_kw,
+    wandb_user='joelye9',
+    wandb_project='icms_modeling',
+    latest_for_each_seed=False,
+    experiment_set="",
+    exact=False,
+    allow_running=False,
+    **filter_kwargs
+) -> List[Any]: # returns list of wandb run objects
+    # One can imagine moving towards a world where we track experiment names in config and query by experiment instead of individual variants...
+    # But that's for the next project...
+    # Default sort order is newest to oldest, which is what we want.
+    api = wandb.Api()
+    target = name_kw if exact else {"$regex": name_kw}
+    states = ["finished", "crashed"]
+    if allow_running:
+        states.append("running")
+    filters = {
+        # "display_name": Target,
+        "config.VARIANT": target,
+        "state": {"$in": states}, # crashed == timeout
+        **filter_kwargs
+    }
+    if experiment_set:
+        filters["config.EXPERIMENT_SET"] = experiment_set
+    runs = api.runs(
+        f"{wandb_user}/{wandb_project}",
+        filters=filters
+    )
+    if latest_for_each_seed:
+        # Filter to latest run for each seed (not compatible with split_seed runs)
+        seed_unique = lambda r: (r.config.get('SEED'), r.config.get('DATASET').get('SPLIT_SEED'))
+        runs = sorted(runs, key=seed_unique)
+        runs = [list(g)[0] for k, g in itertools.groupby(runs, seed_unique)]
+    return runs
+
+def wandb_query_several(
+    strings,
+    min_time=None,
+    latest_for_each_seed=True,
+):
+    runs = []
+    for s in strings:
+        runs.extend(wandb_query_latest(
+            s, exact=True, latest_for_each_seed=latest_for_each_seed,
+            created_at={
+                "$gt": min_time if min_time else "2022-01-01"
+                }
+            ,
+            allow_running=True # ! NOTE THIS
+        ))
+    return runs
+
+
 
 # Compute Gauss window and std with respect to bins
 def gauss_smooth(spikes, bin_size, kernel_sd=0.05):

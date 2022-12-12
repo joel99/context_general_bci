@@ -7,6 +7,7 @@ model:
     freeze_backbone: false
     metrics:
     - Metric.co_bps
+    - Metric.block_co_bps
     outputs:
     - Output.heldout_rates
   readin_strategy: EmbedStrat.token
@@ -14,8 +15,9 @@ model:
   lr_init: 2e-5 # just a test for now
   lr_ramp_steps: 500 # because tiny batches
   lr_decay_steps: 5000
-  weight_decay: 0.03
-  dropout: 0.3
+  weight_decay: 0.01
+  # weight_decay: 0.03
+  dropout: 0.2
 dataset:
   bin_size_ms: 5
   datasets:

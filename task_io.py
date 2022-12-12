@@ -106,7 +106,8 @@ class RatePrediction(TaskPipeline):
     @torch.no_grad()
     def bps(
         self, rates: torch.Tensor, spikes: torch.Tensor, is_lograte=True, mean=True, raw=False,
-        length_mask: Optional[torch.Tensor]=None, channel_mask: Optional[torch.Tensor]=None
+        length_mask: Optional[torch.Tensor]=None, channel_mask: Optional[torch.Tensor]=None,
+        block=False
     ) -> torch.Tensor:
         r""" # tensors B T A C
             Bits per spike, averaged over channels/trials, summed over time.
@@ -138,6 +139,8 @@ class RatePrediction(TaskPipeline):
             mean_rates = reduce(spikes, 'b t a c -> b 1 a c', 'sum') / reduce(length_mask, 'b t -> b 1 1 1', 'sum')
         else:
             mean_rates = reduce(spikes, 'b t a c -> b 1 a c')
+        if block:
+            mean_rates = reduce(mean_rates, 'b 1 a c -> 1 1 a c', 'mean').expand_as(spikes)
         mean_rates = (mean_rates + 1e-8).log()
         nll_null: torch.Tensor = self.loss(mean_rates, spikes)
 
@@ -231,6 +234,14 @@ class HeldoutPrediction(RatePrediction):
                 length_mask=length_mask,
                 channel_mask=channel_mask
             )
+        if Metric.block_co_bps in self.cfg.metrics:
+            batch_out[Metric.block_co_bps] = self.bps(
+                rates.unsqueeze(-2), spikes.unsqueeze(-2),
+                length_mask=length_mask,
+                channel_mask=channel_mask,
+                block=True
+            )
+
 
         if Output.heldout_rates in self.cfg.outputs:
             batch_out[Output.heldout_rates] = rates

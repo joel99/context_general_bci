@@ -29,6 +29,7 @@ class Metric(Enum):
     # Monitoring metrics to log. Losses are automatically included in lgos.
     bps = 'bps'
     co_bps = 'co-bps'
+    block_co_bps = 'block-co-bps'
     kinematic_r2 = 'kinematic_r2'
 
 class Output(Enum):
@@ -141,6 +142,8 @@ class DataKey(Enum):
     spikes = 'spikes'
     stim = 'stim' # icms
     heldout_spikes = 'heldout_spikes' # for co-bps
+
+    test_spikes = 'test_spikes' # for NLB
 
 class MetaKey(Enum):
     r"""
