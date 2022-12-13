@@ -31,6 +31,7 @@ def run_exp(cfg : RootConfig) -> None:
     pl.seed_everything(seed=cfg.seed)
 
     dataset = SpikingDataset(cfg.dataset)
+    dataset.restrict_to_train_set()
     train, val = dataset.create_tv_datasets()
     logger.info(f"Training on {len(train)} examples")
 
@@ -41,7 +42,7 @@ def run_exp(cfg : RootConfig) -> None:
         logger.info(f"Initializing from {init_ckpt}")
         model = BrainBertInterface.load_from_checkpoint(init_ckpt)
         if model.diff_cfg(cfg.model):
-            # logger.warn("Config differs from one loaded from checkpoint. OLD config will be used")
+            # logger.warning("Config differs from one loaded from checkpoint. OLD config will be used")
             raise Exception('Unsupported config diff.')
         # Inject new configuration so things like new regularization params + train schedule are loaded
         # TODO not a lot of safety on the weights actually loaded
@@ -125,8 +126,10 @@ def run_exp(cfg : RootConfig) -> None:
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
 
     # === Train ===
-    # num_workers = 0 # for testing
     num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
+    # num_workers = 0 # for testing
+    if num_workers == 0:
+        logger.warning("Num workers is 0, DEBUGGING.")
     logger.info("Preparing to fit...")
     trainer.fit(
         model,

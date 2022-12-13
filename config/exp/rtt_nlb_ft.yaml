@@ -9,7 +9,7 @@ model:
     - Metric.co_bps
     - Metric.block_co_bps
     outputs:
-    - Output.heldout_rates
+    - Output.heldout_logrates
   readin_strategy: EmbedStrat.token
   lr_schedule: 'cosine_warmup'
   lr_init: 2e-5 # just a test for now

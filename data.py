@@ -91,9 +91,11 @@ class SpikingDataset(Dataset):
             for d in self.cfg.datasets:
                 meta_df.extend(self.load_session(d))
             self.meta_df = pd.concat(meta_df).reset_index()
+            if 'split' in self.meta_df.columns and 'test' in self.meta_df['split'].unique():
+                logger.warning("Test split found in meta_df. Subsetting is expected.")
         else:
             self.meta_df = None
-
+        # check if any split is set to "test" and log warning
         self.context_index = None
         self.subsetted = False
 
@@ -191,7 +193,7 @@ class SpikingDataset(Dataset):
                     )
                     raise Exception()
             elif k == MetaKey.session:
-                # never conflate sessions
+                # never conflate sessions (even if they have the same tag)
                 meta[k] = context_meta.id
             elif k == MetaKey.unique:
                 continue # filled below
@@ -346,7 +348,7 @@ class SpikingDataset(Dataset):
     def get_key_indices(self, key_values, key: MetaKey=MetaKey.unique):
         return self.meta_df[self.meta_df[key].isin(key_values)].index
 
-    def subset_by_key(self, key_values: List[Any], key: MetaKey=MetaKey.unique, allow_second_subset=True):
+    def subset_by_key(self, key_values: List[Any], key: MetaKey | str=MetaKey.unique, allow_second_subset=True, na=None):
         r"""
             # ! In place
         """
@@ -355,7 +357,11 @@ class SpikingDataset(Dataset):
             return
         if self.subsetted:
             assert allow_second_subset
-            logging.warn("Dataset has already been subsetted.")
+            logging.warning("Dataset has already been subsetted.")
+        if na is not None:
+            self.meta_df[key] = self.meta_df[key].fillna(na)
+        subset = self.meta_df[key].isin(key_values)
+        logging.info(f"Subset dataset by {key} to {subset.sum()} / {len(self.meta_df)}")
         self.meta_df = self.meta_df[self.meta_df[key].isin(key_values)]
         self.meta_df = self.meta_df.reset_index(drop=True)
         self.build_context_index()
@@ -390,3 +396,7 @@ class SpikingDataset(Dataset):
         self.meta_df = self.meta_df.reset_index(drop=True)
         self.build_context_index()
         # TODO think about resetting data attrs - this should be called before any data attr call
+
+    def restrict_to_train_set(self):
+        if 'split' in self.meta_df.columns:
+            self.subset_by_key(key_values=['train'], key='split', na='train')

@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_ft
+tag: rtt_ft_smaller
 
 model:
   task:
@@ -16,9 +16,9 @@ model:
   lr_init: 2e-5 # just a test for now
   lr_ramp_steps: 500 # because tiny batches
   lr_decay_steps: 5000
-  # weight_decay: 0.01
-  weight_decay: 0.03
-  dropout: 0.4
+  weight_decay: 0.01
+  # weight_decay: 0.03
+  dropout: 0.2
 dataset:
   bin_size_ms: 5
   datasets:
@@ -35,7 +35,7 @@ dataset:
   - DataKey.heldout_spikes
 train:
   epochs: 50000
-  batch_size: 32 # smaller batches during tuning
+  batch_size: 8 # smaller batches during tuning
   patience: 500 # smaller batches
 
 init_from_id: "rtt_cos-v2ovd8aq"

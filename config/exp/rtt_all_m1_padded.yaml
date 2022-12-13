@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_cos
+tag: rtt_all_m1_padded
 
 model:
   task:

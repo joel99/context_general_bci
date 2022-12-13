@@ -53,7 +53,11 @@ class TaskPipeline(nn.Module):
         raise NotImplementedError # nothing in main model to use this
         return []
 
-    def forward(self, batch, backbone_features: torch.Tensor) -> torch.Tensor:
+    def forward(self, batch, backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
+        r"""
+            If compute_metrics is False, only return outputs. (Typically used in inference)
+            Else also log metrics.
+        """
         raise NotImplementedError
 
 class RatePrediction(TaskPipeline):
@@ -161,20 +165,22 @@ class RatePrediction(TaskPipeline):
 
 class SelfSupervisedInfill(RatePrediction):
 
-    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
 
         rates: torch.Tensor = self.out(backbone_features)
+        batch_out = {}
+        if Output.logrates in self.cfg.outputs:
+            batch_out[Output.logrates] = rates
+
+        if not compute_metrics:
+            return batch_out
         spikes = batch['spike_target']
         loss: torch.Tensor = self.loss(rates, spikes)
-
-        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
-
         # Infill update mask
+        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
         loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')
         loss = loss[loss_mask]
-        batch_out = {
-            'loss': loss.mean()
-        }
+        batch_out['loss'] = loss.mean()
         if Metric.bps in self.cfg.metrics:
             batch_out[Metric.bps] = self.bps(
                 rates, spikes,
@@ -182,8 +188,6 @@ class SelfSupervisedInfill(RatePrediction):
                 channel_mask=channel_mask
             )
 
-        if Output.rates in self.cfg.outputs:
-            batch_out[Output.rates] = rates
         return batch_out
 
 
@@ -213,21 +217,24 @@ class HeldoutPrediction(RatePrediction):
             use_dropout=True # we need _heavy_ regularization
         )
 
-    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
         # torch.autograd.set_detect_anomaly(True)
         backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
         # backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')
         rates: torch.Tensor = self.out(backbone_features)
+        batch_out = {}
+        if Output.heldout_logrates in self.cfg.outputs:
+            batch_out[Output.heldout_logrates] = rates
+
+        if not compute_metrics:
+            return batch_out
         spikes = batch[DataKey.heldout_spikes][..., 0]
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
         loss = rearrange(loss, 'b t c -> b t 1 c')
         loss_mask, length_mask, channel_mask = self.get_masks(loss, batch, channel_key=HELDOUT_CHANNEL_KEY)
         loss = loss[loss_mask]
-        batch_out = {
-            'loss': loss.mean()
-        }
-
+        batch_out['loss'] = loss.mean()
         if Metric.co_bps in self.cfg.metrics:
             batch_out[Metric.co_bps] = self.bps(
                 rates.unsqueeze(-2), spikes.unsqueeze(-2),
@@ -242,9 +249,6 @@ class HeldoutPrediction(RatePrediction):
                 block=True
             )
 
-
-        if Output.heldout_rates in self.cfg.outputs:
-            batch_out[Output.heldout_rates] = rates
         return batch_out
 
 

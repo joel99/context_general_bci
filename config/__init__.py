@@ -34,8 +34,8 @@ class Metric(Enum):
 
 class Output(Enum):
     # Various keys for different vectors model produces
-    rates = 'rates'
-    heldout_rates = 'heldout_rates'
+    logrates = 'logrates' # unnormalized
+    heldout_logrates = 'heldout_logrates'
     poisson_loss = 'poisson_loss'
     features = 'features'
 
@@ -156,6 +156,9 @@ class MetaKey(Enum):
     task = 'task'
     unique = 'unique' # default unique identifier
 
+    # Note these two are trial-wise metadata, and are stored in meta.csv. Currently easier to just store string 'split' and 'path' rather than parse out the enums from the csv.
+    split = 'split' # for NLB, sometimes data is loaded that has special labels/should be processed differently
+    path = 'path'
 
 @dataclass
 class ExperimentalConfig:

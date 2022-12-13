@@ -58,7 +58,7 @@ class ContextInfo:
                 f"An array in {self._arrays} not found in SubjectArrayRegistry"
         assert self.datapath is not Path("fake_path"), "ContextInfo didn't initialize with datapath"
         if not self.datapath.exists():
-            logging.warn(f"ContextInfo datapath not found ({self.datapath})")
+            logging.warning(f"ContextInfo datapath not found ({self.datapath})")
 
     @property
     def array(self) -> List[str]:

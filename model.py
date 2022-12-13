@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn, optim
 import pytorch_lightning as pl
-from einops import rearrange, repeat, reduce, pack # baby steps...
+from einops import rearrange, repeat, reduce, pack, unpack # baby steps...
 
 import logging
 
@@ -73,15 +73,15 @@ class BrainBertInterface(pl.LightningModule):
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.session, "Session embedding strategy requires session in data"
             if len(data_attrs.context.session) == 1:
-                logger.warn('Using session embedding strategy with only one session. Expected only if tuning.')
+                logger.warning('Using session embedding strategy with only one session. Expected only if tuning.')
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.subject, "Subject embedding strategy requires subject in data"
             if len(data_attrs.context.subject) == 1:
-                logger.warn('Using subject embedding strategy with only one subject. Expected only if tuning.')
+                logger.warning('Using subject embedding strategy with only one subject. Expected only if tuning.')
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
             assert data_attrs.context.array, "Array embedding strategy requires array in data"
             if len(data_attrs.context.array) == 1:
-                logger.warn('Using array embedding strategy with only one array. Expected only if tuning.')
+                logger.warning('Using array embedding strategy with only one array. Expected only if tuning.')
         old_attrs = None
         skip_bind = False
         if self.data_attrs is not None: # IO already exists
@@ -320,6 +320,8 @@ class BrainBertInterface(pl.LightningModule):
     def _step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         r"""
             batch provided contains all configured data_keys and meta_keys
+            - The distinction with `forward` is not currently clear, but `_step` is specifically oriented around training.
+            Which means it'll fiddle with the payload itself and compute losses
 
             TODO:
             - Fix: targets are keyed/id-ed per task; there is just a single target variable we're hoping is right
@@ -373,10 +375,57 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     @torch.inference_mode()
-    def predict(self, x: torch.Tensor):
-        return self(x)
+    def predict(self, batch: Dict[str, torch.Tensor]):
+        r"""
+            batch should provide info needed by model. (responsibility of user)
+            Output is always batched (for now)
+        """
+        # there are data keys and meta keys, that might be coming in unbatched
+        import pdb;pdb.set_trace()
+        batch_shapes = {
+            DataKey.spikes: '* t a c 1',
+            DataKey.stim: '* t c h', # TODO review
+            MetaKey.session: '*',
+            MetaKey.subject: '*',
+            MetaKey.array: '* a',
+            LENGTH_KEY: '*',
+            CHANNEL_KEY: '* a',
+        }
+        pack_info = {}
+        for k in batch:
+            batch[k], pack_info[k] = pack(batch[k], batch_shapes[k])
+        features = self(batch)
+        batch_out: Dict[str, torch.Tensor] = {}
+        for task in [self.cfg.task.task]:
+            batch_out.update(self.task_pipelines[task.value](batch, features, compute_metrics=False))
+        return batch_out
+
+    def predict_step(
+        self, batch
+    ):
+        return self.predict(batch)
+
 
     # ==================== Utilities ====================
+    def unpad_and_transform_rates(self, logrates: torch.Tensor, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+        r"""
+            logrates: raw, padded predictions from model, B T A H
+        """
+        # unpad logrates using LENGTH_KEY and CHANNEL_KEY
+        assert logrates.shape[2] == 1, "Only single array dim supported for now"
+        assert (batch[CHANNEL_KEY] == batch[CHANNEL_KEY].flatten()[0]).all(), "Heterogenuous arrays not supported for now"
+        logrates = logrates.unbind()
+        if LENGTH_KEY in batch:
+            logrates = [l[:b, ...] for l, b in zip(logrates, batch[LENGTH_KEY])]
+        if CHANNEL_KEY in batch:
+            import pdb;pdb.set_trace()
+            # currently expecting batch[channel_key] to look like bxa
+            logrates = [l[:, :, b[0], ...] for l, b in zip(logrates, batch[CHANNEL_KEY])]
+        # try to stack
+        if (batch[LENGTH_KEY] == batch[LENGTH_KEY][0]).all():
+            logrates = torch.stack(logrates)
+        return self.transform_rates(logrates, exp=True, normalize_hz=True).cpu()
+
     def transform_rates(
         self,
         logrates: List[torch.Tensor] | torch.Tensor,
@@ -389,21 +438,20 @@ class BrainBertInterface(pl.LightningModule):
             exp: Should exponentiate?
             normalize_hz: Should normalize to spikes per second (instead of spikes per bin)?
         """
+        def _transform(single: torch.Tensor):
+            if exp:
+                single = single.exp()
+            if normalize_hz:
+                single = single / self.data_attrs.bin_size_ms
+            return single
         out = logrates
         if isinstance(out, list):
-            out = torch.cat(out)
-        if exp:
-            out = out.exp()
-        if normalize_hz:
-            out = out / self.data_attrs.bin_size_ms
+            out = [_transform(o) for o in out]
+        else:
+            out = _transform(out)
         return out
 
     # ==================== Optimization ====================
-    def predict_step(
-        self, batch
-    ):
-        return self.predict(batch)
-
     def common_log(self, metrics, prefix=''):
         self.log(f'{prefix}_loss', metrics['loss'])
         for m in self.cfg.task.metrics:
@@ -457,3 +505,17 @@ class BrainBertInterface(pl.LightningModule):
         if scheduler is not None:
             out['lr_scheduler'] = scheduler
         return out
+
+    # === Model loading
+    @classmethod
+    def load_from_checkpoint(cls, checkpoint_path: str, cfg: ModelConfig | None = None, data_attrs: DataAttrs | None = None):
+        r"""
+            Specifically, model topology is determined by data_attrs.
+            data_attrs thus must be saved and loaded with a model to make sense of it.
+            However, if we're initializing from another checkpoint, we want to know its data_attrs, but not save it as the new attrs. To avoid doing this while still hooking into PTL `save_hyperparameters()`, we do a manual state_dict transfer of two model instances (one with old and one with new topology.)
+        """
+        old_model = super().load_from_checkpoint(checkpoint_path)
+        if cfg:
+            if old_model.diff_cfg(cfg):
+                raise Exception("Unsupported config diff")
+
