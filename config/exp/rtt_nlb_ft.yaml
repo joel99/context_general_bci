@@ -32,4 +32,4 @@ train:
   batch_size: 32 # smaller batches during tuning
   patience: 500 # smaller batches
 
-init_from_id: "rtt_nlb-2qm0ck14"
+init_from_id: "rtt_nlb-1ois0tjz"

@@ -59,6 +59,10 @@ class DataAttrs:
     context: ContextAttrs
     max_arrays: int = 1 # patch, todo remove default
 
+    # Task specific
+    rtt_heldout_channel_count: int = 0 # Only for NLB, kinda hacky
+    maze_heldout_channel_count: int = 0
+
 class SpikingDataset(Dataset):
     r"""
         Generic container for spiking data from intracortical microelectrode recordings.
@@ -238,7 +242,7 @@ class SpikingDataset(Dataset):
         # while heldout channels are never provided in multiple shapes
         # the alternative to padding is to define custom readout via DataAttrs
         # we would rather maintain consistent interface and pad
-        heldout_channel_counts = []
+        # heldout_channel_counts = []
 
         for k in self.cfg.data_keys:
             if k == DataKey.spikes:
@@ -267,15 +271,15 @@ class SpikingDataset(Dataset):
                     )
                 ], 1) # T A C H
                 channel_counts.extend([0] * (self.cfg.max_arrays - len(array_spikes)))
-            elif k == DataKey.heldout_spikes:
-                # no array padding - just pad to max spikes
-                assert self.cfg.max_channels > 0, "Heldout spikes logic without max channels not implemented"
-                data_items[k] = F.pad(
-                    payload[k],
-                    (0, 0, 0, self.cfg.max_channels - payload[k].shape[-2]),
-                    value=0
-                ) # T C H
-                heldout_channel_counts.append(payload[k].shape[-2])
+            # elif k == DataKey.heldout_spikes:
+            #     # no array padding OR channel pad - heldout channel count should be preconfigured, and this only happens in finetuning (no heterogeneity)
+            #     assert self.cfg.max_channels > 0, "Heldout spikes logic without max channels not implemented"
+            #     # data_items[k] = F.pad(
+            #     #     payload[k],
+            #     #     (0, 0, 0, self.cfg.max_channels - payload[k].shape[-2]),
+            #     #     value=0
+            #     # ) # T C H
+            #     # heldout_channel_counts.append(payload[k].shape[-2])
             else:
                 data_items[k] = payload[k]
         out = {
@@ -284,8 +288,8 @@ class SpikingDataset(Dataset):
         }
         if self.cfg.max_channels:
             out[CHANNEL_KEY] = torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
-            if heldout_channel_counts:
-                out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
+            # if heldout_channel_counts:
+            #     out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
         return out
 
     def __len__(self):
@@ -334,12 +338,15 @@ class SpikingDataset(Dataset):
         """
         if self.context_index is None:
             self.build_context_index()
+
         return DataAttrs(
             bin_size_ms=self.cfg.bin_size_ms,
             max_channel_count=self.cfg.max_channels,
             max_arrays=self.cfg.max_arrays,
             spike_dim=1, # Higher dims not supported right now
-            context=ContextAttrs(**self.context_index)
+            context=ContextAttrs(**self.context_index),
+            rtt_heldout_channel_count=self.cfg.nlb_rtt.heldout_neurons,
+            maze_heldout_channel_count=self.cfg.nlb_maze.heldout_neurons,
         )
 
     # ==================== Data splitters ====================

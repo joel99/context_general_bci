@@ -13,13 +13,12 @@ from nlb_tools.make_tensors import save_to_h5
 
 # Load BrainBertInterface and SpikingDataset to make some predictions
 from model import BrainBertInterface
-from data import SpikingDataset
+from data import SpikingDataset, DataAttrs
 from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
 from contexts import context_registry
 from copy import deepcopy
 
 from utils import get_latest_ckpt_from_wandb_id, get_wandb_run
-
 
 dataset_name = 'mc_rtt'
 context = context_registry.query(alias=dataset_name)
@@ -33,6 +32,15 @@ default_cfg.dataset.max_channels = 98
 
 dataset = SpikingDataset(default_cfg.dataset)
 test_dataset = deepcopy(dataset)
+
+#%%
+wandb_id = "rtt_nlb_ft-pgh47dlp"
+run = get_wandb_run(default_cfg.wandb_project, wandb_id)
+from dacite import from_dict
+run_data_attrs = from_dict(data_class=DataAttrs, data=run.config['data_attrs'])
+del run.config['data_attrs']
+cfg: RootConfig = OmegaConf.create(run.config) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
+
 #%%
 dataset.restrict_to_train_set()
 dataset.build_context_index()
@@ -40,7 +48,7 @@ test_dataset.subset_by_key(['test'], key='split')
 test_dataset.build_context_index()
 
 # Load the model
-wandb_id = "rtt_nlb_ft-32np55gs"
+wandb_id = "rtt_nlb_ft-toe7nvo7"
 run = get_wandb_run(default_cfg.wandb_project, wandb_id)
 co_bps_ckpt = get_latest_ckpt_from_wandb_id(default_cfg.wandb_project, wandb_id, tag="val_co_bps")
 heldout_model = BrainBertInterface.load_from_checkpoint(co_bps_ckpt)
@@ -74,7 +82,6 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
     return out
 
 heldin_outputs = stack_batch(trainer.predict(heldin_model, dataloader))
-import pdb;pdb.set_trace()
 #%%
 heldout_outputs = stack_batch(trainer.predict(heldout_model, dataloader))
 test_heldin_outputs = stack_batch(trainer.predict(heldin_model, test_dataloader))
@@ -86,21 +93,15 @@ dataset_name = dataset.cfg.datasets[0]
 suffix = '' # no suffix needed for 5ms submissions
 output_dict = {
     dataset_name + suffix: {
-        'train_rates_heldin': heldin_outputs[Output.rates],
-        'train_rates_heldout': heldout_outputs[Output.heldout_rates],
-        'eval_rates_heldin': test_heldin_outputs[Output.rates],
-        'eval_rates_heldout': test_heldout_outputs[Output.heldout_rates],
+        'train_rates_heldin': heldin_outputs[Output.rates].squeeze(2).numpy(),
+        'train_rates_heldout': heldout_outputs[Output.heldout_rates].numpy(),
+        'eval_rates_heldin': test_heldin_outputs[Output.rates].squeeze(2).numpy(),
+        'eval_rates_heldout': test_heldout_outputs[Output.heldout_rates].numpy(),
     }
 }
-
 print(output_dict.keys())
 print(output_dict[dataset_name + suffix].keys()) # sanity check
 # for rtt, expected shapes are 1080 / 272, 120, 98 / 32
 print(output_dict[dataset_name + suffix]['train_rates_heldin'].shape) # should be trial x time x neuron
-print(output_dict[dataset_name + suffix]['train_rates_heldin'])
-
+# print(output_dict[dataset_name + suffix]['train_rates_heldout'])
 save_to_h5(output_dict, "submission.h5")
-
-#%%
-# TODO implement model.predict to produce outputs you desire
-# TODO connect to NLB pipeline and make private test submission

@@ -5,6 +5,7 @@ from pprint import pformat
 import logging # we use top level logging since most actual diagnostic info is in libs
 import hydra
 from omegaconf import OmegaConf
+import dataclasses
 
 import torch
 from torch.utils.data import DataLoader
@@ -117,6 +118,7 @@ def run_exp(cfg : RootConfig) -> None:
         if cfg.tag:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
+        wandb.config.update({'data_attrs': dataclasses.asdict(data_attrs)})
 
     # === Train ===
     num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.

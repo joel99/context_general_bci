@@ -27,7 +27,7 @@ class BrainBertInterface(pl.LightningModule):
     """
     def __init__(self, cfg: ModelConfig, data_attrs: DataAttrs):
         super().__init__() # store cfg
-        self.save_hyperparameters()
+        self.save_hyperparameters(logger=False)
         self.cfg = cfg
         self.backbone = TemporalTransformer(self.cfg.transformer)
         self.data_attrs = data_attrs
@@ -38,7 +38,7 @@ class BrainBertInterface(pl.LightningModule):
             Check if cfg is different from current cfg (used when initing)
         """
         self_copy = self.cfg.copy()
-        # Things that are allowed to change on init
+        # Things that are allowed to change on init (actually most things should be allowed to change, but just register them explicitly here as needed)
         for safe_attr in [
             'task',
             'weight_decay',
@@ -142,9 +142,17 @@ class BrainBertInterface(pl.LightningModule):
             # TODO add readin for the stim array (similar attr)
             raise NotImplementedError
 
+        def get_target_size(k: ModelTask):
+            if k == ModelTask.heldout_decoding:
+                # even more hacky - we know only one of these is nonzero at the same time
+                return max(
+                    self.data_attrs.rtt_heldout_channel_count,
+                    self.data_attrs.maze_heldout_channel_count,
+                )
+            return channel_count
         self.task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
-                self.backbone.out_size, channel_count, self.cfg, self.data_attrs
+                self.backbone.out_size, get_target_size(k), self.cfg, self.data_attrs
             ) for k in [self.cfg.task.task]
         })
 
@@ -160,14 +168,15 @@ class BrainBertInterface(pl.LightningModule):
             logger.info(f'Task config updated from {transfer_cfg.task} to {self.cfg.task}')
 
         def try_transfer(module_name: str):
-            if hasattr(self, module_name) and hasattr(transfer_model, module_name):
-                if isinstance(getattr(self, module_name), nn.Parameter):
-                    getattr(self, module_name).data = getattr(transfer_model, module_name).data
+            if hasattr(self, module_name):
+                if hasattr(transfer_model, module_name):
+                    if isinstance(getattr(self, module_name), nn.Parameter):
+                        getattr(self, module_name).data = getattr(transfer_model, module_name).data
+                    else:
+                        getattr(self, module_name).load_state_dict(getattr(transfer_model, module_name).state_dict())
+                    logger.info(f'Transferred {module_name} weights.')
                 else:
-                    getattr(self, module_name).load_state_dict(getattr(transfer_model, module_name).state_dict())
-                logger.info(f'Transferred {module_name} weights.')
-            else:
-                logger.info(f'New {module_name} weights.')
+                    logger.info(f'New {module_name} weights.')
 
         if self.data_attrs != transfer_data_attrs:
             def try_transfer_embed(
@@ -262,7 +271,7 @@ class BrainBertInterface(pl.LightningModule):
                 project_context.append(subject)
 
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            import pdb;pdb.set_trace() # TODO vet, also I think the embedding isn't quite right?
+            import pdb;pdb.set_trace() # TODO vet - I think we can't provide this as a single token, because there's an array dimension and we need to assign this to the correct arrays (there's more than one context token per batch)
             array: torch.Tensor = self.array_embed(batch[MetaKey.array])
             if self.cfg.array_embed_strategy == EmbedStrat.token:
                 array = array + self.array_flag
@@ -389,9 +398,9 @@ class BrainBertInterface(pl.LightningModule):
             batch_out.update(self.task_pipelines[task.value](batch, features, compute_metrics=False))
         if transform_logrates:
             if Output.logrates in batch_out:
-                batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates], batch)
+                batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates], batch[LENGTH_KEY], batch[CHANNEL_KEY])
             if Output.heldout_logrates in batch_out:
-                batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(batch_out[Output.heldout_logrates], batch)
+                batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(batch_out[Output.heldout_logrates], batch[LENGTH_KEY])
         return batch_out
 
     def predict_step(
@@ -401,23 +410,23 @@ class BrainBertInterface(pl.LightningModule):
 
 
     # ==================== Utilities ====================
-    def unpad_and_transform_rates(self, logrates: torch.Tensor, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def unpad_and_transform_rates(self, logrates: torch.Tensor, lengths: torch.Tensor | None = None, channels: torch.Tensor | None = None) -> torch.Tensor:
         r"""
             logrates: raw, padded predictions from model, B T A H
         """
         # unpad logrates using LENGTH_KEY and CHANNEL_KEY
-        if logrates.shape[2] != 1:
-            import pdb;pdb.set_trace()
-        assert logrates.shape[2] == 1, "Only single array dim supported for now"
-        assert (batch[CHANNEL_KEY] == batch[CHANNEL_KEY].flatten()[0]).all(), "Heterogenuous arrays not supported for now"
+        logrates, ps = pack([logrates], 'b t * h')
+        assert logrates.shape[2] == 1 or logrates.ndim == 3, "Only single array dim supported for now"
+        assert channels is None or (channels == channels.flatten()[0]).all(), "Heterogenuous arrays not supported for now"
         logrates = logrates.unbind()
-        if LENGTH_KEY in batch:
-            logrates = [l[:b, ...] for l, b in zip(logrates, batch[LENGTH_KEY])]
-        if CHANNEL_KEY in batch:
-            logrates = [l[:, :, :b[0], ...] for l, b in zip(logrates, batch[CHANNEL_KEY])]
+        if lengths is not None:
+            logrates = [l[:b, ...] for l, b in zip(logrates, lengths)]
+        if channels is not None:
+            logrates = [l[:, :, :b[0], ...] for l, b in zip(logrates, channels)]
         # try to stack
-        if (batch[LENGTH_KEY] == batch[LENGTH_KEY][0]).all():
+        if (lengths == lengths[0]).all():
             logrates = torch.stack(logrates)
+        [logrates] = unpack(logrates, ps, 'b t * h')
         return self.transform_rates(logrates, exp=True, normalize_hz=True).cpu()
 
     def transform_rates(

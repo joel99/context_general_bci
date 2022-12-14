@@ -268,6 +268,3 @@ class RootConfig:
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
 
     exp: Any = MISSING # delta config, provide via yaml and on CLI as `+exp=<test>.yaml`
-
-cs = ConfigStore.instance()
-cs.store(name="config", node=RootConfig)

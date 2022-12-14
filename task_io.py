@@ -232,7 +232,7 @@ class HeldoutPrediction(RatePrediction):
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
         loss = rearrange(loss, 'b t c -> b t 1 c')
-        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch, channel_key=HELDOUT_CHANNEL_KEY)
+        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch, channel_key=HELDOUT_CHANNEL_KEY) # channel_key expected to be no-op since we don't provide this mask
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.co_bps in self.cfg.metrics:
