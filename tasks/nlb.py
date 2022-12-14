@@ -83,7 +83,6 @@ class NLBLoader(ExperimentalTaskLoader):
         train_spikes_heldin = torch.tensor(train_spikes_heldin, dtype=torch.uint8)
         train_spikes_heldout = torch.tensor(train_spikes_heldout, dtype=torch.uint8)
         test_spikes_heldin = torch.tensor(test_spikes_heldin, dtype=torch.uint8)
-
         meta_payload = {}
         meta_payload['path'] = []
         meta_payload['split'] = []
@@ -200,7 +199,7 @@ class NWBDatasetChurchland(NWBDataset):
             the bin width of the loaded data in ms
         """
         logger.info(f"Loading {fpath}")
-
+        import pdb;pdb.set_trace()
         # Open NWB file
         io = NWBHDF5IO(fpath, 'r')
         nwbfile = io.read()

@@ -1,5 +1,4 @@
 #%%
-
 from typing import List
 from pathlib import Path
 
@@ -19,13 +18,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 @ExperimentalTaskRegistry.register
-class ODohertyRTTLoader(ExperimentalTaskLoader):
-    name = ExperimentalTask.odoherty_rtt
+class ChurchlandMazeLoader(ExperimentalTaskLoader):
+    name = ExperimentalTask.churchland_maze
     r"""
-    O'Doherty et al RTT data.
-    # https://zenodo.org/record/3854034
-    # The data was pulled from Zenodo directly via
-    # zenodo_get 3854034
+    Churchland/Kaufman reaching data.
+    # https://dandiarchive.org/dandiset/000070/draft/files
+
+    We write a slightly different loader rather than use NLB loader
+    for a bit more granular control.
     """
 
     @classmethod
@@ -37,9 +37,9 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
-        sampling_rate: int = 1000 # Hz, true for ODohery data
+        sampling_rate: int = 1000 # Hz
     ):
-        assert cfg.odoherty_rtt.chop_size_ms % cfg.bin_size_ms == 0, "Chop size must be a multiple of bin size"
+        assert cfg.churchland_maze.chop_size_ms % cfg.bin_size_ms == 0, "Chop size must be a multiple of bin size"
         assert cfg.odoherty_rtt.load_covariates == False, "Covariates not supported yet"
         with h5py.File(datapath, 'r') as h5file:
             orig_timestamps = np.squeeze(h5file['t'][:])

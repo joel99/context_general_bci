@@ -20,20 +20,19 @@ import seaborn as sns
 # dataset_name = 'mc_maze_medium' # 114 sorted units
 # dataset_name = 'mc_maze_small' # 107 sorted units
 # dataset_name = 'mc_maze' # 137 sorted units
-# dataset_name = 'churchland_maze_jenkins-0'
+dataset_name = 'churchland_maze_jenkins-0'
 # dataset_name = 'churchland_maze_jenkins-1'
-dataset_name = 'mc_rtt'
+# dataset_name = 'mc_rtt'
 context = context_registry.query(alias=dataset_name)
 
-datapath = './data/odoherty_rtt/indy_20160407_02.mat'
-context = context_registry.query_by_datapath(datapath)
+# datapath = './data/odoherty_rtt/indy_20160407_02.mat'
+# context = context_registry.query_by_datapath(datapath)
 
 default_cfg = DatasetConfig()
 default_cfg.bin_size_ms = 5
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
-
+default_cfg.datasets = [context.alias]
 dataset = SpikingDataset(default_cfg)
-dataset.meta_df = dataset.load_session(context.alias)[0]
 dataset.build_context_index()
 # dataset = NWBDataset(context.datapath)
 

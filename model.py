@@ -395,12 +395,18 @@ class BrainBertInterface(pl.LightningModule):
         features = self(batch)
         batch_out: Dict[str, torch.Tensor] = {}
         for task in [self.cfg.task.task]:
-            batch_out.update(self.task_pipelines[task.value](batch, features, compute_metrics=False))
+            batch_out.update(
+                self.task_pipelines[task.value](batch, features, compute_metrics=False)
+            )
         if transform_logrates:
             if Output.logrates in batch_out:
-                batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates], batch[LENGTH_KEY], batch[CHANNEL_KEY])
+                batch_out[Output.rates] = self.unpad_and_transform_rates(
+                    batch_out[Output.logrates], batch[LENGTH_KEY], batch[CHANNEL_KEY]
+                )
             if Output.heldout_logrates in batch_out:
-                batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(batch_out[Output.heldout_logrates], batch[LENGTH_KEY])
+                batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(
+                    batch_out[Output.heldout_logrates], batch[LENGTH_KEY]
+                )
         return batch_out
 
     def predict_step(
@@ -427,7 +433,8 @@ class BrainBertInterface(pl.LightningModule):
         if (lengths == lengths[0]).all():
             logrates = torch.stack(logrates)
         [logrates] = unpack(logrates, ps, 'b t * h')
-        return self.transform_rates(logrates, exp=True, normalize_hz=True).cpu()
+        # NLB expects units of spikes / bin (search "spikes/bin" in https://github.dev/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb)
+        return self.transform_rates(logrates, exp=True, normalize_hz=False).cpu()
 
     def transform_rates(
         self,

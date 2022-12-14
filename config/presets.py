@@ -38,7 +38,7 @@ class NLBModelTaskConfig(TaskConfig):
     outputs: List[Output] = field(default_factory=lambda: [Output.heldout_logrates])
 
 @dataclass
-class NLBModelConfig(FinetuningModelConfig):
+class NLBModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=NLBModelTaskConfig)
 
 cs.store(group="model", name="nlb", node=NLBModelConfig)
@@ -62,3 +62,15 @@ class RTTNLBDataConfig(DatasetConfig):
     data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes, DataKey.heldout_spikes])
 
 cs.store(group="dataset", name="rtt_nlb", node=RTTNLBDataConfig)
+
+@dataclass
+class MazeNLBDataConfig(DatasetConfig):
+    r"""
+        Default configuration for all maze datasets NLB fine-tuning
+    """
+    bin_size_ms: int = 5
+    datasets: List[str] = field(default_factory=lambda: ['mc_maze'])
+    max_channels: int = 137
+    data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes, DataKey.heldout_spikes])
+
+cs.store(group="dataset", name="maze_nlb", node=MazeNLBDataConfig)

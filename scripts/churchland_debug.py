@@ -7,20 +7,100 @@ from pathlib import Path
 import logging
 
 import pynwb
-from pynwb import TimeSeries, ProcessingModule
+from pynwb import TimeSeries, ProcessingModule, NWBFile, NWBHDF5IO
 from pynwb.core import MultiContainerInterface
 
 from nlb_tools.make_tensors import make_train_input_tensors, PARAMS, _prep_mask, make_stacked_array
+from contexts import context_registry
 
 ## Load dataset
-path = Path("./data/churchland_reaching/000070/sub-Jenkins/")
-path = Path("./data/churchland_reaching/000070/sub-Nitschke/")
-# path = Path("./data/nlb/000140/sub-Jenkins/")
-exps = list(path.glob("*.nwb"))
-exp = exps[0]
-# exp = exps[1]
-print(exp)
+# From this investigation, it seems like unit 1 is busted
+dataset_name = 'churchland_maze_jenkins-0'
+# dataset_name = 'churchland_maze_jenkins-3'
+dataset_name = 'churchland_maze_nitschke-3'
+context = context_registry.query(alias=dataset_name)
+path = context.datapath
+print(context.datapath)
+io = NWBHDF5IO(context.datapath, 'r')
+nwbfile = io.read()
 
+#%%
+from matplotlib import pyplot as plt
+# print(nwbfile.fields.keys())
+# print(nwbfile.subject)
+
+# TODO explore datafile
+# Has movement and LFP
+# print(nwbfile.processing['behavior'].data_interfaces)
+# print(nwbfile.processing['ecephys'].data_interfaces)
+
+# Time intervals: https://pynwb.readthedocs.io/en/stable/tutorials/general/file.html#time-intervals
+# print(nwbfile.intervals['trials'])
+# Actually, this is the same thing as nwbfile.trials
+print(nwbfile.intervals['trials'].colnames)
+print(nwbfile.intervals['trials']['start_time'][:])
+print(nwbfile.intervals['trials']['go_cue_time'][:])
+print(nwbfile.intervals['trials']['move_begins_time'][:])
+print(nwbfile.intervals['trials']['move_ends_time'][:])
+print(nwbfile.intervals['trials']['discard_trial'][:].sum())
+# print(nwbfile.intervals['trials']['stop_time'][:])
+# print(len(nwbfile.intervals['trials']['start_time'][:]))
+# print(len(nwbfile.intervals['trials']['stop_time'][:]))
+# plt.plot(nwbfile.intervals['trials']['start_time'][:])
+
+# More time intervals?
+# print(nwbfile.trials.id)
+
+#%%
+unit = 2
+unit = 20
+# unit = 1
+# print(nwbfile.units)
+# print(nwbfile.units.spike_times)
+# print(nwbfile.units.to_dataframe().obs_intervals.iloc[unit])
+# plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,0])
+# plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,1])
+# plt.plot(nwbfile.units.to_dataframe().spike_times.iloc[unit])
+# print(nwbfile.units.to_dataframe().spike_times.iloc[1])
+# spikes = nwbfile.units.to_dataframe().spike_times.iloc[unit]
+is_monotonic = lambda spikes: np.all(np.diff(spikes) >= 0)
+all_units = nwbfile.units.to_dataframe()
+unit_valid = []
+for t in range(len(all_units)):
+    unit_valid.append(is_monotonic(all_units.spike_times.iloc[t]))
+print((np.array(unit_valid) == False).nonzero())
+
+#%%
+# Sanity check interval and spike time validity
+intervals = nwbfile.units.to_dataframe().obs_intervals.iloc[unit]
+print(len(intervals))
+#%%
+num_contained = []
+for t in nwbfile.units.to_dataframe().spike_times.iloc[unit]:
+    num_contained.append(np.sum((intervals[:,0] <= t) & (intervals[:,1] >= t)))
+
+print((np.array(num_contained) == 1).all())
+
+# Identify number of overlapping intervals in `intervals`
+def num_overlaps(intervals):
+    num_overlaps = 0
+    for i in range(len(intervals)):
+        for j in range(i+1, len(intervals)):
+            if (intervals[i,0] <= intervals[j,0] <= intervals[i,1]) or (intervals[j,0] <= intervals[i,0] <= intervals[j,1]):
+                num_overlaps += 1
+    return num_overlaps
+print(num_overlaps(intervals))
+
+
+
+
+
+
+
+#%%
+# io.close()
+# exit(0)
+#%%
 # TODO want to add array group info to units
 
 patch_name = 'churchland_reaching'

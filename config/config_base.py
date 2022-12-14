@@ -186,6 +186,11 @@ class RTTConfig(ExperimentalConfig):
     load_covariates: bool = False
 
 @dataclass
+class MazeConfig(ExperimentalConfig):
+    chop_size_ms: int = 1000
+    load_covariates: bool = False
+
+@dataclass
 class NLBConfig(ExperimentalConfig):
     heldout_neurons: int = 32 # for RTT
 
@@ -234,7 +239,7 @@ class DatasetConfig:
     passive_icms: ExperimentalConfig = ExperimentalConfig()
     nlb_maze: NLBConfig = NLBConfig()
     nlb_rtt: NLBConfig = NLBConfig()
-    churchland_maze: ExperimentalConfig = ExperimentalConfig()
+    churchland_maze: MazeConfig = MazeConfig()
     odoherty_rtt: RTTConfig = RTTConfig()
 
 @dataclass

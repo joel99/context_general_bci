@@ -89,18 +89,6 @@ test_heldout_outputs = stack_batch(trainer.predict(heldout_model, test_dataloade
 print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 print(heldout_outputs[Output.heldout_rates].max(), heldout_outputs[Output.heldout_rates].mean())
 print(test_heldout_outputs[Output.heldout_rates].max(), test_heldout_outputs[Output.heldout_rates].mean())
-
-#%%
-print(heldin_outputs[Output.rates].shape)
-test = heldin_outputs[Output.rates].squeeze(2).numpy()
-test = test_heldin_outputs[Output.rates].squeeze(2).numpy()
-test = test_heldout_outputs[Output.heldout_rates].numpy()
-for trial in range(test.shape[0]):
-    plt.plot(test[trial,:,0])
-    if trial > 5:
-        break
-# plt.plot(test[0,:,0])
-print("done")
 #%%
 # Create spikes for NLB submission https://github.com/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb
 dataset_name = dataset.cfg.datasets[0]
