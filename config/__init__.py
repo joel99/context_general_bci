@@ -36,6 +36,8 @@ class Output(Enum):
     # Various keys for different vectors model produces
     logrates = 'logrates' # unnormalized
     heldout_logrates = 'heldout_logrates'
+    rates = 'rates'
+    heldout_rates = 'heldout_rates'
     poisson_loss = 'poisson_loss'
     features = 'features'
 
@@ -142,8 +144,6 @@ class DataKey(Enum):
     spikes = 'spikes'
     stim = 'stim' # icms
     heldout_spikes = 'heldout_spikes' # for co-bps
-
-    test_spikes = 'test_spikes' # for NLB
 
 class MetaKey(Enum):
     r"""

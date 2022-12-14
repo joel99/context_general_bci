@@ -20,7 +20,7 @@ import wandb
 
 from config import RootConfig, Metric
 from data import SpikingDataset
-from model import BrainBertInterface
+from model import BrainBertInterface, load_from_checkpoint
 from utils import get_latest_ckpt_from_wandb_id
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
@@ -40,14 +40,7 @@ def run_exp(cfg : RootConfig) -> None:
     if cfg.init_from_id:
         init_ckpt = get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.init_from_id)
         logger.info(f"Initializing from {init_ckpt}")
-        model = BrainBertInterface.load_from_checkpoint(init_ckpt)
-        if model.diff_cfg(cfg.model):
-            # logger.warning("Config differs from one loaded from checkpoint. OLD config will be used")
-            raise Exception('Unsupported config diff.')
-        # Inject new configuration so things like new regularization params + train schedule are loaded
-        # TODO not a lot of safety on the weights actually loaded
-        model = BrainBertInterface.load_from_checkpoint(init_ckpt, cfg=cfg.model, strict=False)
-        model.bind_io(data_attrs, cfg.model) # Bind new IO
+        model = load_from_checkpoint(init_ckpt, cfg=cfg.model, data_attrs=data_attrs)
     else:
         model = BrainBertInterface(cfg.model, data_attrs)
     if cfg.model.task.freeze_backbone:

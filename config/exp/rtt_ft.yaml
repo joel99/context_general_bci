@@ -28,7 +28,7 @@ dataset:
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
-  - MetaKey.array
+  # - MetaKey.array
   - MetaKey.subject
   data_keys:
   - DataKey.spikes

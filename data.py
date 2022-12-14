@@ -220,8 +220,10 @@ class SpikingDataset(Dataset):
             if k == MetaKey.unique:
                 continue # don't serve
             if k == MetaKey.array: # doing string comparisons probably isn't the fastest thing in the world
+                def map_array(a):
+                    return self.context_index[k.name].index(a) + 1 if a else 0 # 0 is reserved for no array
                 meta_items[k] = torch.tensor([
-                    self.context_index[k.name].index(trial[f'array_{i}']) for i in range(self.cfg.max_arrays)
+                    map_array(trial[f'array_{i}']) for i in range(self.cfg.max_arrays)
                 ])
             else:
                 meta_items[k] = torch.tensor(self.context_index[k.name].index(trial[k])) # Casting in collater might be faster?

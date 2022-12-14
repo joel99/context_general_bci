@@ -7,6 +7,7 @@ model:
   readin_strategy: EmbedStrat.token
   session_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.token
   lr_schedule: 'cosine_warmup'
   lr_init: 5e-4
 dataset:

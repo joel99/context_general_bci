@@ -25,14 +25,13 @@ class BrainBertInterface(pl.LightningModule):
     r"""
         I know I'll end up regretting this name.
     """
-    def __init__(self, cfg: ModelConfig, data_attrs: DataAttrs, bind_io=True):
+    def __init__(self, cfg: ModelConfig, data_attrs: DataAttrs):
         super().__init__() # store cfg
         self.save_hyperparameters()
         self.cfg = cfg
         self.backbone = TemporalTransformer(self.cfg.transformer)
-        self.data_attrs = None
-        if bind_io:
-            self.bind_io(data_attrs)
+        self.data_attrs = data_attrs
+        self.bind_io()
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
@@ -55,7 +54,7 @@ class BrainBertInterface(pl.LightningModule):
 
         return self_copy != cfg
 
-    def bind_io(self, data_attrs: DataAttrs, cfg: Optional[ModelConfig] = None):
+    def bind_io(self):
         r"""
             Add context-specific input/output parameters.
             Has support for re-binding IO, but does _not_ check for shapes, which are assumed to be correct.
@@ -71,112 +70,47 @@ class BrainBertInterface(pl.LightningModule):
             Ideally, we will just bind embedding layers here, but there may be some MLPs.
         """
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            assert data_attrs.context.session, "Session embedding strategy requires session in data"
-            if len(data_attrs.context.session) == 1:
+            assert self.data_attrs.context.session, "Session embedding strategy requires session in data"
+            if len(self.data_attrs.context.session) == 1:
                 logger.warning('Using session embedding strategy with only one session. Expected only if tuning.')
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
-            assert data_attrs.context.subject, "Subject embedding strategy requires subject in data"
-            if len(data_attrs.context.subject) == 1:
+            assert self.data_attrs.context.subject, "Subject embedding strategy requires subject in data"
+            if len(self.data_attrs.context.subject) == 1:
                 logger.warning('Using subject embedding strategy with only one subject. Expected only if tuning.')
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            assert data_attrs.context.array, "Array embedding strategy requires array in data"
-            if len(data_attrs.context.array) == 1:
+            assert self.data_attrs.context.array, "Array embedding strategy requires array in data"
+            if len(self.data_attrs.context.array) == 1:
                 logger.warning('Using array embedding strategy with only one array. Expected only if tuning.')
-        old_attrs = None
-        skip_bind = False
-        if self.data_attrs is not None: # IO already exists
-            if self.data_attrs == data_attrs:
-                logger.info('Identical IO detected, skipping IO rebind')
-                skip_bind = True
-            else:
-                r"""
-                    The other modules are: flags, embedding modules, readin, context_project, task_pipelines.
-                    TODO address in turn
-                """
-                logger.info("Rebinding IO...")
-                old_attrs = self.data_attrs
-
-        self.data_attrs = data_attrs
 
         # Guardrails (to remove)
         assert len(self.data_attrs.context.task) <= 1, "Only tested for single task"
-        assert self.cfg.array_embed_strategy == EmbedStrat.none, "Array embed strategy not yet implemented"
-
-        def init_and_maybe_transfer_embed(
-            new_attrs: List[str],
-            embed_size: int,
-            embed_name: str, # Used for looking up possibly existing attribute
-            old_attrs: List[str] | None = None,
-        ) -> nn.Embedding:
-            if new_attrs == old_attrs:
-                logger.info(f'Identical {embed_name} detected, skipping rebind.')
-                assert getattr(self, embed_name) is not None
-
-            embed = nn.Embedding(len(new_attrs) + int(embed_name == 'array_embed'), embed_size)
-            # # +1 is for padding (i.e. self.array_embed[-1] = padding)
-
-            if not hasattr(self, embed_name):
-                logger.info(f'Initializing {embed_name} from scratch.')
-                return embed
-
-            num_reassigned = 0
-            if old_attrs:
-                for n_idx, target in enumerate(new_attrs):
-                    if target in old_attrs:
-                        embed.weight.data[n_idx] = getattr(self, embed_name).weight.data[old_attrs.index(target)]
-                        num_reassigned += 1
-            logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
-            if num_reassigned == 0:
-                logger.error(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
-            if embed_name == 'array_embed':
-                embed.weight.data[-1] = getattr(self, embed_name).weight.data[-1] # padding
-            return embed
-
-        def init_or_transfer_flag(flag_size, flag_name):
-            return getattr(self, flag_name, nn.Parameter(torch.zeros(flag_size)))
 
         # We write the following repetitive logic explicitly to maintain typing
         project_size = self.cfg.hidden_size
 
-        if not skip_bind:
-            if self.cfg.session_embed_strategy is not EmbedStrat.none:
-                self.session_embed = init_and_maybe_transfer_embed(
-                    self.data_attrs.context.session,
-                    self.cfg.session_embed_size,
-                    'session_embed',
-                    old_attrs.context.session if old_attrs else None,
-                )
-                if self.cfg.session_embed_strategy == EmbedStrat.concat:
-                    project_size += self.cfg.session_embed_size
-                elif self.cfg.session_embed_strategy == EmbedStrat.token:
-                    assert self.cfg.session_embed_size == self.cfg.hidden_size
-                    self.session_flag = init_or_transfer_flag(self.cfg.session_embed_size, 'session_flag')
+        if self.cfg.session_embed_strategy is not EmbedStrat.none:
+            self.session_embed = nn.Embedding(len(self.data_attrs.context.session), self.cfg.session_embed_size)
+            if self.cfg.session_embed_strategy == EmbedStrat.concat:
+                project_size += self.cfg.session_embed_size
+            elif self.cfg.session_embed_strategy == EmbedStrat.token:
+                assert self.cfg.session_embed_size == self.cfg.hidden_size
+                self.session_flag = nn.Parameter(torch.zeros(self.cfg.session_embed_size))
 
-            if self.cfg.subject_embed_strategy is not EmbedStrat.none:
-                self.subject_embed = init_and_maybe_transfer_embed(
-                    self.data_attrs.context.subject,
-                    self.cfg.subject_embed_size,
-                    'subject_embed',
-                    old_attrs.context.subject if old_attrs else None,
-                )
-                if self.cfg.subject_embed_strategy == EmbedStrat.concat:
-                    project_size += self.cfg.subject_embed_size
-                elif self.cfg.subject_embed_strategy == EmbedStrat.token:
-                    assert self.cfg.subject_embed_size == self.cfg.hidden_size
-                    self.subject_flag = init_or_transfer_flag(self.cfg.subject_embed_size, 'subject_flag')
+        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
+            self.subject_embed = nn.Embedding(len(self.data_attrs.context.subject), self.cfg.subject_embed_size)
+            if self.cfg.subject_embed_strategy == EmbedStrat.concat:
+                project_size += self.cfg.subject_embed_size
+            elif self.cfg.subject_embed_strategy == EmbedStrat.token:
+                assert self.cfg.subject_embed_size == self.cfg.hidden_size
+                self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
 
-            if self.cfg.array_embed_strategy is not EmbedStrat.none:
-                self.array_embed = init_and_maybe_transfer_embed(
-                    self.data_attrs.context.array,
-                    self.cfg.array_embed_size,
-                    'array_embed',
-                    old_attrs.context.array if old_attrs else None,
-                )
-                if self.cfg.array_embed_strategy == EmbedStrat.concat:
-                    project_size += self.cfg.subject_embed_size
-                elif self.cfg.array_embed_strategy == EmbedStrat.token:
-                    assert self.cfg.array_embed_size == self.cfg.hidden_size
-                    self.array_flag = init_or_transfer_flag(self.cfg.array_embed_size, 'array_flag')
+        if self.cfg.array_embed_strategy is not EmbedStrat.none:
+            self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size, padding_idx=0)
+            if self.cfg.array_embed_strategy == EmbedStrat.concat:
+                project_size += self.cfg.array_embed_size
+            elif self.cfg.array_embed_strategy == EmbedStrat.token:
+                assert self.cfg.array_embed_size == self.cfg.hidden_size
+                self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
 
         if self.data_attrs.max_channel_count > 0: # there is padding
             channel_count = self.data_attrs.max_channel_count
@@ -188,7 +122,7 @@ class BrainBertInterface(pl.LightningModule):
             # * Because we only ever train on one subject in this strategy, all registered arrays must belong to that subject.
             # * A rework will be needed if we want to do this lookup grouped per subject
             assert self.cfg.readin_strategy == EmbedStrat.project, 'Ragged array readin only implemented for project readin strategy'
-            assert len(data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
+            assert len(self.data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
 
             for a in self.data_attrs.context.array:
                 assert not isinstance(subject_array_registry.query_by_array(a), SortedArrayInfo), "actual mixed readins per session not yet implemented"
@@ -196,38 +130,86 @@ class BrainBertInterface(pl.LightningModule):
                 subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
             ) * self.data_attrs.spike_dim
 
-        if not hasattr(self, 'context_project'):
-            if project_size is not self.cfg.hidden_size:
-                self.context_project = nn.Sequential(
-                    nn.Linear(project_size, self.cfg.hidden_size),
-                    nn.ReLU() if self.cfg.nonlinearity == 'relu' else nn.GELU(),
-                )
-                logger.info(f'Initialized context_project with {project_size} channels')
-            else:
-                self.context_project = None
+        if project_size is not self.cfg.hidden_size:
+            self.context_project = nn.Sequential(
+                nn.Linear(project_size, self.cfg.hidden_size),
+                nn.ReLU() if self.cfg.activation == 'relu' else nn.GELU(),
+            )
 
-        if not hasattr(self, 'readin'):
-            self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
-            logger.info(f'Initialized readin with {channel_count} channels')
-
-        if cfg is not None and self.cfg.task != cfg.task:
-            logger.info(f'Updating task config from {self.cfg.task} to {cfg.task}')
-            self.cfg.task = cfg.task
+        self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
 
         if self.cfg.task.task == ModelTask.icms_one_step_ahead:
             # TODO add readin for the stim array (similar attr)
             raise NotImplementedError
 
-        task_pipelines = nn.ModuleDict({
+        self.task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
                 self.backbone.out_size, channel_count, self.cfg, self.data_attrs
             ) for k in [self.cfg.task.task]
         })
-        if hasattr(self, 'task_pipelines'):
-            for k in task_pipelines:
-                if k in self.task_pipelines:
-                    task_pipelines[k].load_state_dict(self.task_pipelines[k].state_dict())
-        self.task_pipelines = task_pipelines
+
+    def transfer_io(self, transfer_model: pl.LightningModule):
+        r"""
+            The logger messages are told from the perspective of a model that is being transferred to (but in practice, this model has been initialized and contains new weights already)
+        """
+        logger.info("Rebinding IO...")
+
+        transfer_data_attrs: DataAttrs = transfer_model.data_attrs
+        transfer_cfg: ModelConfig = transfer_model.cfg
+        if self.cfg.task != transfer_cfg.task:
+            logger.info(f'Task config updated from {transfer_cfg.task} to {self.cfg.task}')
+
+        def try_transfer(module_name: str):
+            if hasattr(self, module_name) and hasattr(transfer_model, module_name):
+                if isinstance(getattr(self, module_name), nn.Parameter):
+                    getattr(self, module_name).data = getattr(transfer_model, module_name).data
+                else:
+                    getattr(self, module_name).load_state_dict(getattr(transfer_model, module_name).state_dict())
+                logger.info(f'Transferred {module_name} weights.')
+            else:
+                logger.info(f'New {module_name} weights.')
+
+        if self.data_attrs != transfer_data_attrs:
+            def try_transfer_embed(
+                embed_name: str, # Used for looking up possibly existing attribute
+                new_attrs: List[str],
+                old_attrs: List[str] ,
+            ) -> nn.Embedding:
+                if new_attrs == old_attrs:
+                    try_transfer(embed_name)
+                if not old_attrs:
+                    logger.info(f'New {embed_name} weights.')
+                    return
+                if not new_attrs:
+                    logger.warning(f"No {embed_name} provided in new model despite old model dependency. HIGH CHANCE OF ERROR.")
+                    return
+                num_reassigned = 0
+                embed = getattr(self, embed_name)
+                for n_idx, target in enumerate(new_attrs):
+                    if target in old_attrs:
+                        tar_idx = n_idx + int(embed_name == 'array_embed') # padding offset
+                        src_idx = old_attrs.index(target) + int(embed_name == 'array_embed')
+                        embed.weight.data[tar_idx] = getattr(transfer_model, embed_name).weight.data[src_idx]
+                        num_reassigned += 1
+                logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
+                if num_reassigned == 0:
+                    logger.error(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
+
+            try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
+            try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
+            try_transfer_embed('array_embed', self.data_attrs.context.array, transfer_data_attrs.context.array)
+
+            try_transfer('session_flag')
+            try_transfer('subject_flag')
+            try_transfer('array_flag')
+
+        try_transfer('context_project')
+        try_transfer('readin')
+
+        for k in self.task_pipelines:
+            if k in transfer_model.task_pipelines:
+                logger.info(f"Transferred task pipeline {k}.")
+                self.task_pipelines[k].load_state_dict(transfer_model.task_pipelines[k].state_dict())
 
     def freeze_backbone(self):
         logger.info("Freezing backbone.")
@@ -279,7 +261,15 @@ class BrainBertInterface(pl.LightningModule):
                 subject = repeat(subject, 'b h -> b t h', t=state_in.shape[1])
                 project_context.append(subject)
 
-        assert self.cfg.array_embed_strategy is EmbedStrat.none, "Not implemented"
+        if self.cfg.array_embed_strategy is not EmbedStrat.none:
+            import pdb;pdb.set_trace() # TODO vet, also I think the embedding isn't quite right?
+            array: torch.Tensor = self.array_embed(batch[MetaKey.array])
+            if self.cfg.array_embed_strategy == EmbedStrat.token:
+                array = array + self.array_flag
+                static_context.append(array)
+            elif self.cfg.array_embed_strategy == EmbedStrat.concat:
+                array = repeat(array, 'b h -> b t h', t=state_in.shape[1])
+                project_context.append(array)
 
         # TODO support temporal embed + temporal project
         # Do not concat static context - list default is easier to deal with
@@ -375,15 +365,14 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     @torch.inference_mode()
-    def predict(self, batch: Dict[str, torch.Tensor]):
+    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True) -> Dict[str, torch.Tensor]:
         r"""
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
         """
         # there are data keys and meta keys, that might be coming in unbatched
-        import pdb;pdb.set_trace()
         batch_shapes = {
-            DataKey.spikes: '* t a c 1',
+            DataKey.spikes: '* t a c h',
             DataKey.stim: '* t c h', # TODO review
             MetaKey.session: '*',
             MetaKey.subject: '*',
@@ -393,17 +382,22 @@ class BrainBertInterface(pl.LightningModule):
         }
         pack_info = {}
         for k in batch:
-            batch[k], pack_info[k] = pack(batch[k], batch_shapes[k])
+            batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
         features = self(batch)
         batch_out: Dict[str, torch.Tensor] = {}
         for task in [self.cfg.task.task]:
             batch_out.update(self.task_pipelines[task.value](batch, features, compute_metrics=False))
+        if transform_logrates:
+            if Output.logrates in batch_out:
+                batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates], batch)
+            if Output.heldout_logrates in batch_out:
+                batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(batch_out[Output.heldout_logrates], batch)
         return batch_out
 
     def predict_step(
-        self, batch
+        self, batch, *args, transform_logrates=True, **kwargs
     ):
-        return self.predict(batch)
+        return self.predict(batch, transform_logrates=transform_logrates)
 
 
     # ==================== Utilities ====================
@@ -412,15 +406,15 @@ class BrainBertInterface(pl.LightningModule):
             logrates: raw, padded predictions from model, B T A H
         """
         # unpad logrates using LENGTH_KEY and CHANNEL_KEY
+        if logrates.shape[2] != 1:
+            import pdb;pdb.set_trace()
         assert logrates.shape[2] == 1, "Only single array dim supported for now"
         assert (batch[CHANNEL_KEY] == batch[CHANNEL_KEY].flatten()[0]).all(), "Heterogenuous arrays not supported for now"
         logrates = logrates.unbind()
         if LENGTH_KEY in batch:
             logrates = [l[:b, ...] for l, b in zip(logrates, batch[LENGTH_KEY])]
         if CHANNEL_KEY in batch:
-            import pdb;pdb.set_trace()
-            # currently expecting batch[channel_key] to look like bxa
-            logrates = [l[:, :, b[0], ...] for l, b in zip(logrates, batch[CHANNEL_KEY])]
+            logrates = [l[:, :, :b[0], ...] for l, b in zip(logrates, batch[CHANNEL_KEY])]
         # try to stack
         if (batch[LENGTH_KEY] == batch[LENGTH_KEY][0]).all():
             logrates = torch.stack(logrates)
@@ -506,16 +500,30 @@ class BrainBertInterface(pl.LightningModule):
             out['lr_scheduler'] = scheduler
         return out
 
-    # === Model loading
-    @classmethod
-    def load_from_checkpoint(cls, checkpoint_path: str, cfg: ModelConfig | None = None, data_attrs: DataAttrs | None = None):
-        r"""
-            Specifically, model topology is determined by data_attrs.
-            data_attrs thus must be saved and loaded with a model to make sense of it.
-            However, if we're initializing from another checkpoint, we want to know its data_attrs, but not save it as the new attrs. To avoid doing this while still hooking into PTL `save_hyperparameters()`, we do a manual state_dict transfer of two model instances (one with old and one with new topology.)
-        """
-        old_model = super().load_from_checkpoint(checkpoint_path)
-        if cfg:
-            if old_model.diff_cfg(cfg):
-                raise Exception("Unsupported config diff")
+# === Model loading ===
+# Note - I tried coding this as an override, but PTL `save_hyperparams()` acts up (trying to the save the `self` parameter, apparently) - even when passing explicitly that I just want to save `cfg` and `data_attrs`.
+def load_from_checkpoint(checkpoint_path: str, cfg: ModelConfig | None = None, data_attrs: DataAttrs | None = None):
+    r"""
+        Specifically, model topology is determined by data_attrs.
+        data_attrs thus must be saved and loaded with a model to make sense of it.
+        However, if we're initializing from another checkpoint, we want to know its data_attrs, but not save it as the new attrs. To avoid doing this while still hooking into PTL `save_hyperparameters()`, we do a manual state_dict transfer of two model instances (one with old and one with new topology.)
 
+        Args:
+        - cfg: override, new cfg
+        - data_attrs: override, new data_attrs
+        cfg level changes are _expected_ to not affect topology,
+        BUT TODO e.g. it's unclear if novel weight decay declaration means optimizer is reinitialized?
+    """
+    old_model = BrainBertInterface.load_from_checkpoint(checkpoint_path)
+    if cfg is None and data_attrs is None:
+        return old_model
+    if cfg is not None:
+        if old_model.diff_cfg(cfg):
+            raise Exception("Unsupported config diff")
+    else:
+        cfg = old_model.cfg
+    if data_attrs is None:
+        data_attrs = old_model.data_attrs
+    new_cls = BrainBertInterface(cfg=cfg, data_attrs=data_attrs)
+    new_cls.transfer_io(old_model)
+    return new_cls
