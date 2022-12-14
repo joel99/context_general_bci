@@ -1,0 +1,18 @@
+# @package _global_
+tag: rtt_nlb_ft
+
+defaults:
+  - /model:
+    - finetune
+    - nlb
+  - /dataset: rtt_nlb
+  - /train: nlb
+model:
+  task:
+    freeze_backbone: false
+  readin_strategy: EmbedStrat.token
+dataset:
+  max_channels: 98
+  max_arrays: 1
+
+init_from_id: "rtt_nlb-1ois0tjz"

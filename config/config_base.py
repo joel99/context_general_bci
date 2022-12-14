@@ -2,8 +2,6 @@ from typing import List, Optional, Union, Any, Tuple
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass, field
-import hydra
-from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 LENGTH = 'length'
@@ -90,16 +88,16 @@ class ModelConfig:
 
     half_precision: bool = True
     lr_init: float = 0.0005 # be careful of interxn with bsz
-    lr_schedule: str = 'linear_warmup'
+    lr_schedule: str = 'cosine_warmup'
     # one of 'fixed' (default), 'cosine_warmup', 'linear_warmup'
     lr_ramp_init_factor: float = 0.1
     lr_ramp_steps: int = 50 # epochs # targeting ~10k steps, so this highly depends on bsz/batches per epoch. If we're under 100K items though, 50 is a lower bound.
     lr_decay_steps: int = 1000 # epochs (for cosine)
     lr_min: float = 1e-6
 
-    activation: str = 'relu' # gelu
+    activation: str = 'gelu' # gelu
 
-    weight_decay: float = 0.0
+    weight_decay: float = 0.01
     dropout: float = 0.2 # not inherited by transformer (typically just for model IO)
     # The objective. Not intended to be multitask right now; intent is pretrain/fine-tune.
     task: TaskConfig = TaskConfig()
@@ -128,7 +126,7 @@ class ModelConfig:
     # Array embed strategy describes how we should provide information about array
     # Readin strategy describes IO.
     # Only when readin strategy is `token` does array embed get used.
-    readin_strategy: EmbedStrat = EmbedStrat.project
+    readin_strategy: EmbedStrat = EmbedStrat.token
 
 
 
