@@ -292,6 +292,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T A H
+        import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
             temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
@@ -338,6 +339,7 @@ class BrainBertInterface(pl.LightningModule):
         """
         num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
         assert num_updates <= 1, "Only one task pipeline should update the root"
+        import pdb;pdb.set_trace()
         for task in [self.cfg.task.task]:
             self.task_pipelines[task.value].update_batch(batch)
 

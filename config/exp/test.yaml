@@ -1,22 +1,17 @@
 # @package _global_
-tag: test
+tag: maze_med
 
 defaults:
-  - /model: pretrain
-  - /train: small
+  - /model: pretrain_small
+  - /dataset: maze_nlb
+  - /train: nlb
 model:
   readin_strategy: EmbedStrat.token
 dataset:
-  bin_size_ms: 5
   datasets:
-  # - mc_maze_small
-  - churchland_maze_jenkins-0
-  data_keys:
-  - "spikes"
-
-  max_arrays: 2
-  max_channels: 96
+  - mc_maze_medium
+  max_channels: 137
 train:
-  epochs: 100
-  # epochs: 2000
+  epochs: 5000
   batch_size: 128
+  patience: 500 # batches are smaller

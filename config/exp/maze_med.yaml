@@ -2,7 +2,7 @@
 tag: maze_med
 
 defaults:
-  - /model: pretrain
+  - /model: pretrain_small
   - /dataset: maze_nlb
   - /train: nlb
 model:

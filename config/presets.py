@@ -24,6 +24,14 @@ class PretrainingModelConfig(ModelConfig):
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 
 @dataclass
+class PretrainingModelConfig(ModelConfig):
+    task: TaskConfig = field(default_factory=InfillTaskConfig)
+    lr_init: float = 5e-4
+    lr_ramp_steps: int = 500
+    lr_decay_steps: int = 10000
+cs.store(group="model", name="pretrain_small", node=PretrainingModelConfig)
+
+@dataclass
 class FinetuningModelConfig(ModelConfig):
     lr_init: float = 2e-5
     lr_ramp_steps: int = 500 # epochs tend to be small
