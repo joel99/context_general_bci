@@ -24,6 +24,8 @@ class TaskPipeline(nn.Module):
         # TODO manage input
         # TODO manage additional metrics
     """
+    does_update_root = False
+
     def __init__(
         self,
         backbone_out_size: int,
@@ -45,6 +47,14 @@ class TaskPipeline(nn.Module):
         """
         raise NotImplementedError # Nothing in main model to use this
         return []
+
+    def update_batch(self, batch: Dict[str, torch.Tensor]):
+        r"""
+            Currently redundant with get_temporal_context - need to refactor.
+            It could be that this forces a one-time modification.
+            Update batch in place for modifying/injecting batch info.
+        """
+        return batch
 
     def get_trial_query(self, batch: Dict[str, torch.Tensor]):
         r"""
@@ -164,6 +174,29 @@ class RatePrediction(TaskPipeline):
         return bps
 
 class SelfSupervisedInfill(RatePrediction):
+    does_update_root = True
+    def update_batch(self, batch: Dict[str, torch.Tensor]):
+        spikes = batch[DataKey.spikes]
+        is_masked = torch.bernoulli(
+            torch.full(spikes.size()[:3], self.cfg.mask_ratio, device=spikes.device)
+        )
+        mask_token = torch.bernoulli(torch.full_like(is_masked, self.cfg.mask_token_ratio))
+        mask_random = torch.bernoulli(torch.full_like(is_masked, self.cfg.mask_random_ratio))
+        is_masked = is_masked.bool()
+        mask_token, mask_random = (
+            mask_token.bool() & is_masked,
+            mask_random.bool() & is_masked,
+        )
+        target = spikes[..., 0]
+        spikes = spikes.clone()
+        spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
+        spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
+        batch.update({
+            DataKey.spikes: spikes,
+            'is_masked': is_masked,
+            'spike_target': target,
+        })
+        return batch
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
 

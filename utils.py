@@ -133,12 +133,16 @@ def wandb_query_several(
     return runs
 
 def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
-    out = defaultdict(list)
+    all_lists = defaultdict(list)
     for batch in batch_out:
         for k, v in batch.items():
-            out[k].append(v)
-    for k, v in out.items():
-        out[k] = torch.cat(v)
+            all_lists[k].append(v)
+    out = {}
+    for k, v in all_lists.items():
+        if isinstance(v[0], torch.Tensor):
+            out[k] = torch.cat(v)
+        else:
+            out[k] = torch.tensor(v).mean() # some metric
     return out
 
 

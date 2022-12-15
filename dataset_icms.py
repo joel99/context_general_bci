@@ -185,6 +185,7 @@ class ICMSDataset(Dataset):
                     'stim_time': data['stim_time'], # TODO sub with recorded NEV stim
                 }
                 if full:
+                    # ! careful about composition order?
                     payload = {**payload,
                         'src_file': data['src_file'],
                         _CONDITION_KEY: data['condition'],

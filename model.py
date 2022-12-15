@@ -336,34 +336,10 @@ class BrainBertInterface(pl.LightningModule):
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
-        # TODO figure out how to wrap this IO/ICMS code in a task abstraction
-        # ? this logic should maybe be in forward, not separate _step.
-        if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-            pass
-        elif self.cfg.task.task == ModelTask.infill:
-            spikes = batch[DataKey.spikes]
-            is_masked = torch.bernoulli(
-                torch.full(spikes.size()[:3], self.cfg.task.mask_ratio, device=spikes.device)
-            )
-            mask_token = torch.bernoulli(torch.full_like(is_masked, self.cfg.task.mask_token_ratio))
-            mask_random = torch.bernoulli(torch.full_like(is_masked, self.cfg.task.mask_random_ratio))
-            is_masked = is_masked.bool()
-            mask_token, mask_random = (
-                mask_token.bool() & is_masked,
-                mask_random.bool() & is_masked,
-            )
-            target = spikes[..., 0]
-            spikes = spikes.clone()
-            spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
-            spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
-            batch = {
-                **batch,
-                DataKey.spikes: spikes,
-                'is_masked': is_masked,
-                'spike_target': target,
-            }
-        elif self.cfg.task.task == ModelTask.heldout_decoding:
-            pass
+        num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
+        assert num_updates <= 1, "Only one task pipeline should update the root"
+        for task in [self.cfg.task.task]:
+            self.task_pipelines[task.value].update_batch(batch)
 
         features = self(batch) # B T A H
 
@@ -374,7 +350,8 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     @torch.inference_mode()
-    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True) -> Dict[str, torch.Tensor]:
+    # def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=True) -> Dict[str, torch.Tensor]:
+    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=False) -> Dict[str, torch.Tensor]:
         r"""
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
@@ -382,6 +359,7 @@ class BrainBertInterface(pl.LightningModule):
         # there are data keys and meta keys, that might be coming in unbatched
         batch_shapes = {
             DataKey.spikes: '* t a c h',
+            DataKey.heldout_spikes: '* t c h',
             DataKey.stim: '* t c h', # TODO review
             MetaKey.session: '*',
             MetaKey.subject: '*',
@@ -392,6 +370,11 @@ class BrainBertInterface(pl.LightningModule):
         pack_info = {}
         for k in batch:
             batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
+
+        if mask:
+            assert self.cfg.task.task == ModelTask.infill
+            self.task_pipelines[self.cfg.task.task.value].update_batch(batch)
+
         features = self(batch)
         batch_out: Dict[str, torch.Tensor] = {}
         for task in [self.cfg.task.task]:
@@ -410,9 +393,10 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     def predict_step(
-        self, batch, *args, transform_logrates=True, **kwargs
+        self, batch, *args, transform_logrates=True, mask=False, **kwargs
+        # self, batch, *args, transform_logrates=True, mask=True, **kwargs
     ):
-        return self.predict(batch, transform_logrates=transform_logrates)
+        return self.predict(batch, transform_logrates=transform_logrates, mask=mask)
 
 
     # ==================== Utilities ====================
@@ -477,7 +461,10 @@ class BrainBertInterface(pl.LightningModule):
         self.common_log(metrics, prefix='val')
         return metrics['loss']
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx, transform_logrates=True):
+        r"""
+            Note test step isn't capable of returning non-metrics.
+        """
         metrics = self._step(batch)
         self.common_log(metrics, prefix='test')
         return metrics['loss']
