@@ -29,7 +29,6 @@ from matplotlib import pyplot as plt
 # print(nwbfile.fields.keys())
 # print(nwbfile.subject)
 
-# TODO explore datafile
 # Has movement and LFP
 # print(nwbfile.processing['behavior'].data_interfaces)
 # print(nwbfile.processing['ecephys'].data_interfaces)
@@ -53,16 +52,17 @@ print(nwbfile.intervals['trials']['discard_trial'][:].sum())
 
 #%%
 unit = 2
-unit = 20
+# unit = 20
 # unit = 1
-# print(nwbfile.units)
+# print(nwbfile.units.to_dataframe().electrode_group.unique())
 # print(nwbfile.units.spike_times)
-# print(nwbfile.units.to_dataframe().obs_intervals.iloc[unit])
+print(nwbfile.units.to_dataframe().obs_intervals.iloc[unit])
 # plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,0])
 # plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,1])
 # plt.plot(nwbfile.units.to_dataframe().spike_times.iloc[unit])
 # print(nwbfile.units.to_dataframe().spike_times.iloc[1])
 # spikes = nwbfile.units.to_dataframe().spike_times.iloc[unit]
+#%%
 is_monotonic = lambda spikes: np.all(np.diff(spikes) >= 0)
 all_units = nwbfile.units.to_dataframe()
 unit_valid = []

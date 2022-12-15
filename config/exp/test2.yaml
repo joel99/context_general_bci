@@ -10,7 +10,9 @@ dataset:
   bin_size_ms: 5
   datasets:
   # - mc_maze_small
-  - churchland_maze_jenkins-0
+  - churchland_maze_jenkins-.*
+  - churchland_maze_nitschke-.*
+
   data_keys:
   - "spikes"
 

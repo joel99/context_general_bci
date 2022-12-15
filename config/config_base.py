@@ -187,8 +187,11 @@ class RTTConfig(ExperimentalConfig):
 
 @dataclass
 class MazeConfig(ExperimentalConfig):
-    chop_size_ms: int = 1000
+    chop_size_ms: int = 0 # no chop
     load_covariates: bool = False
+    pretrial_time_s: float = 0.25
+    posttrial_time_s: float = 0.1
+    max_length_ms: int = 1000
 
 @dataclass
 class NLBConfig(ExperimentalConfig):

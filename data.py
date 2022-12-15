@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import itertools
 from datetime import datetime
+from omegaconf import OmegaConf
 from dataclasses import dataclass, field
 
 import logging
@@ -21,7 +22,7 @@ import pytorch_lightning as pl
 from config import DatasetConfig, MetaKey, DataKey
 from subjects import SubjectArrayRegistry
 from contexts import context_registry, ContextInfo
-from tasks import ExperimentalTaskRegistry
+from tasks import ExperimentalTask
 
 r"""
     Stores range of contexts provided by a dataset.
@@ -122,20 +123,22 @@ class SpikingDataset(Dataset):
             else:
                 assert k in meta_df.columns, f"Requested meta key {k} not loaded in meta_df"
 
-    def preproc_version(self):
-        # TODO should register other subtask configs
-        return {
-            'max_trial_length': self.cfg.max_trial_length,
+    def preproc_version(self, task: ExperimentalTask):
+        version = {
+            'max_trial_length': self.cfg.max_trial_length, # defunct
             'bin_size_ms': self.cfg.bin_size_ms
         }
+        task_cfg = getattr(self.cfg, task.value)
+        version.update(OmegaConf.to_container(task_cfg, resolve=True))
+        return version
 
-    def checksum_diff(self, version_path: Path):
+    def checksum_diff(self, version_path: Path, task: ExperimentalTask):
         # load json in session path
         if not version_path.exists():
             return True
         with open(version_path, 'r') as f:
             cached_preproc_version = json.load(f)
-        return self.preproc_version() != cached_preproc_version
+        return self.preproc_version(task) != cached_preproc_version
 
 
     def load_session(self, session_path_or_alias: Path | str) -> List[pd.DataFrame]:
@@ -162,7 +165,7 @@ class SpikingDataset(Dataset):
     def load_single_session(self, context_meta: ContextInfo):
         session_path = context_meta.datapath
         if not (hash_dir := self.preprocess_path(self.cfg, session_path)).exists() or \
-            self.checksum_diff(hash_dir / 'preprocess_version.json'):
+            self.checksum_diff(hash_dir / 'preprocess_version.json', context_meta.task):
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
             os.makedirs(hash_dir, exist_ok=True)
             meta = context_meta.load(self.cfg, hash_dir)
@@ -171,7 +174,7 @@ class SpikingDataset(Dataset):
                 return None
             meta.to_csv(hash_dir / 'meta.csv')
             with open(hash_dir / 'preprocess_version.json', 'w') as f:
-                json.dump(self.preproc_version(), f)
+                json.dump(self.preproc_version(context_meta.task), f)
         else:
             meta = pd.read_csv(hash_dir / 'meta.csv')
             del meta[f'Unnamed: 0'] # index column

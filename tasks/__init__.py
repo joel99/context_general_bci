@@ -10,7 +10,7 @@ r"""
 """
 class ExperimentalTask(OrderedEnum):
     passive_icms = "passive_icms"
-    nlb_maze = "maze"
+    nlb_maze = "nlb_maze"
     nlb_rtt = "nlb_rtt"
     churchland_maze = "churchland_maze"
     odoherty_rtt = "odoherty_rtt"
@@ -20,3 +20,4 @@ from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 from .passive_icms import ICMSLoader
 from .nlb import MazeLoader, RTTLoader
 from .rtt import ODohertyRTTLoader
+from .maze import ChurchlandMazeLoader

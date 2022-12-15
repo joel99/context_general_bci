@@ -50,6 +50,7 @@ class NLBTrainConfig(TrainConfig):
     patience: int = 500
 
 cs.store(group="train", name="nlb", node=NLBTrainConfig)
+cs.store(group="train", name="small", node=NLBTrainConfig) # alias
 
 @dataclass
 class RTTNLBDataConfig(DatasetConfig):

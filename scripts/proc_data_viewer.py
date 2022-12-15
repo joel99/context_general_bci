@@ -1,8 +1,4 @@
 #%%
-from nlb_tools.nwb_interface import NWBDataset
-from nlb_tools.make_tensors import make_train_input_tensors, make_eval_input_tensors, make_eval_target_tensors, save_to_h5
-from nlb_tools.evaluation import evaluate
-
 import numpy as np
 import pandas as pd
 import h5py
@@ -15,11 +11,12 @@ from data import SpikingDataset
 
 from matplotlib import pyplot as plt
 import seaborn as sns
+from omegaconf import OmegaConf
 
 # dataset_name = 'mc_maze_large' # 122 sorted units
-# dataset_name = 'mc_maze_medium' # 114 sorted units
+dataset_name = 'mc_maze_medium' # 114 sorted units
 # dataset_name = 'mc_maze_small' # 107 sorted units
-# dataset_name = 'mc_maze' # 137 sorted units
+# dataset_name = 'mc_maze$' # 137 sorted units
 dataset_name = 'churchland_maze_jenkins-0'
 # dataset_name = 'churchland_maze_jenkins-1'
 # dataset_name = 'mc_rtt'
@@ -28,18 +25,26 @@ context = context_registry.query(alias=dataset_name)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 
-default_cfg = DatasetConfig()
+default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 default_cfg.bin_size_ms = 5
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 default_cfg.datasets = [context.alias]
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
-# dataset = NWBDataset(context.datapath)
+
+#%%
+# TODO compare with other maze datasets
+# import torch
+# lengths = []
+# for t in range(1000):
+#     lengths.append(dataset[t][DataKey.spikes].size(0))
+# print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
 
 #%%
 from utils import prep_plt
 trial = 10
 pop_spikes = dataset[trial][DataKey.spikes]
+
 pop_spikes = pop_spikes[..., 0]
 pop_spikes = pop_spikes.flatten(1, 2)
 print(pop_spikes.shape)
