@@ -88,6 +88,8 @@ class SpikingDataset(Dataset):
     """
     def __init__(self, cfg: DatasetConfig):
         super().__init__()
+        if not isinstance(cfg, OmegaConf):
+            cfg: DatasetConfig = OmegaConf.create(cfg)
         self.cfg = cfg
         assert DataKey.spikes in cfg.data_keys, "Must have spikes"
 

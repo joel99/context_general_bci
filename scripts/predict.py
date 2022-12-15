@@ -18,7 +18,7 @@ from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStra
 from contexts import context_registry
 from copy import deepcopy
 
-from utils import get_latest_ckpt_from_wandb_id, get_wandb_run
+from utils import get_latest_ckpt_from_wandb_id, get_wandb_run, load_wandb_run
 
 dataset_name = 'mc_rtt'
 context = context_registry.query(alias=dataset_name)
@@ -35,11 +35,7 @@ test_dataset = deepcopy(dataset)
 
 #%%
 wandb_id = "rtt_nlb_ft-pgh47dlp"
-run = get_wandb_run(default_cfg.wandb_project, wandb_id)
-from dacite import from_dict
-run_data_attrs = from_dict(data_class=DataAttrs, data=run.config['data_attrs'])
-del run.config['data_attrs']
-cfg: RootConfig = OmegaConf.create(run.config) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
+run = get_wandb_run(wandb_id)
 
 #%%
 dataset.restrict_to_train_set()

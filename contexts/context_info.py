@@ -1,13 +1,11 @@
 import abc
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, NamedTuple
 from collections import defaultdict
 from pathlib import Path
 import numpy as np
 
 import logging
-
-from utils import StimCommand
 
 from config import DatasetConfig
 from subjects import SubjectArrayRegistry, SubjectInfo, SubjectName
@@ -16,6 +14,10 @@ from tasks import ExperimentalTask, ExperimentalTaskRegistry
 
 # FYI: Inherited dataclasses don't call parent's __init__ by default. This is a known issue/feature:
 # https://bugs.python.org/issue43835
+StimCommand = NamedTuple("StimCommand", times=np.ndarray, channels=np.ndarray, current=np.ndarray)
+CommandPayload = Dict[Path, StimCommand]
+
+
 
 @dataclass(kw_only=True)
 class ContextInfo:

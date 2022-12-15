@@ -1,18 +1,69 @@
 # Miscellany
 from typing import NamedTuple, Union, Dict, List, Tuple, Any, Optional
+from typing import get_type_hints, get_args
+from collections import defaultdict
+from enum import Enum
 import os.path as osp
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
+from omegaconf import OmegaConf
 import wandb
 import scipy.signal as signal
 import torch
 import itertools
+from dacite import from_dict
 
-# Some types
-StimCommand = NamedTuple("StimCommand", times=np.ndarray, channels=np.ndarray, current=np.ndarray)
-CommandPayload = Dict[Path, StimCommand]
+from model import BrainBertInterface
+from data import DataAttrs
+from config import RootConfig
+
+
+# Wandb management
+
+def cast_paths_and_enums(cfg: Dict, template=RootConfig()):
+    # recursively cast any cfg field that is a path in template to a path, since dacite doesn't support our particular case quite well
+    # thinking about it more - the weak link is wandb; which casts enums and paths to __str__
+    # and now we have to recover from __str__
+    def search_enum(str_rep: str, enum: Enum):
+        for member in enum:
+            if str_rep == str(member):
+                return member
+        raise ValueError(f"Could not find {str_rep} in {enum}")
+    for k, v in get_type_hints(template).items():
+        if v == Any: # optional values
+            continue
+        elif k not in cfg:
+            continue # new attr
+        elif v == Path:
+            cfg[k] = Path(cfg[k])
+        elif isinstance(cfg[k], list):
+            for i, item in enumerate(cfg[k]):
+                generic = get_args(v)[0]
+                if issubclass(generic, Enum):
+                    cfg[k][i] = search_enum(item, generic)
+        elif issubclass(v, Enum):
+            cfg[k] = search_enum(cfg[k], v)
+        elif isinstance(cfg[k], dict):
+            # print(f"recursing with {k}")
+            cast_paths_and_enums(cfg[k], template=v)
+    return cfg
+
+def create_typed_cfg(cfg: Dict) -> RootConfig:
+    cfg = cast_paths_and_enums(cfg)
+    return from_dict(data_class=RootConfig, data=cfg)
+
+
+WandbRun = Any
+
+def load_wandb_run(run: WandbRun, tag="val-") -> Tuple[BrainBertInterface, RootConfig, DataAttrs]:
+    run_data_attrs = from_dict(data_class=DataAttrs, data=run.config['data_attrs'])
+    del run.config['data_attrs']
+    cfg: RootConfig = OmegaConf.create(create_typed_cfg(run.config)) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
+    ckpt = get_latest_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag=tag)
+    model = BrainBertInterface.load_from_checkpoint(ckpt)
+    return model, cfg, run_data_attrs
 
 def get_newest_ckpt_in_dir(ckpt_dir: Path, tag="val-"):
     # Newest is best since we have early stopping callback, and modelcheckpoint only saves early stopped checkpoints (not e.g. latest)
@@ -29,7 +80,7 @@ def get_latest_ckpt_from_wandb_id(
     ckpt_dir = Path(wandb_project) / wandb_id / "checkpoints" # curious, something about checkpoint dumping isn't right
     return get_newest_ckpt_in_dir(ckpt_dir, tag=tag)
 
-def get_wandb_run(wandb_project, wandb_id, wandb_user="joelye9"):
+def get_wandb_run(wandb_id, wandb_project='context_general_bci', wandb_user="joelye9"):
     wandb_id = wandb_id.split('-')[-1]
     api = wandb.Api()
     return api.run(f"{wandb_user}/{wandb_project}/{wandb_id}")
@@ -39,9 +90,7 @@ def get_wandb_run(wandb_project, wandb_id, wandb_user="joelye9"):
 def wandb_query_latest(
     name_kw,
     wandb_user='joelye9',
-    wandb_project='icms_modeling',
-    latest_for_each_seed=False,
-    experiment_set="",
+    wandb_project='context_general_bci',
     exact=False,
     allow_running=False,
     **filter_kwargs
@@ -56,21 +105,14 @@ def wandb_query_latest(
         states.append("running")
     filters = {
         # "display_name": Target,
-        "config.VARIANT": target,
+        "config.tag": target,
         "state": {"$in": states}, # crashed == timeout
         **filter_kwargs
     }
-    if experiment_set:
-        filters["config.EXPERIMENT_SET"] = experiment_set
     runs = api.runs(
         f"{wandb_user}/{wandb_project}",
         filters=filters
     )
-    if latest_for_each_seed:
-        # Filter to latest run for each seed (not compatible with split_seed runs)
-        seed_unique = lambda r: (r.config.get('SEED'), r.config.get('DATASET').get('SPLIT_SEED'))
-        runs = sorted(runs, key=seed_unique)
-        runs = [list(g)[0] for k, g in itertools.groupby(runs, seed_unique)]
     return runs
 
 def wandb_query_several(
@@ -90,6 +132,14 @@ def wandb_query_several(
         ))
     return runs
 
+def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
+    out = defaultdict(list)
+    for batch in batch_out:
+        for k, v in batch.items():
+            out[k].append(v)
+    for k, v in out.items():
+        out[k] = torch.cat(v)
+    return out
 
 
 # Compute Gauss window and std with respect to bins
