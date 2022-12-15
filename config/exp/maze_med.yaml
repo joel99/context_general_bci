@@ -7,6 +7,11 @@ defaults:
   - /train: nlb
 model:
   readin_strategy: EmbedStrat.token
+  dropout: 0.5
+  transformer:
+    dropout: 0.4
+  task:
+    mask_ratio: 0.25
 dataset:
   datasets:
   - mc_maze_medium

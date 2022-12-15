@@ -17,19 +17,22 @@ class InfillTaskConfig(TaskConfig):
 
 @dataclass
 class PretrainingModelConfig(ModelConfig):
+    r"""
+        BERT does 10K ramp, 1M full. We are ~2 orders of magnitude data smaller.
+    """
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_init: float = 5e-4
-    lr_ramp_steps: int = 50
-    lr_decay_steps: int = 1000
+    lr_ramp_steps: int = 1000
+    lr_decay_steps: int = 100000
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 
 @dataclass
-class PretrainingModelConfig(ModelConfig):
+class PretrainingSmallModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_init: float = 5e-4
-    lr_ramp_steps: int = 500
-    lr_decay_steps: int = 10000
-cs.store(group="model", name="pretrain_small", node=PretrainingModelConfig)
+    lr_ramp_steps: int = 2000
+    lr_decay_steps: int = 100000
+cs.store(group="model", name="pretrain_small", node=PretrainingSmallModelConfig)
 
 @dataclass
 class FinetuningModelConfig(ModelConfig):

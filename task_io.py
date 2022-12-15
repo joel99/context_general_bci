@@ -77,7 +77,7 @@ class RatePrediction(TaskPipeline):
         channel_count: int,
         cfg: ModelConfig,
         data_attrs: DataAttrs,
-        use_dropout=False
+        use_dropout=True
     ):
         super().__init__(
             backbone_out_size=backbone_out_size,
@@ -191,7 +191,7 @@ class SelfSupervisedInfill(RatePrediction):
         spikes = spikes.clone()
         spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
         spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         batch.update({
             DataKey.spikes: spikes,
             'is_masked': is_masked,
@@ -200,7 +200,7 @@ class SelfSupervisedInfill(RatePrediction):
         return batch
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.logrates in self.cfg.outputs:

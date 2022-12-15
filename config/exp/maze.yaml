@@ -1,18 +1,22 @@
 # @package _global_
-tag: maze_full
+tag: maze
 
+defaults:
+  - /model: pretrain_small
+  - /dataset: maze_nlb
+  - /train: nlb
 model:
-  task:
-    task: ModelTask.infill
   readin_strategy: EmbedStrat.token
+  dropout: 0.5
+  transformer:
+    dropout: 0.4
+  task:
+    mask_ratio: 0.25
 dataset:
-  bin_size_ms: 5
   datasets:
-  - mc_maze
-  data_keys:
-  - "spikes"
-
+  - mc_maze$
   max_channels: 137
 train:
-  epochs: 2000
+  epochs: 5000
   batch_size: 128
+  patience: 500 # batches are smaller
