@@ -180,8 +180,9 @@ class SelfSupervisedInfill(RatePrediction):
         is_masked = torch.bernoulli(
             torch.full(spikes.size()[:3], self.cfg.mask_ratio, device=spikes.device)
         )
-        mask_token = torch.bernoulli(torch.full_like(is_masked, self.cfg.mask_token_ratio))
-        mask_random = torch.bernoulli(torch.full_like(is_masked, self.cfg.mask_random_ratio))
+        mask_type = torch.rand_like(is_masked)
+        mask_token = mask_type < self.cfg.mask_token_ratio
+        mask_random = (mask_type >= self.cfg.mask_token_ratio) & (mask_type < self.cfg.mask_token_ratio + self.cfg.mask_random_ratio)
         is_masked = is_masked.bool()
         mask_token, mask_random = (
             mask_token.bool() & is_masked,
@@ -191,9 +192,6 @@ class SelfSupervisedInfill(RatePrediction):
         spikes = spikes.clone()
         spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
         spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
-        # target = target.int()
-        # target[~is_masked] = torch.nan # sanity check - shouldn't matter, but does this throw?
-        # import pdb;pdb.set_trace()
         batch.update({
             DataKey.spikes: spikes,
             'is_masked': is_masked,
@@ -202,7 +200,6 @@ class SelfSupervisedInfill(RatePrediction):
         return batch
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
-        # import pdb;pdb.set_trace()
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.logrates in self.cfg.outputs:
@@ -212,7 +209,6 @@ class SelfSupervisedInfill(RatePrediction):
             return batch_out
         spikes = batch['spike_target']
         loss: torch.Tensor = self.loss(rates, spikes)
-        # rates[~batch['is_masked']] = torch.nan # sanity check - no way we can learn anything about unmasked
         # Infill update mask
         loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
         loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')

@@ -15,12 +15,6 @@ from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 wandb_run = wandb_query_latest('maze_med')[0]
 # wandb_run = wandb_query_latest('maze_med_lessmask')[0]
 wandb_run = get_wandb_run("maze_med-1j0loymb")
-wandb_run = get_wandb_run("maze_med-3e72jrh7")
-wandb_run = get_wandb_run("maze-19fcz8h6")
-wandb_run = get_wandb_run("maze_med-16bezwaz")
-wandb_run = get_wandb_run("maze_parity-2f5bgqpw")
-wandb_run = get_wandb_run("maze_med_parity-2hlih58i")
-wandb_run = get_wandb_run("maze_parity-1a92zp4p")
 wandb_run = get_wandb_run("maze_parity-3nv5s351")
 
 model, cfg, data_attrs = load_wandb_run(wandb_run)
@@ -52,10 +46,10 @@ print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 test = heldin_outputs[Output.rates].squeeze(2).numpy()
 num_trials = 1
 for trial in range(test.shape[0]):
-    plt.plot(test[trial,:,10])
+    # plt.plot(test[trial,:,10])
     plt.plot(test[trial,:,50])
     # plt.plot(test[trial,:,100])
-    # plt.plot(test[trial,:,0])
+    # plt.plot(test[trial,:,60])
     if trial > num_trials:
         break
 # plt.plot(test[0,:,0])

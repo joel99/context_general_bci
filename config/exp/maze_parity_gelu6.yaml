@@ -1,7 +1,7 @@
 # @package _global_
 
 # Design to match `mc_maze` from NDT 1 as closely as possible
-tag: test
+tag: maze_parity_gelu6
 
 defaults:
   - /model: pretrain_small
@@ -15,15 +15,15 @@ model:
   hidden_size: 128
   session_embed_size: 128
   transformer:
-    n_layers: 4
+    n_layers: 6
     n_state: 128
     n_heads: 2
     dropout: 0.5
-    activation: "relu"
+    activation: "gelu"
   task:
     mask_ratio: 0.25
-    mask_token_ratio: 0.8
-    mask_random_ratio: 0.1
+    mask_token_ratio: 1.0
+    mask_random_ratio: 0.0
   weight_decay: 5e-5
   lr_init: 1e-3
   lr_ramp_steps: 5000

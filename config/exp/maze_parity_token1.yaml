@@ -1,7 +1,7 @@
 # @package _global_
 
 # Design to match `mc_maze` from NDT 1 as closely as possible
-tag: test
+tag: maze_parity_token1
 
 defaults:
   - /model: pretrain_small
@@ -22,7 +22,7 @@ model:
     activation: "relu"
   task:
     mask_ratio: 0.25
-    mask_token_ratio: 0.8
+    mask_token_ratio: 1.0
     mask_random_ratio: 0.1
   weight_decay: 5e-5
   lr_init: 1e-3

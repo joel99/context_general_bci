@@ -6,9 +6,7 @@ defaults:
   - /dataset: maze_nlb
   - /train: nlb
 model:
-  readin_strategy: EmbedStrat.project
-  session_embed_strategy: EmbedStrat.none
-  # readin_strategy: EmbedStrat.token
+  readin_strategy: EmbedStrat.token
   dropout: 0.5
   hidden_size: 128
   session_embed_size: 128
@@ -18,13 +16,12 @@ model:
     n_heads: 2
     dropout: 0.5
   task:
-    mask_ratio: 0.5
+    mask_ratio: 0.25
+    mask_random_ratio: 0.0
 dataset:
   datasets:
   - mc_maze_medium
-  max_channels: 114
-  # max_channels: 0
 train:
-  epochs: 5000
+  epochs: 50000
   batch_size: 128
   patience: 500 # batches are smaller
