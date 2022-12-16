@@ -1,7 +1,7 @@
 # @package _global_
 
 # Design to match `mc_maze` from NDT 1 as closely as possible
-tag: test
+tag: maze_parity
 
 defaults:
   - /model: pretrain_small

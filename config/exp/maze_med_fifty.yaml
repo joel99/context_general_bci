@@ -12,7 +12,7 @@ model:
     n_layers: 2
     dropout: 0.5
   task:
-    mask_ratio: 0.25
+    mask_ratio: 0.5
 dataset:
   datasets:
   - mc_maze_medium

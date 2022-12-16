@@ -191,6 +191,8 @@ class SelfSupervisedInfill(RatePrediction):
         spikes = spikes.clone()
         spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
         spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
+        # target = target.int()
+        # target[~is_masked] = torch.nan # sanity check - shouldn't matter, but does this throw?
         # import pdb;pdb.set_trace()
         batch.update({
             DataKey.spikes: spikes,
@@ -210,6 +212,7 @@ class SelfSupervisedInfill(RatePrediction):
             return batch_out
         spikes = batch['spike_target']
         loss: torch.Tensor = self.loss(rates, spikes)
+        # rates[~batch['is_masked']] = torch.nan # sanity check - no way we can learn anything about unmasked
         # Infill update mask
         loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
         loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')

@@ -124,8 +124,8 @@ class BrainBertInterface(pl.LightningModule):
             assert self.cfg.readin_strategy == EmbedStrat.project, 'Ragged array readin only implemented for project readin strategy'
             assert len(self.data_attrs.context.subject) <= 1, "Only implemented for single subject (likely need padding for mixed batches)"
 
-            for a in self.data_attrs.context.array:
-                assert not isinstance(subject_array_registry.query_by_array(a), SortedArrayInfo), "actual mixed readins per session not yet implemented"
+            # for a in self.data_attrs.context.array:
+            #     assert not isinstance(subject_array_registry.query_by_array(a), SortedArrayInfo), "actual mixed readins per session not yet implemented"
             channel_count = sum(
                 subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
             ) * self.data_attrs.spike_dim
@@ -352,8 +352,8 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     @torch.inference_mode()
-    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=True) -> Dict[str, torch.Tensor]:
-    # def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=False) -> Dict[str, torch.Tensor]:
+    # def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=True) -> Dict[str, torch.Tensor]:
+    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=False) -> Dict[str, torch.Tensor]:
         r"""
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
@@ -386,7 +386,7 @@ class BrainBertInterface(pl.LightningModule):
         if transform_logrates:
             if Output.logrates in batch_out:
                 batch_out[Output.rates] = self.unpad_and_transform_rates(
-                    batch_out[Output.logrates], batch[LENGTH_KEY], batch[CHANNEL_KEY]
+                    batch_out[Output.logrates], batch[LENGTH_KEY], batch[CHANNEL_KEY] if CHANNEL_KEY in batch else None
                 )
             if Output.heldout_logrates in batch_out:
                 batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(
@@ -395,8 +395,8 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     def predict_step(
-        self, batch, *args, transform_logrates=True, mask=True, **kwargs
-        # self, batch, *args, transform_logrates=True, mask=False, **kwargs
+        # self, batch, *args, transform_logrates=True, mask=True, **kwargs
+        self, batch, *args, transform_logrates=True, mask=False, **kwargs
     ):
         return self.predict(batch, transform_logrates=transform_logrates, mask=mask)
 

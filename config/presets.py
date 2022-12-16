@@ -19,6 +19,8 @@ class InfillTaskConfig(TaskConfig):
 class PretrainingModelConfig(ModelConfig):
     r"""
         BERT does 10K ramp, 1M full. We are ~2 orders of magnitude data smaller.
+        Our "steps" below are in epochs - so adjust appropriately. Currently
+        ~10 batches per epoch in 2K trials (unaggregate)
     """
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_init: float = 5e-4

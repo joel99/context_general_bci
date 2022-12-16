@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import h5py
+import torch
 
 import logging
 
@@ -12,12 +13,13 @@ from data import SpikingDataset
 from matplotlib import pyplot as plt
 import seaborn as sns
 from omegaconf import OmegaConf
+from utils import prep_plt
 
 # dataset_name = 'mc_maze_large' # 122 sorted units
-dataset_name = 'mc_maze_medium' # 114 sorted units
+# dataset_name = 'mc_maze_medium' # 114 sorted units
 # dataset_name = 'mc_maze_small' # 107 sorted units
-# dataset_name = 'mc_maze$' # 137 sorted units
-dataset_name = 'churchland_maze_jenkins-0'
+dataset_name = 'mc_maze$' # 137 sorted units
+# dataset_name = 'churchland_maze_jenkins-0'
 # dataset_name = 'churchland_maze_jenkins-1'
 # dataset_name = 'mc_rtt'
 context = context_registry.query(alias=dataset_name)
@@ -33,6 +35,7 @@ dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
 
 #%%
+#%%
 # TODO compare with other maze datasets
 # import torch
 # lengths = []
@@ -41,12 +44,22 @@ dataset.build_context_index()
 # print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
 
 #%%
-from utils import prep_plt
-trial = 10
-pop_spikes = dataset[trial][DataKey.spikes]
+trial = 0
+# trial = 10
+# trial = 26
 
+pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
 pop_spikes = pop_spikes.flatten(1, 2)
+
+# path_to_old = './data/old_nlb/mc_maze.h5'
+# with h5py.File(path_to_old, 'r') as f:
+#     print(f.keys())
+#     pop_spikes = f['train_data_heldin']
+#     pop_spikes = torch.tensor(pop_spikes)
+#     print(pop_spikes.shape)
+# pop_spikes = pop_spikes[trial]
+
 print(pop_spikes.shape)
 # print(pop_spikes.sum(0) / 0.6)
 # print(pop_spikes.sum(0))
