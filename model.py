@@ -110,7 +110,7 @@ class BrainBertInterface(pl.LightningModule):
                 project_size += self.cfg.array_embed_size
             elif self.cfg.array_embed_strategy == EmbedStrat.token:
                 assert self.cfg.array_embed_size == self.cfg.hidden_size
-                self.array_flag = nn.Parameter(torch.zeros(self.cfg.array_embed_size))
+                self.array_flag = nn.Parameter(torch.zeros(self.data_attrs.max_arrays, self.cfg.array_embed_size))
 
         if self.data_attrs.max_channel_count > 0: # there is padding
             channel_count = self.data_attrs.max_channel_count
@@ -258,7 +258,7 @@ class BrainBertInterface(pl.LightningModule):
                 session = session + self.session_flag # B x H
                 static_context.append(session)
             elif self.cfg.session_embed_strategy == EmbedStrat.concat:
-                session = repeat(session, 'b h -> b t h', t=state_in.shape[1])
+                session = repeat(session, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(session)
 
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
@@ -267,17 +267,18 @@ class BrainBertInterface(pl.LightningModule):
                 subject = subject + self.subject_flag
                 static_context.append(subject)
             elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
-                subject = repeat(subject, 'b h -> b t h', t=state_in.shape[1])
+                subject = repeat(subject, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(subject)
 
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            import pdb;pdb.set_trace() # TODO vet - I think we can't provide this as a single token, because there's an array dimension and we need to assign this to the correct arrays (there's more than one context token per batch)
             array: torch.Tensor = self.array_embed(batch[MetaKey.array])
             if self.cfg.array_embed_strategy == EmbedStrat.token:
                 array = array + self.array_flag
-                static_context.append(array)
+                static_context.extend(array.unbind(1)) # path not yet tested
+            elif self.cfg.array_embed_strategy == EmbedStrat.token_add:
+                state_in = state_in + rearrange(array, 'b a h -> b 1 a h')
             elif self.cfg.array_embed_strategy == EmbedStrat.concat:
-                array = repeat(array, 'b h -> b t h', t=state_in.shape[1])
+                array = repeat(array, 'b a h -> b t a h', t=state_in.shape[1])
                 project_context.append(array)
 
         # TODO support temporal embed + temporal project
@@ -285,7 +286,8 @@ class BrainBertInterface(pl.LightningModule):
         # static_context = rearrange(static_context, 't0 b h -> b t0 h') if static_context else None
         if project_context: # someone wanted it
             # B T' H, and we want to merge into B T A H (specifically add T' to each token)
-            augmented_tokens, ps = pack([state_in, *project_context], 'b * h')
+            raise NotImplementedError # not tested
+            augmented_tokens, ps = pack([state_in, *project_context], 'b * a h')
             augmented_tokens = self.context_project(augmented_tokens)
             state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
         return state_in, static_context, temporal_context

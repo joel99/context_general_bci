@@ -51,7 +51,7 @@ class TaskConfig:
     # infill
     mask_ratio: float = 0.25 # we don't have any schedule right now - the smaller this is, the higher the ceiling (probably), the slower the training
     mask_token_ratio: float = 0.8
-    mask_random_ratio: float = 0.15 # It's really important to keep this quite high.
+    mask_random_ratio: float = 0.2 # It's really important to keep this quite high (in fact, anything lower than full seems to break)
     mask_random_shuffle: bool = False # doesn't actually seem more helpful
 
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps])
@@ -77,6 +77,7 @@ class EmbedStrat(Enum):
     # Embedding strategies
     none = "" # Just ignore context
     token = 'token' # Embed context as a token
+    token_add = 'token' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
     concat = 'concat' # concat embedding and downproject
 
     project = 'project' # just for array inputs

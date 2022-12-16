@@ -5,11 +5,11 @@ model:
   task:
     task: ModelTask.infill
   readin_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.token_add
 dataset:
   bin_size_ms: 5
   datasets:
-  - mc_maze_small
-  # - churchland_maze_jenkins-0
+  - churchland_maze.*
   data_keys:
   - "spikes"
 
