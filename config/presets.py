@@ -81,7 +81,7 @@ class MazeNLBDataConfig(DatasetConfig):
         Default configuration for all maze datasets NLB fine-tuning
     """
     bin_size_ms: int = 5
-    datasets: List[str] = field(default_factory=lambda: ['mc_maze'])
+    datasets: List[str] = field(default_factory=lambda: ['mc_maze$'])
     max_channels: int = 137
     data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes, DataKey.heldout_spikes])
 
