@@ -49,9 +49,10 @@ class TaskConfig:
     task: ModelTask = ModelTask.icms_one_step_ahead
 
     # infill
-    mask_ratio: float = 0.5
+    mask_ratio: float = 0.25 # we don't have any schedule right now - the smaller this is, the higher the ceiling (probably), the slower the training
     mask_token_ratio: float = 0.8
-    mask_random_ratio: float = 0.1
+    mask_random_ratio: float = 0.15 # It's really important to keep this quite high.
+    mask_random_shuffle: bool = False # doesn't actually seem more helpful
 
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps])
     outputs: List[Output] = field(default_factory=lambda: [])

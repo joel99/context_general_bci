@@ -23,7 +23,6 @@ class PretrainingModelConfig(ModelConfig):
         ~10 batches per epoch in 2K trials (unaggregate)
     """
     task: TaskConfig = field(default_factory=InfillTaskConfig)
-    lr_init: float = 5e-4
     lr_ramp_steps: int = 1000
     lr_decay_steps: int = 100000
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
@@ -31,8 +30,7 @@ cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 @dataclass
 class PretrainingSmallModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=InfillTaskConfig)
-    lr_init: float = 5e-4
-    lr_ramp_steps: int = 2000
+    lr_ramp_steps: int = 3000
     lr_decay_steps: int = 100000
 cs.store(group="model", name="pretrain_small", node=PretrainingSmallModelConfig)
 

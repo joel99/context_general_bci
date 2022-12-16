@@ -1,0 +1,18 @@
+# @package _global_
+
+tag: maze_nlb_big
+
+defaults:
+  - /model: pretrain_small
+  - /dataset: maze_nlb
+  - /train: nlb
+model: # NDT 1 says we still don't want to kill dropout since we're way overparamed
+  dropout: 0.5
+  transformer:
+    dropout: 0.5
+  task:
+    mask_ratio: 0.25
+dataset:
+  datasets:
+  - mc_maze$
+  max_channels: 137

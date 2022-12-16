@@ -190,7 +190,24 @@ class SelfSupervisedInfill(RatePrediction):
         )
         target = spikes[..., 0]
         spikes = spikes.clone()
-        spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
+
+        b, t, a, c, _ = spikes.shape
+        if LENGTH_KEY in batch:
+            times = rearrange(batch[LENGTH_KEY], 'b -> b 1 1') # 1 = a
+        else:
+            times = torch.full((b, 1, a), t, device=spikes.device)
+
+        if self.cfg.mask_random_shuffle:
+            # How can we generate a random time if we have different bounds? Use a large number and take modulo, roughly fair
+            # (note permute doesn't really work if we have ragged times, we risk shuffling in padding)
+            random_draw = torch.randint(0, 100000, (b, t, a), device=times.device) % times
+
+            # Use random_draw to index spikes and extract a tensor of size b t a c 1
+            time_shuffled_spikes = spikes.gather(1, random_draw.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, c, -1))
+            spikes[mask_random] = time_shuffled_spikes[mask_random]
+        else:
+            # Old implementation
+            spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
         spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
         batch.update({
             DataKey.spikes: spikes,

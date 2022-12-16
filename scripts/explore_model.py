@@ -16,7 +16,10 @@ wandb_run = wandb_query_latest('maze_med')[0]
 # wandb_run = wandb_query_latest('maze_med_lessmask')[0]
 wandb_run = get_wandb_run("maze_med-1j0loymb")
 wandb_run = get_wandb_run("maze_parity-3nv5s351")
-
+wandb_run = get_wandb_run("maze_parity_token-63zkce39")
+# wandb_run = get_wandb_run("maze_parity_train-25y6d5fg")
+wandb_run = get_wandb_run("maze_parity_rand-uee1ef8h")
+wandb_run = get_wandb_run("maze_parity_newrand-3qn6cpf7")
 model, cfg, data_attrs = load_wandb_run(wandb_run)
 
 #%%
