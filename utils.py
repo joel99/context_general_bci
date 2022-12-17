@@ -137,11 +137,15 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
     all_lists = defaultdict(list)
     for batch in batch_out:
         for k, v in batch.items():
-            all_lists[k].append(v)
+            all_lists[k].extend(v)
     out = {}
     for k, v in all_lists.items():
         if isinstance(v[0], torch.Tensor):
-            out[k] = torch.cat(v)
+            # try cat
+            if all(v2.size() == v[0].size() for v2 in v[1:]):
+                out[k] = torch.cat(v)
+            else:
+                out[k] = v
         else:
             out[k] = torch.tensor(v).mean() # some metric
     return out

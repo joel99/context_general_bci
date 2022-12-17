@@ -23,8 +23,11 @@ wandb_run = get_wandb_run("maze_parity_newrand-3qn6cpf7")
 wandb_run = get_wandb_run("maze_nlb_padded-1t9rxry3")
 wandb_run = get_wandb_run("maze_nlb_safe-1axibgsj")
 wandb_run = get_wandb_run("maze_nlb_padded-1yy0yiuq")
+wandb_run = get_wandb_run("maze_jenkins-1k9xx5do")
 model, cfg, data_attrs = load_wandb_run(wandb_run)
-
+print(cfg.dataset.datasets)
+# cfg.dataset.datasets = cfg.dataset.datasets[:1]
+cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 #%%
 
 dataset = SpikingDataset(cfg.dataset)
@@ -47,15 +50,17 @@ trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
 # heldin_outputs = stack_batch(trainer.test(model, dataloader))
 # heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
-print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
+#%%
+print(heldin_outputs.keys())
+# print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 
-test = heldin_outputs[Output.rates].squeeze(2).numpy()
+test = heldin_outputs[Output.rates]
 num_trials = 1
-for trial in range(test.shape[0]):
+for trial in range(len(test)):
     # plt.plot(test[trial,:,10])
-    plt.plot(test[trial,:,50])
-    # plt.plot(test[trial,:,100])
-    # plt.plot(test[trial,:,60])
+    # plt.plot(test[trial][:,50])
+    # plt.plot(test[trial][:,100])
+    plt.plot(test[trial][:,60])
     if trial > num_trials:
         break
 # plt.plot(test[0,:,0])

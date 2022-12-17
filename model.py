@@ -405,22 +405,26 @@ class BrainBertInterface(pl.LightningModule):
     def unpad_and_transform_rates(self, logrates: torch.Tensor, lengths: torch.Tensor | None = None, channels: torch.Tensor | None = None) -> torch.Tensor:
         r"""
             logrates: raw, padded predictions from model, B T A H
+            out: B T C
         """
         # unpad logrates using LENGTH_KEY and CHANNEL_KEY
         logrates, ps = pack([logrates], 'b t * h')
-        assert logrates.shape[2] == 1 or logrates.ndim == 3, "Only single array dim supported for now"
-        assert channels is None or (channels == channels.flatten()[0]).all(), "Heterogenuous arrays not supported for now"
+        import pdb;pdb.set_trace()
+        assert channels is None or (channels == channels[0].unsqueeze(0)).all(), "Heterogenuous arrays not supported for evaluation (why would you want that anyway)"
         logrates = logrates.unbind()
         if lengths is not None:
             logrates = [l[:b, ...] for l, b in zip(logrates, lengths)]
         if channels is not None:
-            logrates = [l[:, :, :b[0], ...] for l, b in zip(logrates, channels)]
-        # try to stack
-        if (lengths == lengths[0]).all():
+            cat_rates: List[torch.Tensor] = []
+            for lograte, array_channels in zip(logrates, channels):
+                cat_rates.append(torch.cat([lograte[:, i, :array_channels[i]] for i in range(len(array_channels))], -1))
+            logrates = cat_rates
+            # B T C
+        # Now a potentially heterogenuous list of T x C, with varying T and or C
+        if all(lograte.size() == logrates[0].size() for lograte in logrates[1:]):
             logrates = torch.stack(logrates)
-        [logrates] = unpack(logrates, ps, 'b t * h')
         # NLB expects units of spikes / bin (search "spikes/bin" in https://github.dev/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb)
-        return self.transform_rates(logrates, exp=True, normalize_hz=False).cpu()
+        return self.transform_rates(logrates, exp=True, normalize_hz=False)
 
     def transform_rates(
         self,
@@ -439,7 +443,7 @@ class BrainBertInterface(pl.LightningModule):
                 single = single.exp()
             if normalize_hz:
                 single = single / self.data_attrs.bin_size_ms
-            return single
+            return single.cpu()
         out = logrates
         if isinstance(out, list):
             out = [_transform(o) for o in out]

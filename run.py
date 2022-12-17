@@ -17,6 +17,7 @@ from pytorch_lightning.callbacks import (
 )
 
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.strategies import DDPStrategy
 import wandb
 
 from config import RootConfig, Metric
@@ -108,6 +109,7 @@ def run_exp(cfg : RootConfig) -> None:
         default_root_dir=cfg.default_root_dir,
         track_grad_norm=2 if cfg.train.log_grad else -1,
         precision=16 if cfg.model.half_precision else 32,
+        strategy=DDPStrategy(find_unused_parameters=False) if torch.cuda.device_count() > 1 else None,
         gradient_clip_val=cfg.train.gradient_clip_val,
         accumulate_grad_batches=cfg.train.accumulate_batches,
         profiler=cfg.train.profiler if cfg.train.profiler else None,
