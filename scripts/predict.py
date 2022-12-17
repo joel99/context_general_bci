@@ -21,37 +21,25 @@ from copy import deepcopy
 from utils import get_latest_ckpt_from_wandb_id, get_wandb_run, load_wandb_run
 
 dataset_name = 'mc_rtt'
-context = context_registry.query(alias=dataset_name)
+dataset_name = 'mc_maze$'
 
-default_cfg = RootConfig()
-default_cfg.dataset.bin_size_ms = 5
-default_cfg.dataset.max_arrays = min(max(1, len(context.array)), 2)
-default_cfg.dataset.data_keys = [DataKey.spikes]
-default_cfg.dataset.datasets = [context.alias] # do _not_ accidentally set this as just a str
-default_cfg.dataset.max_channels = 98
+wandb_id = "maze_nlb_ft-umbki5uw"
+wandb_run = get_wandb_run(wandb_id)
+heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_co_bps')
+heldout_model.cfg.task.outputs = [Output.heldout_logrates]
 
-dataset = SpikingDataset(default_cfg.dataset)
+cfg.dataset.data_keys = [DataKey.spikes]
+cfg.dataset.datasets = [dataset_name] # do _not_ accidentally set this as just a str
+
+dataset = SpikingDataset(cfg.dataset)
 test_dataset = deepcopy(dataset)
-
-#%%
-wandb_id = "rtt_nlb_ft-pgh47dlp"
-run = get_wandb_run(wandb_id)
-
-#%%
 dataset.restrict_to_train_set()
 dataset.build_context_index()
 test_dataset.subset_by_key(['test'], key='split')
 test_dataset.build_context_index()
 
-# Load the model
-wandb_id = "rtt_nlb_ft-toe7nvo7"
-run = get_wandb_run(default_cfg.wandb_project, wandb_id)
-co_bps_ckpt = get_latest_ckpt_from_wandb_id(default_cfg.wandb_project, wandb_id, tag="val_co_bps")
-heldout_model = BrainBertInterface.load_from_checkpoint(co_bps_ckpt)
-heldout_model.cfg.task.outputs = [Output.heldout_logrates]
-base_id = run.config['init_from_id']
-base_ckpt = get_latest_ckpt_from_wandb_id(default_cfg.wandb_project, base_id)
-heldin_model = BrainBertInterface.load_from_checkpoint(base_ckpt)
+base_run = get_wandb_run(cfg.init_from_id)
+heldin_model, *_ = load_wandb_run(base_run)
 heldin_model.cfg.task.outputs = [Output.logrates]
 #%%
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
@@ -81,17 +69,16 @@ heldin_outputs = stack_batch(trainer.predict(heldin_model, dataloader))
 heldout_outputs = stack_batch(trainer.predict(heldout_model, dataloader))
 test_heldin_outputs = stack_batch(trainer.predict(heldin_model, test_dataloader))
 test_heldout_outputs = stack_batch(trainer.predict(heldout_model, test_dataloader))
-#%%
-print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
-print(heldout_outputs[Output.heldout_rates].max(), heldout_outputs[Output.heldout_rates].mean())
-print(test_heldout_outputs[Output.heldout_rates].max(), test_heldout_outputs[Output.heldout_rates].mean())
+# print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
+# print(heldout_outputs[Output.heldout_rates].max(), heldout_outputs[Output.heldout_rates].mean())
+# print(test_heldout_outputs[Output.heldout_rates].max(), test_heldout_outputs[Output.heldout_rates].mean())
 
 #%%
 print(heldin_outputs[Output.rates].shape)
 test = heldin_outputs[Output.rates].squeeze(2).numpy()
 test = test_heldin_outputs[Output.rates].squeeze(2).numpy()
 test = test_heldout_outputs[Output.heldout_rates].numpy()
-for trial in range(test.shape[0]):
+for trial in range(len(test)):
     plt.plot(test[trial,:,0])
     if trial > 5:
         break

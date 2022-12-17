@@ -416,9 +416,11 @@ class BrainBertInterface(pl.LightningModule):
         if channels is not None:
             cat_rates: List[torch.Tensor] = []
             for lograte, array_channels in zip(logrates, channels):
-                cat_rates.append(torch.cat([lograte[:, i, :array_channels[i]] for i in range(len(array_channels))], -1))
+                cat_rates.append(torch.cat([lograte[:, i, :array_channels] for i in range(len(array_channels))], -1))
             logrates = cat_rates
-            # B T C
+        else:
+            logrates = [lr.squeeze(-2) for lr in logrates]
+        # B T C
         # Now a potentially heterogenuous list of T x C, with varying T and or C
         if all(lograte.size() == logrates[0].size() for lograte in logrates[1:]):
             logrates = torch.stack(logrates)
