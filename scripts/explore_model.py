@@ -22,6 +22,7 @@ wandb_run = get_wandb_run("maze_parity_rand-uee1ef8h")
 wandb_run = get_wandb_run("maze_parity_newrand-3qn6cpf7")
 wandb_run = get_wandb_run("maze_nlb_padded-1t9rxry3")
 wandb_run = get_wandb_run("maze_nlb_safe-1axibgsj")
+wandb_run = get_wandb_run("maze_nlb_padded-1yy0yiuq")
 model, cfg, data_attrs = load_wandb_run(wandb_run)
 
 #%%

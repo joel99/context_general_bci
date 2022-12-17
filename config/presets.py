@@ -23,8 +23,8 @@ class PretrainingModelConfig(ModelConfig):
         ~10 batches per epoch in 2K trials (unaggregate)
     """
     task: TaskConfig = field(default_factory=InfillTaskConfig)
-    lr_ramp_steps: int = 1000
-    lr_decay_steps: int = 100000
+    lr_ramp_steps: int = 500
+    lr_decay_steps: int = 10000
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 
 @dataclass
@@ -48,11 +48,19 @@ class NLBModelTaskConfig(TaskConfig):
     metrics: List[Metric] = field(default_factory=lambda: [Metric.co_bps, Metric.block_co_bps])
     outputs: List[Output] = field(default_factory=lambda: [Output.heldout_logrates])
 
+cs.store(group='model/task', name='nlb', node=NLBModelTaskConfig)
 @dataclass
 class NLBModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=NLBModelTaskConfig)
 
 cs.store(group="model", name="nlb", node=NLBModelConfig)
+
+@dataclass
+class PretrainConfig(TrainConfig):
+    epochs: int = 10000
+    batch_size: int = 256
+    patience: int = 100
+cs.store(group="train", name="pretrain", node=PretrainConfig)
 
 @dataclass
 class NLBTrainConfig(TrainConfig):
@@ -76,6 +84,12 @@ class RTTNLBDataConfig(DatasetConfig):
 cs.store(group="dataset", name="rtt_nlb", node=RTTNLBDataConfig)
 
 @dataclass
+class MCMazeExpConfig(NLBConfig):
+    heldout_neurons: int = 45
+
+cs.store(group='dataset/nlb_maze', name='mc_maze', node=MCMazeExpConfig)
+
+@dataclass
 class MazeNLBDataConfig(DatasetConfig):
     r"""
         Default configuration for all maze datasets NLB fine-tuning
@@ -84,5 +98,6 @@ class MazeNLBDataConfig(DatasetConfig):
     datasets: List[str] = field(default_factory=lambda: ['mc_maze$'])
     max_channels: int = 137
     data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes, DataKey.heldout_spikes])
+    nlb_maze: NLBConfig = field(default_factory=MCMazeExpConfig)
 
 cs.store(group="dataset", name="maze_nlb", node=MazeNLBDataConfig)

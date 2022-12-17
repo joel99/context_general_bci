@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Any, Tuple
+from typing import List, Optional, Union, Any, Tuple, Dict
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -68,6 +68,9 @@ class TransformerConfig:
     dropout: float = 0.2 # applies generically
     activation: str = 'gelu'
     # causal: bool = True # Pretty sure this should be passed in by task, not configured
+
+    # Optional pattern for phasing in config?
+    # fixup_init: Optional[bool] = False # doesn't seem useful
 
     # Position
     learnable_position: bool = False
@@ -182,10 +185,19 @@ class ExperimentalConfig:
     """
     arrays: List[str] = field(default_factory=lambda: []) # Empty list means don't filter
 
+    def reproc_dict(self) -> Dict[str, List[str]]:
+        r"""
+            Dictionary of attrs that should trigger a reprocessing events
+        """
+        return {}
+
 @dataclass
 class RTTConfig(ExperimentalConfig):
     chop_size_ms: int = 1000
     load_covariates: bool = False
+
+    def reproc_dict(self):
+        return {'chop_size_ms': self.chop_size_ms}
 
 @dataclass
 class MazeConfig(ExperimentalConfig):
@@ -194,6 +206,14 @@ class MazeConfig(ExperimentalConfig):
     pretrial_time_s: float = 0.25
     posttrial_time_s: float = 0.1
     max_length_ms: int = 1000
+
+    def reproc_dict(self):
+        return {
+            'chop_size_ms': self.chop_size_ms,
+            'max_length_ms': self.max_length_ms,
+            'pretrial_time_s': self.pretrial_time_s,
+            'posttrial_time_s': self.posttrial_time_s,
+        }
 
 @dataclass
 class NLBConfig(ExperimentalConfig):

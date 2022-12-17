@@ -131,7 +131,8 @@ class SpikingDataset(Dataset):
             'bin_size_ms': self.cfg.bin_size_ms
         }
         task_cfg = getattr(self.cfg, task.value)
-        version.update(OmegaConf.to_container(task_cfg, resolve=True))
+        version.update(task_cfg.reproc_dict())
+        # version.update(OmegaConf.to_container(task_cfg, resolve=True))
         return version
 
     def checksum_diff(self, version_path: Path, task: ExperimentalTask):
@@ -230,7 +231,7 @@ class SpikingDataset(Dataset):
                 continue # don't serve
             if k == MetaKey.array: # doing string comparisons probably isn't the fastest thing in the world
                 def map_array(a):
-                    return self.context_index[k.name].index(a) + 1 if a else 0 # 0 is reserved for no array
+                    return self.context_index[k.name].index(a)
                 meta_items[k] = torch.tensor([
                     map_array(trial[f'array_{i}']) for i in range(self.cfg.max_arrays)
                 ])
@@ -255,16 +256,21 @@ class SpikingDataset(Dataset):
                 # for alias in trial[MetaKey.array.name]:
                 for i in range(self.cfg.max_arrays):
                     alias = trial[f'array_{i}']
-                    alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
-                    # ! Right now pad channels seems subservient to pad arrays, that doesn't seem to be necessary.
-                    array_group = torch.cat([payload[k][a] for a in alias_arrays], dim=-2) # T C' H
-                    if self.cfg.max_channels:
-                        channel_counts.append(array_group.shape[-2])
-                        array_group = torch.cat([
-                            array_group, torch.zeros((
-                                array_group.shape[0], self.cfg.max_channels - array_group.shape[-2], array_group.shape[2]
-                            ), dtype=array_group.dtype)
-                        ], -2) # T C H
+                    if alias == '': # empty
+                        # should only occur for i >= 1
+                        array_group = torch.zeros_like(array_spikes[0][:,0])
+                        channel_counts.append(torch.tensor(0))
+                    else:
+                        alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
+                        # ! Right now pad channels seems subservient to pad arrays, that doesn't seem to be necessary.
+                        array_group = torch.cat([payload[k][a] for a in alias_arrays], dim=-2) # T C' H
+                        if self.cfg.max_channels:
+                            channel_counts.append(array_group.shape[-2])
+                            array_group = torch.cat([
+                                array_group, torch.zeros((
+                                    array_group.shape[0], self.cfg.max_channels - array_group.shape[-2], array_group.shape[2]
+                                ), dtype=array_group.dtype)
+                            ], -2) # T C H
                     array_spikes.append(array_group.unsqueeze(1))
                 data_items[k] = torch.cat([
                     *array_spikes,
@@ -326,7 +332,7 @@ class SpikingDataset(Dataset):
             elif k == MetaKey.array:
                 all_arrays = sorted(
                     pd.concat(self.meta_df[f'array_{i}'] for i in range(self.cfg.max_arrays)).unique()
-                ) # This automatically includes the padding "" if it's present in df
+                ) # This automatically includes the padding "", as index 0 if it's present in df
                 context[MetaKey.array.name] = all_arrays
             else:
                 assert k in self.meta_df.columns, f"Key {k} not in metadata"

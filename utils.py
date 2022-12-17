@@ -15,7 +15,7 @@ import torch
 import itertools
 from dacite import from_dict
 
-from model import BrainBertInterface
+from model import BrainBertInterface, load_from_checkpoint
 from data import DataAttrs
 from config import RootConfig
 
@@ -62,7 +62,8 @@ def load_wandb_run(run: WandbRun, tag="val-") -> Tuple[BrainBertInterface, RootC
     del run.config['data_attrs']
     cfg: RootConfig = OmegaConf.create(create_typed_cfg(run.config)) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
     ckpt = get_latest_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag=tag)
-    model = BrainBertInterface.load_from_checkpoint(ckpt)
+    model = load_from_checkpoint(ckpt)
+    # model = BrainBertInterface.load_from_checkpoint(ckpt, cfg=cfg)
     return model, cfg, run_data_attrs
 
 def get_newest_ckpt_in_dir(ckpt_dir: Path, tag="val-"):

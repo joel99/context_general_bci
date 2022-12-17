@@ -5,7 +5,7 @@ tag: maze_nlb_ft
 defaults:
   - /model:
     - finetune
-    - nlb
+  - /model/task: nlb
   - /dataset: maze_nlb
   - /train: nlb
 model:
@@ -20,18 +20,6 @@ model:
   lr_init: 1e-3
   lr_ramp_steps: 5000
 dataset:
-  datasets:
-  - mc_maze$
   max_arrays: 1
 
-init_from_id: "maze_nlb_padded-1t9rxry3"
-
-# Unimplemented, missing elements
-# - context forward and backward
-# - fixup init, pre-norm** (plausibly most important candidate right now, but still... really? we're in a _completely_ wrong regime of overfitting right now)
-# 1. cosine lr schedule (precise warmup steps)
-# 2. mask span
-# 3. not half precision
-# 4. learnable position
-# 6. trial length cropped to 140
-# 7. grad clip, scale factor after readin
+init_from_id: "maze_nlb_padded-1yy0yiuq"

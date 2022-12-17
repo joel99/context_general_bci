@@ -169,6 +169,8 @@ class RatePrediction(TaskPipeline):
         if raw:
             return bps_raw
         bps = bps_raw[(spikes.sum(1) != 0).expand_as(bps_raw)].detach()
+        if bps.isnan().any() or bps.mean().isnan().any():
+            import pdb;pdb.set_trace() # unnatural - this should only occur if something's really wrong with data
         if mean:
             return bps.mean()
         return bps

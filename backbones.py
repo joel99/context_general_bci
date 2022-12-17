@@ -50,6 +50,27 @@ class TemporalTransformer(nn.Module):
         self.pos_encoder = PositionalEncoding(self.cfg)
         self.dropout_rate = nn.Dropout(self.cfg.dropout)
         # And implement token level etc.
+        if getattr(self.cfg, 'fixup_init', False):
+        # if self.cfg.fixup_init:
+            self.fixup_initialization()
+
+    def fixup_initialization(self):
+        r"""
+        http://www.cs.toronto.edu/~mvolkovs/ICML2020_tfixup.pdf
+        """
+        temp_state_dic = {}
+        en_layers = self.cfg.n_layers
+
+        for l in self.encoder.layers:
+            for name, param in l.named_parameters():
+                if name in ["linear1.weight",
+                            "linear2.weight",
+                            "self_attn.out_proj.weight",
+                            ]:
+                    temp_state_dic[name] = (0.67 * (en_layers) ** (- 1. / 4.)) * param
+                elif name in ["self_attn.v_proj.weight",]:
+                    temp_state_dic[name] = (0.67 * (en_layers) ** (- 1. / 4.)) * (param * (2**0.5))
+            l.load_state_dict(temp_state_dic, strict=False)
 
     @property
     def out_size(self):

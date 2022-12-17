@@ -166,7 +166,6 @@ class BrainBertInterface(pl.LightningModule):
         transfer_cfg: ModelConfig = transfer_model.cfg
         if self.cfg.task != transfer_cfg.task:
             logger.info(f'Task config updated from {transfer_cfg.task} to {self.cfg.task}')
-
         def try_transfer(module_name: str):
             if hasattr(self, module_name):
                 if hasattr(transfer_model, module_name):
@@ -186,6 +185,7 @@ class BrainBertInterface(pl.LightningModule):
             ) -> nn.Embedding:
                 if new_attrs == old_attrs:
                     try_transfer(embed_name)
+                    return
                 if not old_attrs:
                     logger.info(f'New {embed_name} weights.')
                     return
@@ -196,9 +196,7 @@ class BrainBertInterface(pl.LightningModule):
                 embed = getattr(self, embed_name)
                 for n_idx, target in enumerate(new_attrs):
                     if target in old_attrs:
-                        tar_idx = n_idx + int(embed_name == 'array_embed') # padding offset
-                        src_idx = old_attrs.index(target) + int(embed_name == 'array_embed')
-                        embed.weight.data[tar_idx] = getattr(transfer_model, embed_name).weight.data[src_idx]
+                        embed.weight.data[n_idx] = getattr(transfer_model, embed_name).weight.data[old_attrs.index(target)]
                         num_reassigned += 1
                 logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
                 if num_reassigned == 0:
@@ -461,6 +459,7 @@ class BrainBertInterface(pl.LightningModule):
         return metrics['loss']
 
     def validation_step(self, batch, batch_idx):
+        # import pdb;pdb.set_trace()
         metrics = self._step(batch)
         self.common_log(metrics, prefix='val')
         return metrics['loss']

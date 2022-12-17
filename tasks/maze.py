@@ -51,7 +51,10 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
             trial_info = nwbfile.trials
             move_begins = trial_info['move_begins_time'][:]
             move_ends = trial_info['move_ends_time'][:]
-            is_valid = ~trial_info['discard_trial'][:]
+            trial_ends = trial_info['stop_time'][:]
+            end_time_mapped = np.isnan(move_ends)
+            move_ends[end_time_mapped] = trial_ends[end_time_mapped]
+            is_valid = ~(trial_info['discard_trial'][:].astype(bool))
             spikes = nwbfile.units.to_dataframe()
             spike_intervals = spikes.obs_intervals # 1 per unit
             spike_times = spikes.spike_times # 1 per unit
@@ -63,10 +66,26 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
         # Validation
         def is_ascending(times):
             return np.all(np.diff(times) > 0)
+        reset_time = 0
+        if not is_ascending(move_begins):
+            first_nonascend = np.where(np.diff(move_begins) <= 0)[0][0]
+            logger.warning(f"Move begins not ascending, cropping to ascending {(100 * first_nonascend / len(move_begins)):.2f} %")
+            move_begins = move_begins[:first_nonascend]
+            move_ends = move_ends[:first_nonascend]
+            is_valid = is_valid[:first_nonascend]
+            reset_time = move_begins[-1]
+            # No need to crop obs_intervals, we'll naturally only index so far in
         for mua_unit in range(len(spike_times)):
             if not is_ascending(spike_times.iloc[mua_unit]) and mua_unit not in drop_units:
-                drop_units.append(mua_unit)
-                logger.warning(f"Spike times for unit {mua_unit} not ascending, blacklisting...")
+                reset_idx = (spike_times.iloc[mua_unit] > reset_time).nonzero()
+                if len(reset_idx) > 0:
+                    reset_idx = reset_idx[0][0]
+                    logger.warning(f"Spike times for unit {mua_unit} not ascending, crop to {(100 * reset_idx / len(spike_times.iloc[mua_unit])):.2f}% of spikes")
+                    spike_times.iloc[mua_unit] = spike_times.iloc[mua_unit][:reset_idx]
+                else:
+                    logger.warning(f"No reset index found for unit {mua_unit}! Skipping...")
+                    drop_units.append(mua_unit)
+                # Based on explorations, several of the datasets have repeated trials / unit times. All appear to complete/get to a fairly high point before resetting
 
 
         for t in range(len(spike_intervals)):
@@ -87,8 +106,9 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
             if start <= spike_intervals[t][0]:
                 logger.warning("Movement begins before observation interval, cropping...")
                 start = spike_intervals[t][0]
-            if end >= spike_intervals[t][1]:
-                logger.warning("Movement ends after observation interval, cropping...")
+            if end > spike_intervals[t][1]:
+                if not end_time_mapped[t]: # will definitely be true if end time mapped
+                    logger.warning("Movement ends after observation interval, cropping...")
                 end = spike_intervals[t][1]
             if math.isnan(end - start):
                 logger.warning(f"Trial {t} has NaN duration, skipping...") # this occurs irreproducibly...

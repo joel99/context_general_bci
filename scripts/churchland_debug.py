@@ -17,7 +17,10 @@ from contexts import context_registry
 # From this investigation, it seems like unit 1 is busted
 dataset_name = 'churchland_maze_jenkins-0'
 # dataset_name = 'churchland_maze_jenkins-3'
+dataset_name = 'churchland_maze_nitschke-0'
 dataset_name = 'churchland_maze_nitschke-3'
+dataset_name = 'churchland_maze_nitschke-1'
+dataset_name = 'churchland_maze_nitschke-2'
 context = context_registry.query(alias=dataset_name)
 path = context.datapath
 print(context.datapath)
@@ -45,7 +48,7 @@ print(nwbfile.intervals['trials']['discard_trial'][:].sum())
 # print(nwbfile.intervals['trials']['stop_time'][:])
 # print(len(nwbfile.intervals['trials']['start_time'][:]))
 # print(len(nwbfile.intervals['trials']['stop_time'][:]))
-# plt.plot(nwbfile.intervals['trials']['start_time'][:])
+plt.plot(nwbfile.intervals['trials']['start_time'][:])
 
 # More time intervals?
 # print(nwbfile.trials.id)
@@ -57,7 +60,7 @@ unit = 2
 # print(nwbfile.units.to_dataframe().electrode_group.unique())
 # print(nwbfile.units.spike_times)
 print(nwbfile.units.to_dataframe().obs_intervals.iloc[unit])
-# plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,0])
+plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,0])
 # plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,1])
 # plt.plot(nwbfile.units.to_dataframe().spike_times.iloc[unit])
 # print(nwbfile.units.to_dataframe().spike_times.iloc[1])
