@@ -20,7 +20,9 @@ from utils import prep_plt
 # dataset_name = 'mc_maze_small' # 107 sorted units
 dataset_name = 'mc_maze$' # 137 sorted units
 # dataset_name = 'churchland_maze_jenkins-0'
-# dataset_name = 'churchland_maze_jenkins-1'
+dataset_name = 'churchland_maze_nitschke-1'
+# dataset_name = 'churchland_maze_nitschke-3'
+dataset_name = 'churchland_maze_nitschke-2'
 # dataset_name = 'mc_rtt'
 context = context_registry.query(alias=dataset_name)
 

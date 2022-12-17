@@ -19,8 +19,8 @@ dataset_name = 'churchland_maze_jenkins-0'
 # dataset_name = 'churchland_maze_jenkins-3'
 dataset_name = 'churchland_maze_nitschke-0'
 dataset_name = 'churchland_maze_nitschke-3'
-dataset_name = 'churchland_maze_nitschke-1'
-dataset_name = 'churchland_maze_nitschke-2'
+# dataset_name = 'churchland_maze_nitschke-1'
+# dataset_name = 'churchland_maze_nitschke-2'
 context = context_registry.query(alias=dataset_name)
 path = context.datapath
 print(context.datapath)
@@ -40,7 +40,8 @@ from matplotlib import pyplot as plt
 # print(nwbfile.intervals['trials'])
 # Actually, this is the same thing as nwbfile.trials
 print(nwbfile.intervals['trials'].colnames)
-print(nwbfile.intervals['trials']['start_time'][:])
+starts = nwbfile.intervals['trials']['start_time'][:]
+print(nwbfile.intervals['trials']['discard_trial'][:][10:])
 print(nwbfile.intervals['trials']['go_cue_time'][:])
 print(nwbfile.intervals['trials']['move_begins_time'][:])
 print(nwbfile.intervals['trials']['move_ends_time'][:])

@@ -1,0 +1,20 @@
+# @package _global_
+tag: rtt_all
+
+defaults:
+  - /model: pretrain
+  - /dataset: rtt_nlb
+  - /train: pretrain
+model:
+  subject_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.token_add
+dataset:
+  data_keys:
+  - DataKey.spikes
+  meta_keys:
+  - MetaKey.unique
+  - MetaKey.session
+  - MetaKey.array
+  - MetaKey.subject
+train:
+  batch_size: 512 # ~10G

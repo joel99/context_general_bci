@@ -128,6 +128,7 @@ def run_exp(cfg : RootConfig) -> None:
     if num_workers == 0:
         logger.warning("Num workers is 0, DEBUGGING.")
     logger.info("Preparing to fit...")
+
     trainer.fit(
         model,
         DataLoader(

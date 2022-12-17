@@ -101,3 +101,28 @@ class MazeNLBDataConfig(DatasetConfig):
     nlb_maze: NLBConfig = field(default_factory=MCMazeExpConfig)
 
 cs.store(group="dataset", name="maze_nlb", node=MazeNLBDataConfig)
+
+@dataclass
+class RTTExpConfig(NLBConfig):
+    heldout_neurons: int = 32
+
+@dataclass
+class ODohertyExpConfig(RTTConfig):
+    arrays: List[str] = field(default_factory=lambda: ['Indy-M1', 'Loco-M1'])
+
+cs.store(group='dataset/nlb_rtt', name='mc_rtt', node=RTTExpConfig)
+
+@dataclass
+class RTTNLBDataConfig(DatasetConfig):
+    r"""
+        Default configuration for all maze datasets NLB fine-tuning
+    """
+    bin_size_ms: int = 5
+    datasets: List[str] = field(default_factory=lambda: ['mc_rtt', 'odoherty_rtt.*'])
+    max_channels: int = 98
+    max_arrays: int = 1
+    data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes, DataKey.heldout_spikes])
+    nlb_rtt: NLBConfig = field(default_factory=RTTExpConfig)
+    odoherty_rtt: ODohertyExpConfig = field(default_factory=ODohertyExpConfig)
+
+cs.store(group="dataset", name="rtt_nlb", node=RTTNLBDataConfig)

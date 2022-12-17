@@ -49,15 +49,20 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
         with NWBHDF5IO(datapath, 'r') as io:
             nwbfile = io.read()
             trial_info = nwbfile.trials
+            is_valid = ~(trial_info['discard_trial'][:].astype(bool))
             move_begins = trial_info['move_begins_time'][:]
             move_ends = trial_info['move_ends_time'][:]
             trial_ends = trial_info['stop_time'][:]
             end_time_mapped = np.isnan(move_ends)
             move_ends[end_time_mapped] = trial_ends[end_time_mapped]
-            is_valid = ~(trial_info['discard_trial'][:].astype(bool))
             spikes = nwbfile.units.to_dataframe()
             spike_intervals = spikes.obs_intervals # 1 per unit
             spike_times = spikes.spike_times # 1 per unit
+
+            move_begins = move_begins[is_valid]
+            move_ends = move_ends[is_valid]
+            for t in range(len(spike_intervals)):
+                spike_intervals.iloc[t] = spike_intervals.iloc[t][is_valid]
 
         meta_payload = {}
         meta_payload['path'] = []
@@ -96,8 +101,8 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
         arrays_to_use = context_arrays
         assert len(spike_times) == 192, "Expected 192 units"
         for t in range(len(move_begins)):
-            if not is_valid[t]:
-                continue
+            # if not is_valid[t]:
+            #     continue # we subset now
             if t > 0 and spike_intervals[t][0] < spike_intervals[t-1][1]:
                 logger.warning(f"Observation interval for trial {t} overlaps with previous trial, skipping...")
                 continue
@@ -108,7 +113,7 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
                 start = spike_intervals[t][0]
             if end > spike_intervals[t][1]:
                 if not end_time_mapped[t]: # will definitely be true if end time mapped
-                    logger.warning("Movement ends after observation interval, cropping...")
+                    logger.warning(f"Movement ends after observation interval, cropping... (diff = {(end - spike_intervals[t][1]):.02f}s)")
                 end = spike_intervals[t][1]
             if math.isnan(end - start):
                 logger.warning(f"Trial {t} has NaN duration, skipping...") # this occurs irreproducibly...

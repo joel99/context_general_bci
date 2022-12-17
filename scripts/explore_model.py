@@ -24,6 +24,10 @@ wandb_run = get_wandb_run("maze_nlb_padded-1t9rxry3")
 wandb_run = get_wandb_run("maze_nlb_safe-1axibgsj")
 wandb_run = get_wandb_run("maze_nlb_padded-1yy0yiuq")
 wandb_run = get_wandb_run("maze_jenkins-1k9xx5do")
+# wandb_run = get_wandb_run("maze_jenkins-3vyh3opg")
+# wandb_run = get_wandb_run("maze_med-3k1etyx1")
+wandb_run = get_wandb_run("test-blfrvcsj")
+
 model, cfg, data_attrs = load_wandb_run(wandb_run)
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
@@ -57,10 +61,10 @@ print(heldin_outputs.keys())
 test = heldin_outputs[Output.rates]
 num_trials = 1
 for trial in range(len(test)):
-    # plt.plot(test[trial,:,10])
+    plt.plot(test[trial,:,10])
     # plt.plot(test[trial][:,50])
     # plt.plot(test[trial][:,100])
-    # plt.plot(test[trial][:,60])
+    # plt.plot(test[trial][:,65])
     if trial > num_trials:
         break
 # plt.plot(test[0,:,0])

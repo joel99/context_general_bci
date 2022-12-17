@@ -416,7 +416,7 @@ class BrainBertInterface(pl.LightningModule):
         if channels is not None:
             cat_rates: List[torch.Tensor] = []
             for lograte, array_channels in zip(logrates, channels):
-                cat_rates.append(torch.cat([lograte[:, i, :array_channels] for i in range(len(array_channels))], -1))
+                cat_rates.append(torch.cat([lograte[:, i, :array_channels[i]] for i in range(len(array_channels))], -1))
             logrates = cat_rates
         else:
             logrates = [lr.squeeze(-2) for lr in logrates]
@@ -453,10 +453,10 @@ class BrainBertInterface(pl.LightningModule):
         return out
 
     # ==================== Optimization ====================
-    def common_log(self, metrics, prefix=''):
+    def common_log(self, metrics, prefix='', **kwargs):
         self.log(f'{prefix}_loss', metrics['loss'])
         for m in self.cfg.task.metrics:
-            self.log(f'{prefix}_{m}', metrics[m])
+            self.log(f'{prefix}_{m}', metrics[m], **kwargs)
 
     def training_step(self, batch, batch_idx):
         metrics = self._step(batch)
@@ -466,7 +466,7 @@ class BrainBertInterface(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # import pdb;pdb.set_trace()
         metrics = self._step(batch)
-        self.common_log(metrics, prefix='val')
+        self.common_log(metrics, prefix='val', sync_dist=True)
         return metrics['loss']
 
     def test_step(self, batch, batch_idx, transform_logrates=True):
