@@ -58,9 +58,9 @@ test = heldin_outputs[Output.rates]
 num_trials = 1
 for trial in range(len(test)):
     # plt.plot(test[trial,:,10])
-    # plt.plot(test[trial][:,50])
+    plt.plot(test[trial][:,50])
     # plt.plot(test[trial][:,100])
-    plt.plot(test[trial][:,60])
+    # plt.plot(test[trial][:,60])
     if trial > num_trials:
         break
 # plt.plot(test[0,:,0])

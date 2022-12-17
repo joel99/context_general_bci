@@ -141,9 +141,9 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
     out = {}
     for k, v in all_lists.items():
         if isinstance(v[0], torch.Tensor):
-            # try cat
+            # try stack
             if all(v2.size() == v[0].size() for v2 in v[1:]):
-                out[k] = torch.cat(v)
+                out[k] = torch.stack(v)
             else:
                 out[k] = v
         else:

@@ -409,7 +409,6 @@ class BrainBertInterface(pl.LightningModule):
         """
         # unpad logrates using LENGTH_KEY and CHANNEL_KEY
         logrates, ps = pack([logrates], 'b t * h')
-        import pdb;pdb.set_trace()
         assert channels is None or (channels == channels[0].unsqueeze(0)).all(), "Heterogenuous arrays not supported for evaluation (why would you want that anyway)"
         logrates = logrates.unbind()
         if lengths is not None:
