@@ -37,8 +37,8 @@ cs.store(group="model", name="pretrain_small", node=PretrainingSmallModelConfig)
 @dataclass
 class FinetuningModelConfig(ModelConfig):
     lr_init: float = 2e-5
-    lr_ramp_steps: int = 500 # epochs tend to be small
-    lr_decay_steps: int = 5000 # epochs tend to be small
+    lr_ramp_steps: int = 2000 # epochs tend to be small
+    lr_decay_steps: int = 10000 # epochs tend to be small
 
 cs.store(group="model", name="finetune", node=FinetuningModelConfig)
 

@@ -1,22 +1,27 @@
 # @package _global_
 tag: rtt_nlb
 
+defaults:
+  - /model: pretrain
+  - /dataset: rtt_nlb
+  - /train: pretrain
 model:
-  task:
-    task: ModelTask.infill
-  readin_strategy: EmbedStrat.token
-  lr_schedule: 'cosine_warmup'
-  lr_init: 5e-4
+  subject_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.token_add
+
   lr_ramp_steps: 500 # because tiny batches
   lr_decay_steps: 5000
 dataset:
-  bin_size_ms: 5
   datasets:
   - mc_rtt
-  max_channels: 98
-  max_arrays: 1
+  data_keys:
+  - DataKey.spikes
+  meta_keys:
+  - MetaKey.unique
+  - MetaKey.session
+  - MetaKey.array
+  - MetaKey.subject
 train:
   epochs: 50000
-  batch_size: 128 # batch size reduced here since there's only ~1K trials
-  patience: 500 # smaller batches
-  # batch_size: 512
+  batch_size: 128 # ~10G
+  patience: 500

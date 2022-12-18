@@ -33,6 +33,8 @@ class BrainBertInterface(pl.LightningModule):
         self.data_attrs = data_attrs
         self.bind_io()
 
+        self.novel_params: List[str] = [] # for fine-tuning
+
     def diff_cfg(self, cfg: ModelConfig):
         r"""
             Check if cfg is different from current cfg (used when initing)
@@ -49,6 +51,7 @@ class BrainBertInterface(pl.LightningModule):
             'lr_ramp_init_factor',
             'lr_decay_steps',
             'lr_min',
+            # 'accelerate_new_params'
         ]:
             setattr(self_copy, safe_attr, getattr(cfg, safe_attr))
 
@@ -156,6 +159,15 @@ class BrainBertInterface(pl.LightningModule):
             ) for k in [self.cfg.task.task]
         })
 
+    def _wrap_key(self, prefix, key):
+        return f'{prefix}.{key}'
+
+    def _wrap_keys(self, prefix, named_params):
+        out = []
+        for n, p in named_params:
+            out.append(self._wrap_key(prefix, n))
+        return out
+
     def transfer_io(self, transfer_model: pl.LightningModule):
         r"""
             The logger messages are told from the perspective of a model that is being transferred to (but in practice, this model has been initialized and contains new weights already)
@@ -167,14 +179,20 @@ class BrainBertInterface(pl.LightningModule):
         if self.cfg.task != transfer_cfg.task:
             logger.info(f'Task config updated from {transfer_cfg.task} to {self.cfg.task}')
         def try_transfer(module_name: str):
-            if hasattr(self, module_name):
-                if hasattr(transfer_model, module_name):
-                    if isinstance(getattr(self, module_name), nn.Parameter):
-                        getattr(self, module_name).data = getattr(transfer_model, module_name).data
+            if (module := getattr(self, module_name, None)) is not None:
+                if (transfer_module := getattr(transfer_model, module_name, None)) is not None:
+                    if isinstance(module, nn.Parameter):
+                        assert module.data.shape == transfer_module.data.shape
+                        # Currently will fail for array flag transfer, no idea what the right policy is right now
+                        module.data = transfer_module.data
                     else:
-                        getattr(self, module_name).load_state_dict(getattr(transfer_model, module_name).state_dict())
+                        module.load_state_dict(transfer_module.state_dict())
                     logger.info(f'Transferred {module_name} weights.')
                 else:
+                    if isinstance(module, nn.Parameter):
+                        self.novel_params.append(self._wrap_key(module_name, module_name))
+                    else:
+                        self.novel_params.extend(self._wrap_keys(module_name, module.named_parameters()))
                     logger.info(f'New {module_name} weights.')
 
         if self.data_attrs != transfer_data_attrs:
@@ -186,21 +204,25 @@ class BrainBertInterface(pl.LightningModule):
                 if new_attrs == old_attrs:
                     try_transfer(embed_name)
                     return
+                embed = getattr(self, embed_name)
                 if not old_attrs:
+                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
                     logger.info(f'New {embed_name} weights.')
                     return
                 if not new_attrs:
                     logger.warning(f"No {embed_name} provided in new model despite old model dependency. HIGH CHANCE OF ERROR.")
                     return
                 num_reassigned = 0
-                embed = getattr(self, embed_name)
                 for n_idx, target in enumerate(new_attrs):
                     if target in old_attrs:
                         embed.weight.data[n_idx] = getattr(transfer_model, embed_name).weight.data[old_attrs.index(target)]
                         num_reassigned += 1
                 logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
                 if num_reassigned == 0:
-                    logger.error(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
+                    logger.warning(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
+                if num_reassigned < len(new_attrs):
+                    # There is no non-clunky granular parameter assignment (probably) but we don't need it either
+                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
 
             try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
             try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
@@ -217,6 +239,8 @@ class BrainBertInterface(pl.LightningModule):
             if k in transfer_model.task_pipelines:
                 logger.info(f"Transferred task pipeline {k}.")
                 self.task_pipelines[k].load_state_dict(transfer_model.task_pipelines[k].state_dict())
+            else:
+                self.novel_params.extend(self._wrap_keys(f'task_pipelines.{k}', self.task_pipelines[k].named_parameters()))
 
     def freeze_backbone(self):
         logger.info("Freezing backbone.")
@@ -479,8 +503,17 @@ class BrainBertInterface(pl.LightningModule):
 
     def configure_optimizers(self):
         scheduler = None
+        if False and self.cfg.accelerate_new_params > 1.0: # TODO bring in
+            params = self.named_parameters()
+            import pdb;pdb.set_trace()
+            grouped_params = [
+                {"params": [p for n, p in params if n in self.novel_params], 'lr': self.cfg.lr_init * self.cfg.accelerate_new_params},
+                {"params": [p for n, p in params if n not in self.novel_params], 'lr': self.cfg.lr_init},
+            ]
+        else:
+            grouped_params = self.parameters()
         optimizer = optim.AdamW(
-            self.parameters(),
+            grouped_params,
             lr=self.cfg.lr_init,
             weight_decay=self.cfg.weight_decay
         )

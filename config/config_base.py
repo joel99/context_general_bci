@@ -80,7 +80,7 @@ class EmbedStrat(Enum):
     # Embedding strategies
     none = "" # Just ignore context
     token = 'token' # Embed context as a token
-    token_add = 'token' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
+    token_add = 'token_add' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
     concat = 'concat' # concat embedding and downproject
 
     project = 'project' # just for array inputs
@@ -106,6 +106,9 @@ class ModelConfig:
     dropout: float = 0.2 # not inherited by transformer (typically just for model IO)
     # The objective. Not intended to be multitask right now; intent is pretrain/fine-tune.
     task: TaskConfig = TaskConfig()
+
+    # Speed the learning rates of parameters that are freshly initialized (intended for fine-tuning)
+    # accelerate_new_params: float = 1.0
 
     # Spike prediction tasks
     lograte: bool = True

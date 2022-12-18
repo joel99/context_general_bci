@@ -1,5 +1,5 @@
 # @package _global_
-tag: maze_jenkins_med
+tag: maze_jenkins
 
 defaults:
   - /model: pretrain

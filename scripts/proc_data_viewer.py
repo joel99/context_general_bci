@@ -23,9 +23,10 @@ dataset_name = 'mc_maze$' # 137 sorted units
 dataset_name = 'churchland_maze_nitschke-1'
 # dataset_name = 'churchland_maze_nitschke-3'
 dataset_name = 'churchland_maze_nitschke-2'
-# dataset_name = 'mc_rtt'
+dataset_name = 'mc_rtt'
+dataset_name = 'odoherty_rtt-Loco-20170215_02'
 context = context_registry.query(alias=dataset_name)
-
+print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 

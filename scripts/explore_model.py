@@ -24,14 +24,21 @@ wandb_run = get_wandb_run("maze_nlb_padded-1t9rxry3")
 wandb_run = get_wandb_run("maze_nlb_safe-1axibgsj")
 wandb_run = get_wandb_run("maze_nlb_padded-1yy0yiuq")
 wandb_run = get_wandb_run("maze_jenkins-1k9xx5do")
-# wandb_run = get_wandb_run("maze_jenkins-3vyh3opg")
-# wandb_run = get_wandb_run("maze_med-3k1etyx1")
-wandb_run = get_wandb_run("test-blfrvcsj")
+wandb_run = get_wandb_run("maze_jenkins-3vyh3opg")
+wandb_run = get_wandb_run("maze_med-3hg7jno9")
+wandb_run = get_wandb_run("maze_jenkins_only-2a0baze7")
 
+wandb_run = get_wandb_run("rtt_all-3c7obgxc")
+# wandb_run = get_wandb_run("rtt_nlb-vdvh8tbm")
+# wandb_run = get_wandb_run("maze_med-dqsze6yu")
+# wandb_run = get_wandb_run("maze_all-1dgyxzh8")
 model, cfg, data_attrs = load_wandb_run(wandb_run)
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
+# cfg.dataset.datasets = ['mc_maze$']
+# cfg.dataset.datasets = ['mc_maze_medium']
+# cfg.dataset.datasets = ['churchland_maze_jenkins-1']
 #%%
 
 dataset = SpikingDataset(cfg.dataset)
@@ -61,8 +68,8 @@ print(heldin_outputs.keys())
 test = heldin_outputs[Output.rates]
 num_trials = 1
 for trial in range(len(test)):
-    plt.plot(test[trial,:,10])
-    # plt.plot(test[trial][:,50])
+    # plt.plot(test[trial][:,10])
+    plt.plot(test[trial][:,50])
     # plt.plot(test[trial][:,100])
     # plt.plot(test[trial][:,65])
     if trial > num_trials:

@@ -24,6 +24,9 @@ dataset_name = 'mc_rtt'
 dataset_name = 'mc_maze$'
 
 wandb_id = "maze_nlb_ft-umbki5uw"
+wandb_id = "maze_jenkins_only_to_med_ft-ihy0h4yv"
+wandb_id = "maze_all_med_ft-2iln5gpm"
+wandb_id = "maze_med_ft-qetjfh2b"
 wandb_run = get_wandb_run(wandb_id)
 heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_co_bps')
 heldout_model.cfg.task.outputs = [Output.heldout_logrates]

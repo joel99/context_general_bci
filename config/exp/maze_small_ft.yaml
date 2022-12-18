@@ -1,0 +1,26 @@
+# @package _global_
+
+tag: maze_med_ft
+
+defaults:
+  - /model:
+    - finetune
+  - /model/task: nlb
+  - /dataset: maze_nlb
+  - /train: nlb
+model:
+  dropout: 0.5
+  hidden_size: 128
+  session_embed_size: 128
+  transformer:
+    n_state: 128
+    dropout: 0.5
+dataset:
+  datasets:
+  - mc_maze_small
+  max_arrays: 1
+  nlb_maze:
+    heldout_neurons: 35
+    # small is 35, large is 40
+
+init_from_id: "maze_small-TODO"
