@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: maze_med
+tag: maze_large
 
 defaults:
   - /model: pretrain_small

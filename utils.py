@@ -62,6 +62,7 @@ def load_wandb_run(run: WandbRun, tag="val-") -> Tuple[BrainBertInterface, RootC
     del run.config['data_attrs']
     cfg: RootConfig = OmegaConf.create(create_typed_cfg(run.config)) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
     ckpt = get_latest_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag=tag)
+    print(f"Loading {ckpt}")
     model = load_from_checkpoint(ckpt)
     # model = BrainBertInterface.load_from_checkpoint(ckpt, cfg=cfg)
     return model, cfg, run_data_attrs

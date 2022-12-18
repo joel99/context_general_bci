@@ -15,7 +15,7 @@ class PositionalEncoding(nn.Module):
         self.learnable = cfg.learnable_position
         if self.learnable:
             self.register_buffer('pe', position.long())
-            self.pos_embedding = nn.Embedding(cfg.max_trial_length, cfg.n_state) # So maybe it's here...?
+            self.pos_embedding = nn.Embedding(cfg.max_trial_length, cfg.n_state)
         else:
             pe = torch.zeros(cfg.max_trial_length, cfg.n_state)
             div_term = torch.exp(torch.arange(0, cfg.n_state, 2).float() * (-math.log(10000.0) / cfg.n_state))
@@ -83,7 +83,7 @@ class TemporalTransformer(nn.Module):
         temporal_context: List[torch.Tensor] = [], # TC' [B T H]
         temporal_padding_mask: Optional[torch.Tensor] = None, # B T
         array_padding_mask: Optional[torch.Tensor] = None, # B A
-        causal=True
+        causal: bool=True
     ) -> torch.Tensor: # T B H
         # testing hypothesis that some src modification is making the nan untraceable?
         r"""
@@ -106,7 +106,7 @@ class TemporalTransformer(nn.Module):
 
         # src mask
         if causal:
-            import pdb;pdb.set_trace() # untested codepath
+            # import pdb;pdb.set_trace() # untested codepath
             src_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
             # Add array dimension
             src_mask = rearrange(

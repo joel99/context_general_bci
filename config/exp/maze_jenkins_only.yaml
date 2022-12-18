@@ -16,6 +16,6 @@ dataset:
   - DataKey.spikes
   max_arrays: 2
 train:
-  # accumulate_batches: 2
-  # batch_size: 128
-  batch_size: 128 # 2 GPU run
+  # comment out if 2gpu run
+  accumulate_batches: 2
+  batch_size: 128

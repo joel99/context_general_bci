@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: maze_med_ft
+tag: maze_small_ft
 
 defaults:
   - /model:
@@ -23,4 +23,4 @@ dataset:
     heldout_neurons: 35
     # small is 35, large is 40
 
-init_from_id: "maze_small-TODO"
+init_from_id: "maze_small-3nmfzurr"

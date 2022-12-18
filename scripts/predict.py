@@ -20,30 +20,27 @@ from copy import deepcopy
 
 from utils import get_latest_ckpt_from_wandb_id, get_wandb_run, load_wandb_run
 
-dataset_name = 'mc_rtt'
-dataset_name = 'mc_maze$'
+# dataset_name = 'mc_rtt'
+# dataset_name = 'mc_maze$'
 
 wandb_id = "maze_nlb_ft-umbki5uw"
 wandb_id = "maze_jenkins_only_to_med_ft-ihy0h4yv"
 wandb_id = "maze_all_med_ft-2iln5gpm"
 wandb_id = "maze_med_ft-qetjfh2b"
-wandb_run = get_wandb_run(wandb_id)
-heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_co_bps')
-heldout_model.cfg.task.outputs = [Output.heldout_logrates]
 
-cfg.dataset.data_keys = [DataKey.spikes]
-cfg.dataset.datasets = [dataset_name] # do _not_ accidentally set this as just a str
+wandb_id = "maze_med_ft_lowerlr-143pvgo3"
+wandb_id = "maze_all_large_ft-fswsqcx3"
+wandb_id = "maze_all_med_ft-1uwtb7qc" # note a previous run did substantially better than this, and had higher LR?
+wandb_id = "maze_all_small_ft-23vu306p"
 
-dataset = SpikingDataset(cfg.dataset)
-test_dataset = deepcopy(dataset)
-dataset.restrict_to_train_set()
-dataset.build_context_index()
-test_dataset.subset_by_key(['test'], key='split')
-test_dataset.build_context_index()
-
-base_run = get_wandb_run(cfg.init_from_id)
-heldin_model, *_ = load_wandb_run(base_run)
-heldin_model.cfg.task.outputs = [Output.logrates]
+ids = [
+    "maze_all_large_ft-fswsqcx3",
+    "maze_all_med_ft-1uwtb7qc",
+    "maze_all_small_ft-23vu306p"
+]
+# wandb_run = get_wandb_run(wandb_id)
+wandb_runs = [get_wandb_run(wandb_id) for wandb_id in ids]
+# heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val-')
 #%%
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
@@ -54,11 +51,6 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
         collate_fn=dataset.collater_factory()
     )
 
-dataloader = get_dataloader(dataset)
-test_dataloader = get_dataloader(test_dataset)
-
-trainer = pl.Trainer(gpus=1, default_root_dir='tmp')
-
 def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
     out = defaultdict(list)
     for batch in batch_out:
@@ -68,37 +60,59 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
         out[k] = torch.cat(v)
     return out
 
-heldin_outputs = stack_batch(trainer.predict(heldin_model, dataloader))
-heldout_outputs = stack_batch(trainer.predict(heldout_model, dataloader))
-test_heldin_outputs = stack_batch(trainer.predict(heldin_model, test_dataloader))
-test_heldout_outputs = stack_batch(trainer.predict(heldout_model, test_dataloader))
-# print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
-# print(heldout_outputs[Output.heldout_rates].max(), heldout_outputs[Output.heldout_rates].mean())
-# print(test_heldout_outputs[Output.heldout_rates].max(), test_heldout_outputs[Output.heldout_rates].mean())
+def create_submission_dict(wandb_run):
+    heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_co_bps')
+    heldout_model.cfg.task.outputs = [Output.heldout_logrates]
+
+    cfg.dataset.data_keys = [DataKey.spikes]
+    # cfg.dataset.datasets = [dataset_name] # do _not_ accidentally set this as just a str
+
+    dataset = SpikingDataset(cfg.dataset)
+    test_dataset = deepcopy(dataset)
+    dataset.restrict_to_train_set()
+    dataset.build_context_index()
+    test_dataset.subset_by_key(['test'], key='split')
+    test_dataset.build_context_index()
+
+    base_run = get_wandb_run(cfg.init_from_id)
+    heldin_model, *_ = load_wandb_run(base_run)
+    heldin_model.cfg.task.outputs = [Output.logrates]
+
+    dataloader = get_dataloader(dataset)
+    test_dataloader = get_dataloader(test_dataset)
+
+    trainer = pl.Trainer(gpus=1, default_root_dir='tmp')
+    heldin_outputs = stack_batch(trainer.predict(heldin_model, dataloader))
+    heldout_outputs = stack_batch(trainer.predict(heldout_model, dataloader))
+    test_heldin_outputs = stack_batch(trainer.predict(heldin_model, test_dataloader))
+    test_heldout_outputs = stack_batch(trainer.predict(heldout_model, test_dataloader))
+    return dataset.cfg.datasets[0], {
+        'train_rates_heldin': heldin_outputs[Output.rates].squeeze(2).numpy(),
+        'train_rates_heldout': heldout_outputs[Output.heldout_rates].numpy(),
+        'eval_rates_heldin': test_heldin_outputs[Output.rates].squeeze(2).numpy(),
+        'eval_rates_heldout': test_heldout_outputs[Output.heldout_rates].numpy(),
+    }
 
 #%%
-print(heldin_outputs[Output.rates].shape)
-test = heldin_outputs[Output.rates].squeeze(2).numpy()
-test = test_heldin_outputs[Output.rates].squeeze(2).numpy()
-test = test_heldout_outputs[Output.heldout_rates].numpy()
+submit_dict = create_submission_dict(wandb_runs[0])
+# test = heldin_outputs[Output.rates].squeeze(2).numpy()
+# test = test_heldin_outputs[Output.rates].squeeze(2).numpy()
+test = submit_dict['eval_rates_heldout']
 for trial in range(len(test)):
-    plt.plot(test[trial,:,0])
+    plt.plot(test[trial,:,20])
+    # plt.plot(test[trial,:,10])
     if trial > 5:
         break
 # plt.plot(test[0,:,0])
 print("done")
 #%%
 # Create spikes for NLB submission https://github.com/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb
-dataset_name = dataset.cfg.datasets[0]
 suffix = '' # no suffix needed for 5ms submissions
-output_dict = {
-    dataset_name + suffix: {
-        'train_rates_heldin': heldin_outputs[Output.rates].squeeze(2).numpy(),
-        'train_rates_heldout': heldout_outputs[Output.heldout_rates].numpy(),
-        'eval_rates_heldin': test_heldin_outputs[Output.rates].squeeze(2).numpy(),
-        'eval_rates_heldout': test_heldout_outputs[Output.heldout_rates].numpy(),
-    }
-}
+output_dict = {}
+for r in wandb_runs:
+    dataset_name, payload = create_submission_dict(r)
+    output_dict[dataset_name] = payload
+
 print(output_dict.keys())
 print(output_dict[dataset_name + suffix].keys()) # sanity check
 # for rtt, expected shapes are 1080 / 272, 120, 98 / 32

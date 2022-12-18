@@ -108,7 +108,7 @@ class ModelConfig:
     task: TaskConfig = TaskConfig()
 
     # Speed the learning rates of parameters that are freshly initialized (intended for fine-tuning)
-    # accelerate_new_params: float = 1.0
+    accelerate_new_params: float = 1.0
 
     # Spike prediction tasks
     lograte: bool = True

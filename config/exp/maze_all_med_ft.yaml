@@ -24,6 +24,6 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 train:
-  batch_size: 64 # 2 gpus
+  batch_size: 32 # 2 gpus
 
-init_from_id: "maze_all-TODO"
+init_from_id: "maze_all-307jsaky"

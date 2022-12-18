@@ -5,7 +5,7 @@ import torch
 from torch import nn, optim
 import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack, unpack # baby steps...
-
+from omegaconf import OmegaConf
 import logging
 
 from config import (
@@ -29,17 +29,27 @@ class BrainBertInterface(pl.LightningModule):
         super().__init__() # store cfg
         self.save_hyperparameters(logger=False)
         self.cfg = cfg
-        self.backbone = TemporalTransformer(self.cfg.transformer)
         self.data_attrs = data_attrs
+        self.backbone = TemporalTransformer(self.cfg.transformer)
+        self.backbone = torch.jit.script(self.backbone)
+        # , example_inputs=[
+        #     torch.rand(10, self.cfg.transformer.max_trial_length, self.data_attrs.max_arrays, self.cfg.transformer.n_state),
+        #     [torch.rand(10, self.cfg.transformer.n_state)],
+        #     [torch.rand(10, self.cfg.transformer.max_trial_length, self.cfg.transformer.n_state)],
+        #     torch.rand(10, self.cfg.transformer.max_trial_length),
+        #     torch.rand(10, self.data_attrs.max_arrays),
+        #     False
+        # ])
         self.bind_io()
 
         self.novel_params: List[str] = [] # for fine-tuning
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
-            Check if cfg is different from current cfg (used when initing)
+            Check if new cfg is different from current cfg (used when initing)
         """
         self_copy = self.cfg.copy()
+        self_copy = OmegaConf.merge(ModelConfig(), self_copy) # backport novel config
         # Things that are allowed to change on init (actually most things should be allowed to change, but just register them explicitly here as needed)
         for safe_attr in [
             'task',
@@ -51,7 +61,7 @@ class BrainBertInterface(pl.LightningModule):
             'lr_ramp_init_factor',
             'lr_decay_steps',
             'lr_min',
-            # 'accelerate_new_params'
+            'accelerate_new_params'
         ]:
             setattr(self_copy, safe_attr, getattr(cfg, safe_attr))
 
@@ -503,7 +513,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def configure_optimizers(self):
         scheduler = None
-        if False and self.cfg.accelerate_new_params > 1.0: # TODO bring in
+        if self.cfg.accelerate_new_params > 1.0: # TODO bring in
             params = self.named_parameters()
             import pdb;pdb.set_trace()
             grouped_params = [

@@ -1,18 +1,15 @@
 # @package _global_
-
 tag: test
 
 defaults:
-  - /model:
-    - finetune
+  - /model: finetune
   - /model/task: nlb
   - /dataset: maze_nlb
   - /train: nlb
+
 model:
-  subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
-  lr_init: 1e-3
-  lr_ramp_steps: 5000
+  accelerate_new_params: 10.0
 dataset:
   datasets:
   - mc_maze_medium
@@ -20,12 +17,5 @@ dataset:
   nlb_maze:
     heldout_neurons: 38
     # small is 35, large is 40
-  meta_keys:
-  - MetaKey.unique
-  - MetaKey.session
-  - MetaKey.array
-  - MetaKey.subject
-train:
-  batch_size: 64 # 2 gpus
 
-init_from_id: "maze_all-1dgyxzh8"
+init_from_id: "maze_jenkins_only-2a0baze7"
