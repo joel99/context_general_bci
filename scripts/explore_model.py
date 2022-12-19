@@ -32,6 +32,7 @@ wandb_run = get_wandb_run("rtt_all-3c7obgxc")
 # wandb_run = get_wandb_run("rtt_nlb-vdvh8tbm")
 # wandb_run = get_wandb_run("maze_med-dqsze6yu")
 # wandb_run = get_wandb_run("maze_all-1dgyxzh8")
+wandb_run = get_wandb_run("rtt_nlb-vdvh8tbm")
 model, cfg, data_attrs = load_wandb_run(wandb_run)
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]

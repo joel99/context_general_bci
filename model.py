@@ -31,7 +31,7 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg = cfg
         self.data_attrs = data_attrs
         self.backbone = TemporalTransformer(self.cfg.transformer)
-        self.backbone = torch.jit.script(self.backbone)
+        # self.backbone = torch.jit.script(self.backbone)
         # , example_inputs=[
         #     torch.rand(10, self.cfg.transformer.max_trial_length, self.data_attrs.max_arrays, self.cfg.transformer.n_state),
         #     [torch.rand(10, self.cfg.transformer.n_state)],
@@ -513,7 +513,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def configure_optimizers(self):
         scheduler = None
-        if self.cfg.accelerate_new_params > 1.0: # TODO bring in
+        if self.cfg.accelerate_new_params > 1.0:
             params = self.named_parameters()
             import pdb;pdb.set_trace()
             grouped_params = [
@@ -522,7 +522,13 @@ class BrainBertInterface(pl.LightningModule):
             ]
         else:
             grouped_params = self.parameters()
-        optimizer = optim.AdamW(
+        try:
+            from apex.optimizers import FusedAdam
+            optimizer_cls = FusedAdam # In JY's experience, about 5% speedup on 3090 in PT 1.13
+        except ImportError:
+            logger.info("Didn't find Apex optimizer, defaulting to Pytorch AdamW")
+            optimizer_cls = optim.AdamW
+        optimizer = optimizer_cls(
             grouped_params,
             lr=self.cfg.lr_init,
             weight_decay=self.cfg.weight_decay

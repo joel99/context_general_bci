@@ -13,22 +13,25 @@ class PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(p=cfg.dropout)
         position = torch.arange(0, cfg.max_trial_length, dtype=torch.float).unsqueeze(1)
         self.learnable = cfg.learnable_position
+        # if self.learnable:
+        #     self.register_buffer('pe', position.long())
+        #     self.pos_embedding = nn.Embedding(cfg.max_trial_length, cfg.n_state)
+        # else:
+        pe = torch.zeros(cfg.max_trial_length, cfg.n_state)
+        div_term = torch.exp(torch.arange(0, cfg.n_state, 2).float() * (-math.log(10000.0) / cfg.n_state))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(1) # t x 1 x d
+        self.register_buffer('pe', pe)
         if self.learnable:
-            self.register_buffer('pe', position.long())
-            self.pos_embedding = nn.Embedding(cfg.max_trial_length, cfg.n_state)
-        else:
-            pe = torch.zeros(cfg.max_trial_length, cfg.n_state)
-            div_term = torch.exp(torch.arange(0, cfg.n_state, 2).float() * (-math.log(10000.0) / cfg.n_state))
-            pe[:, 0::2] = torch.sin(position * div_term)
-            pe[:, 1::2] = torch.cos(position * div_term)
-            pe = pe.unsqueeze(1) # t x 1 x d
-            self.register_buffer('pe', pe)
+            self.pe = nn.Parameter(self.pe)
 
     def forward(self, x: torch.Tensor, batch_first=True):
-        if self.learnable:
-            pos_embed = self.pos_embedding(self.pe) # t 1 d
-        else:
-            pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
+        # if self.learnable:
+        #     pos_embed = self.pos_embedding(self.pe) # t 1 d
+        # else:
+        #     pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
+        pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
         x = x + rearrange(pos_embed, 't b d -> b t 1 d' if batch_first else 't b d -> t b 1 d')
         return self.dropout(x)
 
@@ -36,16 +39,19 @@ class TemporalTransformer(nn.Module):
     def __init__(self, config: TransformerConfig):
         super().__init__()
         self.cfg = config
-        self.encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                self.cfg.n_state,
-                self.cfg.n_heads,
-                dim_feedforward=int(self.cfg.n_state * self.cfg.feedforward_factor),
-                dropout=self.cfg.dropout,
-                batch_first=False, # we use this to stick to pytorch defaults. Who knows if it's more efficient internally? But closer to docs.
-                activation=self.cfg.activation,
-            ),
-            self.cfg.n_layers,
+        # self.encoder = torch.jit.script( # In a basic timing test, this didn't appear faster. Built-in transformer likely already very fast.
+        self.encoder = (
+                nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    self.cfg.n_state,
+                    self.cfg.n_heads,
+                    dim_feedforward=int(self.cfg.n_state * self.cfg.feedforward_factor),
+                    dropout=self.cfg.dropout,
+                    batch_first=False, # we use this to stick to pytorch defaults. Who knows if it's more efficient internally? But closer to docs.
+                    activation=self.cfg.activation,
+                ),
+                self.cfg.n_layers,
+            )
         )
         self.pos_encoder = PositionalEncoding(self.cfg)
         self.dropout_rate = nn.Dropout(self.cfg.dropout)
