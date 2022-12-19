@@ -10,7 +10,6 @@ from config import TransformerConfig
 class PositionalEncoding(nn.Module):
     def __init__(self, cfg: TransformerConfig):
         super().__init__()
-        self.dropout = nn.Dropout(p=cfg.dropout)
         position = torch.arange(0, cfg.max_trial_length, dtype=torch.float).unsqueeze(1)
         self.learnable = cfg.learnable_position
         # if self.learnable:
@@ -32,8 +31,7 @@ class PositionalEncoding(nn.Module):
         # else:
         #     pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
         pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
-        x = x + rearrange(pos_embed, 't b d -> b t 1 d' if batch_first else 't b d -> t b 1 d')
-        return self.dropout(x)
+        return rearrange(pos_embed, 't b d -> b t 1 d' if batch_first else 't b d -> t b 1 d')
 
 class TemporalTransformer(nn.Module):
     def __init__(self, config: TransformerConfig):
@@ -54,7 +52,8 @@ class TemporalTransformer(nn.Module):
             )
         )
         self.pos_encoder = PositionalEncoding(self.cfg)
-        self.dropout_rate = nn.Dropout(self.cfg.dropout)
+        self.dropout_in = nn.Dropout(self.cfg.dropout)
+        self.dropout_out = nn.Dropout(self.cfg.dropout)
         # And implement token level etc.
         if getattr(self.cfg, 'fixup_init', False):
         # if self.cfg.fixup_init:
@@ -101,7 +100,9 @@ class TemporalTransformer(nn.Module):
         """
         # import pdb;pdb.set_trace() # ! TODO need to test mixed multi-array settings
         b, t, a, h = src.size()
+        src = self.dropout_in(src)
         src = src + self.pos_encoder(src) # TODO make relative
+
         contextualized_src, ps = pack([
             src,
             *temporal_context,
@@ -181,5 +182,5 @@ class TemporalTransformer(nn.Module):
             padding_mask = None
         output = self.encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
         output = rearrange(output[: t * a], '(t a) b h -> b t a h', t=t, a=a)
-        output = self.dropout_rate(output)
+        output = self.dropout_out(output)
         return output
