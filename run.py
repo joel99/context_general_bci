@@ -25,6 +25,19 @@ from data import SpikingDataset
 from model import BrainBertInterface, load_from_checkpoint
 from utils import get_latest_ckpt_from_wandb_id
 
+r"""
+    A note on usage:
+    hydra will require config_path='config' and config_name='config' to load default.
+    They point to using overrides to merge in experimental config.
+    `python run.py +exp=test`
+    where +exp directs hydra to look for "test.yaml" in ./config/exp/
+
+    However we'd like some additional organization
+    To access subdirectory experiments, the command would look like
+    `python run.py +exp/subdir=test`
+    (As opposed to +exp=subdir/test)
+"""
+
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
     logger = logging.getLogger(__name__)
