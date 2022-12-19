@@ -14,3 +14,10 @@ dataset:
       arrays:
       - Indy-M1
       - Loco-M1
+  data_keys:
+  - DataKey.spikes
+  meta_keys:
+  - MetaKey.unique
+  - MetaKey.session
+  - MetaKey.array
+  - MetaKey.subject

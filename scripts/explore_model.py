@@ -12,27 +12,13 @@ from model import BrainBertInterface
 
 from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 
-wandb_run = wandb_query_latest('maze_med')[0]
-# wandb_run = wandb_query_latest('maze_med_lessmask')[0]
-wandb_run = get_wandb_run("maze_med-1j0loymb")
-wandb_run = get_wandb_run("maze_parity-3nv5s351")
-wandb_run = get_wandb_run("maze_parity_token-63zkce39")
-# wandb_run = get_wandb_run("maze_parity_train-25y6d5fg")
-wandb_run = get_wandb_run("maze_parity_rand-uee1ef8h")
-wandb_run = get_wandb_run("maze_parity_newrand-3qn6cpf7")
-wandb_run = get_wandb_run("maze_nlb_padded-1t9rxry3")
-wandb_run = get_wandb_run("maze_nlb_safe-1axibgsj")
-wandb_run = get_wandb_run("maze_nlb_padded-1yy0yiuq")
-wandb_run = get_wandb_run("maze_jenkins-1k9xx5do")
-wandb_run = get_wandb_run("maze_jenkins-3vyh3opg")
-wandb_run = get_wandb_run("maze_med-3hg7jno9")
-wandb_run = get_wandb_run("maze_jenkins_only-2a0baze7")
+# wandb_run = get_wandb_run("maze_med-1j0loymb")
 
-wandb_run = get_wandb_run("rtt_all-3c7obgxc")
-# wandb_run = get_wandb_run("rtt_nlb-vdvh8tbm")
-# wandb_run = get_wandb_run("maze_med-dqsze6yu")
-# wandb_run = get_wandb_run("maze_all-1dgyxzh8")
-# wandb_run = get_wandb_run("rtt_nlb-vdvh8tbm")
+query = "maze_small"
+query = "maze_med"
+# query = "maze_large"
+wandb_run = wandb_query_latest(query, exact=True)[0]
+print(wandb_run.id)
 model, cfg, data_attrs = load_wandb_run(wandb_run)
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]

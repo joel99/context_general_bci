@@ -53,8 +53,6 @@ class BrainBertInterface(pl.LightningModule):
         # Things that are allowed to change on init (actually most things should be allowed to change, but just register them explicitly here as needed)
         for safe_attr in [
             'task',
-            'weight_decay',
-            'dropout',
             'lr_init',
             'lr_schedule',
             'lr_ramp_steps',
@@ -561,6 +559,28 @@ class BrainBertInterface(pl.LightningModule):
         return out
 
 # === Model loading ===
+def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
+    r"""
+        Copy src_cfg into target_cfg
+        Motivation: Some cfg we don't want to bother repeatedly specifying; just take from the init-ing ckpt.
+        Should be mutually exclusive from `diff_cfg` list.
+    """
+    for attr in [
+        "hidden_size",
+        "activation",
+        "weight_decay",
+        "dropout",
+        "session_embed_size",
+        "session_embed_strategy",
+        "subject_embed_size",
+        "subject_embed_strategy",
+        "array_embed_size",
+        "array_embed_strategy",
+        "readin_strategy",
+        "transformer",
+    ]:
+        setattr(target_cfg, attr, getattr(src_cfg, attr))
+
 # Note - I tried coding this as an override, but PTL `save_hyperparams()` acts up (trying to the save the `self` parameter, apparently) - even when passing explicitly that I just want to save `cfg` and `data_attrs`.
 def load_from_checkpoint(checkpoint_path: str, cfg: ModelConfig | None = None, data_attrs: DataAttrs | None = None):
     r"""
@@ -578,6 +598,7 @@ def load_from_checkpoint(checkpoint_path: str, cfg: ModelConfig | None = None, d
     if cfg is None and data_attrs is None:
         return old_model
     if cfg is not None:
+        transfer_cfg(src_cfg=old_model.cfg, target_cfg=cfg)
         if old_model.diff_cfg(cfg):
             raise Exception("Unsupported config diff")
     else:

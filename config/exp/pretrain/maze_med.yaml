@@ -9,3 +9,7 @@ defaults:
 dataset:
   datasets:
   - mc_maze_med
+model:
+  dropout: 0.7
+  transformer:
+    dropout: 0.7

@@ -166,7 +166,7 @@ class ODohertyExpConfig(RTTConfig):
 cs.store(group='dataset/nlb_rtt', name='mc_rtt', node=RTTExpConfig)
 
 @dataclass
-class RTTNLBDataConfig(DatasetConfig):
+class RTTDataConfig(DatasetConfig):
     r"""
         Default configuration for all maze datasets NLB fine-tuning
     """
@@ -178,4 +178,4 @@ class RTTNLBDataConfig(DatasetConfig):
     nlb_rtt: NLBConfig = field(default_factory=RTTExpConfig)
     odoherty_rtt: ODohertyExpConfig = field(default_factory=ODohertyExpConfig)
 
-cs.store(group="dataset", name="rtt_nlb", node=RTTNLBDataConfig)
+cs.store(group="dataset", name="rtt", node=RTTDataConfig)
