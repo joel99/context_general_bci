@@ -3,23 +3,9 @@ tag: maze_all
 
 defaults:
   - /model: pretrain
-  - /dataset: maze_nlb
+  - /dataset: maze
   - /train: pretrain
 
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
-dataset:
-  datasets:
-  - churchland_maze_*
-  - mc_maze.*
-  data_keys:
-  - DataKey.spikes
-  max_arrays: 2
-  meta_keys:
-  - MetaKey.unique
-  - MetaKey.session
-  - MetaKey.array
-  - MetaKey.subject
-train:
-  batch_size: 128 # x2 GPU

@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: maze_small
+tag: maze_main
 
 defaults:
   - /model: pretrain_small
@@ -8,4 +8,4 @@ defaults:
   - /train: nlb
 dataset:
   datasets:
-  - mc_maze_small
+  - mc_maze$

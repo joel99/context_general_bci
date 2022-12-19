@@ -2,18 +2,13 @@
 tag: rtt_nlb
 
 defaults:
-  - /model: pretrain
+  - /model: pretrain_small
   - /dataset: rtt_nlb
-  - /train: pretrain
+  - /train: nlb
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
-
-  lr_ramp_steps: 500 # because tiny batches
-  lr_decay_steps: 5000
 dataset:
-  datasets:
-  - mc_rtt
   data_keys:
   - DataKey.spikes
   meta_keys:
@@ -21,7 +16,3 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-train:
-  epochs: 50000
-  batch_size: 128 # ~10G
-  patience: 500

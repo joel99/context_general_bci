@@ -3,7 +3,7 @@ tag: maze_jenkins_only
 
 defaults:
   - /model: pretrain
-  - /dataset: maze_nlb
+  - /dataset: maze
   - /train: pretrain
 
 model:
@@ -11,11 +11,7 @@ model:
 dataset:
   datasets:
   - churchland_maze_jenkins.*
-  # - mc_maze$
-  data_keys:
-  - DataKey.spikes
-  max_arrays: 2
-train:
-  # comment out if 2gpu run
-  accumulate_batches: 2
-  batch_size: 128
+  meta_keys:
+  - MetaKey.unique
+  - MetaKey.array
+  - MetaKey.session

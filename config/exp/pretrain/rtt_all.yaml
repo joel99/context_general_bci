@@ -3,18 +3,14 @@ tag: rtt_all
 
 defaults:
   - /model: pretrain
-  - /dataset: rtt_nlb
+  - /dataset: rtt
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
+
 dataset:
-  data_keys:
-  - DataKey.spikes
-  meta_keys:
-  - MetaKey.unique
-  - MetaKey.session
-  - MetaKey.array
-  - MetaKey.subject
-train:
-  batch_size: 512 # ~10G
+  odoherty_rtt:
+      arrays:
+      - Indy-M1
+      - Loco-M1

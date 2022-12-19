@@ -14,6 +14,15 @@ cs = ConfigStore.instance()
 class InfillTaskConfig(TaskConfig):
     task: ModelTask = ModelTask.infill
 
+@dataclass
+class SmallTransformerConfig(TransformerConfig):
+    n_state: int = 128
+    dropout: float = 0.6
+
+@dataclass
+class SmallTransformerConfigLessDrop(TransformerConfig):
+    n_state: int = 128
+    dropout: float = 0.5
 
 @dataclass
 class PretrainingModelConfig(ModelConfig):
@@ -25,13 +34,27 @@ class PretrainingModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_ramp_steps: int = 500
     lr_decay_steps: int = 10000
+    dropout: float = 0.5
+    hidden_size: int = 128
+    session_embed_size: int = 128
+    subject_embed_size: int = 128
+    array_embed_size: int = 128
+    transformer: TransformerConfig = field(default_factory=SmallTransformerConfigLessDrop)
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
+
 
 @dataclass
 class PretrainingSmallModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_ramp_steps: int = 3000
     lr_decay_steps: int = 100000
+    dropout: float = 0.6
+    hidden_size: int = 128
+    session_embed_size: int = 128
+    subject_embed_size: int = 128
+    array_embed_size: int = 128
+    transformer: TransformerConfig = field(default_factory=SmallTransformerConfig)
+
 cs.store(group="model", name="pretrain_small", node=PretrainingSmallModelConfig)
 
 @dataclass
@@ -58,7 +81,7 @@ cs.store(group="model", name="nlb", node=NLBModelConfig)
 @dataclass
 class PretrainConfig(TrainConfig):
     epochs: int = 10000
-    batch_size: int = 256
+    batch_size: int = 128
     patience: int = 100
 cs.store(group="train", name="pretrain", node=PretrainConfig)
 
@@ -66,10 +89,24 @@ cs.store(group="train", name="pretrain", node=PretrainConfig)
 class NLBTrainConfig(TrainConfig):
     epochs: int = 50000 # epochs tend to be small
     batch_size: int = 128
-    patience: int = 500
+    patience: int = 3000
 
 cs.store(group="train", name="nlb", node=NLBTrainConfig)
 cs.store(group="train", name="small", node=NLBTrainConfig) # alias
+
+@dataclass
+class RTTDataConfig(DatasetConfig):
+    r"""
+        Default configuration for all RTT datasets
+    """
+    bin_size_ms: int = 5
+    datasets: List[str] = field(default_factory=lambda: ['mc_rtt', 'odoherty_rtt.*'])
+    max_channels: int = 98
+    data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
+    max_arrays: int = 1
+    meta_keys: List[MetaKey] = field(default_factory=lambda: [
+        MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session,
+    ])
 
 @dataclass
 class RTTNLBDataConfig(DatasetConfig):
@@ -90,9 +127,25 @@ class MCMazeExpConfig(NLBConfig):
 cs.store(group='dataset/nlb_maze', name='mc_maze', node=MCMazeExpConfig)
 
 @dataclass
+class MazeDataConfig(DatasetConfig):
+    r"""
+        Default configuration for all maze datasets
+    """
+    bin_size_ms: int = 5
+    datasets: List[str] = field(default_factory=lambda: ['mc_maze.*', 'churchland_maze_*'])
+    max_channels: int = 137
+    data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
+    nlb_maze: NLBConfig = field(default_factory=MCMazeExpConfig)
+    max_arrays: int = 2
+    meta_keys: List[MetaKey] = field(default_factory=lambda: [
+        MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session,
+    ])
+cs.store(group="dataset", name="maze", node=MazeDataConfig)
+
+@dataclass
 class MazeNLBDataConfig(DatasetConfig):
     r"""
-        Default configuration for all maze datasets NLB fine-tuning
+        Default configuration for NLB-dataset pretrain or fine-tuning
     """
     bin_size_ms: int = 5
     datasets: List[str] = field(default_factory=lambda: ['mc_maze$'])
