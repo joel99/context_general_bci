@@ -13,7 +13,7 @@ dataset:
   nlb_maze:
     heldout_neurons: 35
     # small is 35, large is 40
-init_from_id: "maze_small-1kg4z08e"
+init_from_id: "maze_small-10yen8z6"
 # Needs accomodation for tiny batches
 train:
   batch_size: 32

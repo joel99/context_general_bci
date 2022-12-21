@@ -85,6 +85,8 @@ class RatePrediction(TaskPipeline):
             data_attrs=data_attrs
         )
         decoder_layers = [
+            nn.Linear(backbone_out_size, backbone_out_size),
+            nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
             nn.Linear(backbone_out_size, channel_count)
         ]
 
@@ -246,6 +248,16 @@ class NextStepPrediction(TaskPipeline):
         raise NotImplementedError
 
 class ICMSNextStepPrediction(NextStepPrediction):
+    does_update_root = True
+    def update_batch(self, batch: Dict[str, torch.Tensor]):
+        # Remove final timestep, prepend "initial" quiet recording (for causal)
+        spikes = batch[DataKey.spikes]
+        spikes = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
+        batch.update({
+            DataKey.spikes: spikes
+        })
+        return batch
+
     def get_temporal_context(self, batch: Dict[str, torch.Tensor]):
         parent = super().get_temporal_context(batch)
         return [*parent, batch[DataKey.stim]]

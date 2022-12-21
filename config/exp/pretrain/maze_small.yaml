@@ -10,6 +10,8 @@ dataset:
   datasets:
   - mc_maze_small
 model:
-  dropout: 0.85
+  dropout: 0.65
   transformer:
-    dropout: 0.85
+    dropout: 0.65
+train:
+  patience: 6000

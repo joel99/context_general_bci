@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: maze_med
+tag: maze_med_08
 
 defaults:
   - /model: pretrain_small
@@ -15,9 +15,9 @@ dataset:
   - DataKey.spikes
   - DataKey.heldout_spikes
 model:
-  dropout: 0.7
+  dropout: 0.8
   transformer:
-    dropout: 0.7
+    dropout: 0.8
   task:
     tasks:
     - ModelTask.infill

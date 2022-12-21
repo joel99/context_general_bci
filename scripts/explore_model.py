@@ -17,9 +17,10 @@ from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 query = "maze_small"
 query = "maze_med"
 query = "maze_med_ft"
+query = "maze_small_ft"
 # query = "maze_large"
 # query = "maze_large_ft"
-query = "maze_all"
+# query = "maze_all"
 wandb_run = wandb_query_latest(query, exact=True)[0]
 print(wandb_run.id)
 model, cfg, data_attrs = load_wandb_run(wandb_run)

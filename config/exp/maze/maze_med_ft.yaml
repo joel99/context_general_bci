@@ -14,4 +14,4 @@ dataset:
     heldout_neurons: 38
     # small is 35, large is 40
 
-init_from_id: "maze_med-6jk50oqx"
+init_from_id: "maze_med-1nvnvh5j"

@@ -12,7 +12,7 @@ cs = ConfigStore.instance()
 
 @dataclass
 class InfillTaskConfig(TaskConfig):
-    task: ModelTask = ModelTask.infill
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill])
 
 @dataclass
 class SmallTransformerConfig(TransformerConfig):
@@ -67,7 +67,7 @@ cs.store(group="model", name="finetune", node=FinetuningModelConfig)
 
 @dataclass
 class NLBModelTaskConfig(TaskConfig):
-    task: ModelTask = ModelTask.heldout_decoding
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.heldout_decoding])
     metrics: List[Metric] = field(default_factory=lambda: [Metric.co_bps, Metric.block_co_bps])
     outputs: List[Output] = field(default_factory=lambda: [Output.heldout_logrates])
 

@@ -149,9 +149,10 @@ class BrainBertInterface(pl.LightningModule):
 
         self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
 
-        if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-            # TODO add readin for the stim array (similar attr)
-            raise NotImplementedError
+        for k in self.cfg.task.tasks:
+            if k == ModelTask.icms_one_step_ahead:
+                # TODO add readin for the stim array (similar attr)
+                raise NotImplementedError
 
         def get_target_size(k: ModelTask):
             if k == ModelTask.heldout_decoding:
@@ -164,7 +165,7 @@ class BrainBertInterface(pl.LightningModule):
         self.task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
                 self.backbone.out_size, get_target_size(k), self.cfg, self.data_attrs
-            ) for k in [self.cfg.task.task]
+            ) for k in self.cfg.task.tasks
         })
 
     def _wrap_key(self, prefix, key):
@@ -266,18 +267,13 @@ class BrainBertInterface(pl.LightningModule):
                 static_context: List(T') [B x H]
                 temporal_context: List(?) [B x T x H]
         """
-        spikes = torch.as_tensor(
+        state_in = torch.as_tensor(
             rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)'),
             dtype=torch.float
         )
         temporal_context = []
-        for task in [self.cfg.task.task]:
+        for task in self.cfg.task.tasks:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
-        if self.cfg.task.task == ModelTask.icms_one_step_ahead:
-            # Remove final timestep, prepend "initial" quiet recording
-            state_in = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
-        else:
-            state_in = spikes
         state_in = self.readin(state_in) # b t a h
 
         static_context = []
@@ -341,7 +337,7 @@ class BrainBertInterface(pl.LightningModule):
             temporal_context=temporal_context,
             temporal_padding_mask=temporal_padding_mask,
             array_padding_mask=array_padding_mask,
-            causal=self.cfg.task.task == ModelTask.icms_one_step_ahead,
+            causal=ModelTask.icms_one_step_ahead in self.cfg.task.tasks,
         ) # B x T x A x H
         if outputs.isnan().any(): # I have no idea why, but something in s61 or s62 throws a nan
             # And strangely, I can't repro by invoking forward again.
@@ -372,14 +368,14 @@ class BrainBertInterface(pl.LightningModule):
         num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
         assert num_updates <= 1, "Only one task pipeline should update the root"
         # import pdb;pdb.set_trace()
-        for task in [self.cfg.task.task]:
+        for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch)
 
         features = self(batch) # B T A H
 
         # Create outputs for configured task
         batch_out: Dict[str, torch.Tensor] = {}
-        for task in [self.cfg.task.task]:
+        for task in self.cfg.task.tasks:
             batch_out.update(self.task_pipelines[task.value](batch, features))
         return batch_out
 
@@ -406,12 +402,12 @@ class BrainBertInterface(pl.LightningModule):
             batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
 
         if mask:
-            assert self.cfg.task.task == ModelTask.infill
-            self.task_pipelines[self.cfg.task.task.value].update_batch(batch)
+            assert ModelTask.infill in self.cfg.task.tasks
+            self.task_pipelines[ModelTask.infill.value].update_batch(batch)
 
         features = self(batch)
         batch_out: Dict[str, torch.Tensor] = {}
-        for task in [self.cfg.task.task]:
+        for task in self.cfg.task.tasks:
             batch_out.update(
                 self.task_pipelines[task.value](batch, features, compute_metrics=False)
             )
