@@ -277,7 +277,7 @@ class TrainConfig:
     batch_size: int = 64
     patience: int = 25 # these are in units of val checks (epochs)
     log_grad: bool = False
-    gradient_clip_val: float = 0.0
+    gradient_clip_val: float = 1.0
     accumulate_batches: int = 1
     profiler: str = ""
     val_check_interval: int = 100 # these are in steps, but mostly isn't used # TODO deprecate

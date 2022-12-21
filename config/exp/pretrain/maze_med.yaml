@@ -15,9 +15,10 @@ dataset:
   - DataKey.spikes
   - DataKey.heldout_spikes
 model:
-  dropout: 0.7
+  dropout: 0.8
   transformer:
-    dropout: 0.7
+    dropout: 0.8
+    n_heads: 2
   task:
     tasks:
     - ModelTask.infill

@@ -375,8 +375,13 @@ class BrainBertInterface(pl.LightningModule):
 
         # Create outputs for configured task
         batch_out: Dict[str, torch.Tensor] = {}
+        running_loss = 0
         for task in self.cfg.task.tasks:
-            batch_out.update(self.task_pipelines[task.value](batch, features))
+            update = self.task_pipelines[task.value](batch, features)
+            if 'loss' in update:
+                running_loss = running_loss + update['loss'] # uniform weight
+            batch_out.update(update)
+        batch_out['loss'] = running_loss
         return batch_out
 
     @torch.inference_mode()

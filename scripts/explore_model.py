@@ -20,9 +20,10 @@ query = "maze_med_ft"
 query = "maze_small_ft"
 # query = "maze_large"
 # query = "maze_large_ft"
-# query = "maze_all"
-wandb_run = wandb_query_latest(query, exact=True)[0]
+query = "maze_all"
+wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
+
 model, cfg, data_attrs = load_wandb_run(wandb_run)
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
@@ -64,7 +65,7 @@ for trial in range(len(test)):
     # plt.plot(test[trial][:,8])
     # plt.plot(test[trial][:,10])
     # plt.plot(test[trial][:,11])
-    plt.plot(test[trial][:,12])
+    # plt.plot(test[trial][:,12])
     # plt.plot(test[trial][:,50])
     # plt.plot(test[trial][:,100])
     # plt.plot(test[trial][:,65])

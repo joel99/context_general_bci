@@ -37,6 +37,7 @@ r"""
     `python run.py +exp/subdir=test`
     (As opposed to +exp=subdir/test)
 """
+reset_early_stop = True # todo move into config
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
@@ -82,6 +83,10 @@ def run_exp(cfg : RootConfig) -> None:
                 min_delta=0.00005, # we can tune this lower to squeeze a bit more..
             )
         )
+        if reset_early_stop:
+            def null_load(*args):
+                return
+        callbacks[-1].load_state_dict = null_load
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
     if cfg.model.lr_schedule != "fixed":
