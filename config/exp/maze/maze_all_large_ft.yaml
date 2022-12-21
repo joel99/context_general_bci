@@ -3,14 +3,21 @@
 tag: maze_all_large_ft
 
 defaults:
-  - /model:
-    - finetune
+  - /model: finetune
   - /model/task: nlb
   - /dataset: maze_nlb
   - /train: nlb
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
+  task:
+    tasks:
+    - ModelTask.infill
+    - ModelTask.heldout_decoding
+    metrics:
+    - Metric.bps
+    - Metric.co_bps
+    - Metric.block_co_bps
 dataset:
   datasets:
   - mc_maze_large
@@ -23,7 +30,6 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-train:
-  batch_size: 32 # 2 gpus
 
-init_from_id: "maze_all-307jsaky"
+init_from_id: "maze_all-339tvoxc"
+# init_from_id: "maze_all-307jsaky"

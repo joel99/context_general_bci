@@ -16,9 +16,9 @@ from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 
 query = "maze_small"
 query = "maze_med"
-query = "maze_med_ft"
-query = "maze_small_ft"
-# query = "maze_large"
+query = "maze_large"
+# query = "maze_med_ft"
+# query = "maze_small_ft"
 # query = "maze_large_ft"
 query = "maze_all"
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -29,7 +29,8 @@ print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
-cfg.dataset.datasets = ['mc_maze_medium']
+# cfg.dataset.datasets = ['mc_maze_medium']
+cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
 #%%
 
@@ -63,7 +64,7 @@ test = heldin_outputs[Output.rates]
 num_trials = 1
 for trial in range(len(test)):
     # plt.plot(test[trial][:,8])
-    # plt.plot(test[trial][:,10])
+    plt.plot(test[trial][:,10])
     # plt.plot(test[trial][:,11])
     # plt.plot(test[trial][:,12])
     # plt.plot(test[trial][:,50])

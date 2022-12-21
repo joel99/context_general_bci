@@ -34,12 +34,14 @@ wandb_id = "maze_all_med_ft-1uwtb7qc" # note a previous run did substantially be
 wandb_id = "maze_all_small_ft-23vu306p"
 
 ids = [
-    "maze_all_large_ft-fswsqcx3",
-    "maze_all_med_ft-1uwtb7qc",
-    "maze_all_small_ft-23vu306p"
+    # "maze_all_large_ft-fswsqcx3",
+    # "maze_all_med_ft-1uwtb7qc",
+    # "maze_all_small_ft-23vu306p"
+    "maze_large-2lt96j3t",
+    "maze_med-1vdsby2m",
+    "maze_small-lj0l4nn3"
 ]
 # wandb_run = get_wandb_run(wandb_id)
-wandb_runs = [get_wandb_run(wandb_id) for wandb_id in ids]
 # heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val-')
 #%%
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
@@ -61,6 +63,7 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
     return out
 
 def create_submission_dict(wandb_run):
+    print(f"creating submission for {wandb_run.id}")
     heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_co_bps')
     heldout_model.cfg.task.outputs = [Output.heldout_logrates]
 
@@ -73,19 +76,26 @@ def create_submission_dict(wandb_run):
     dataset.build_context_index()
     test_dataset.subset_by_key(['test'], key='split')
     test_dataset.build_context_index()
-
-    base_run = get_wandb_run(cfg.init_from_id)
-    heldin_model, *_ = load_wandb_run(base_run)
-    heldin_model.cfg.task.outputs = [Output.logrates]
+    if cfg.init_from_id:
+        base_run = get_wandb_run(cfg.init_from_id)
+        heldin_model, *_ = load_wandb_run(base_run)
+        heldin_model.cfg.task.outputs = [Output.logrates]
+    else:
+        heldin_model = heldout_model
+        heldin_model.cfg.task.outputs = [Output.logrates, Output.heldout_logrates]
 
     dataloader = get_dataloader(dataset)
     test_dataloader = get_dataloader(test_dataset)
 
     trainer = pl.Trainer(gpus=1, default_root_dir='tmp')
     heldin_outputs = stack_batch(trainer.predict(heldin_model, dataloader))
-    heldout_outputs = stack_batch(trainer.predict(heldout_model, dataloader))
     test_heldin_outputs = stack_batch(trainer.predict(heldin_model, test_dataloader))
-    test_heldout_outputs = stack_batch(trainer.predict(heldout_model, test_dataloader))
+    if cfg.init_from_id:
+        heldout_outputs = stack_batch(trainer.predict(heldout_model, dataloader))
+        test_heldout_outputs = stack_batch(trainer.predict(heldout_model, test_dataloader))
+    else:
+        heldout_outputs = heldin_outputs
+        test_heldout_outputs = test_heldin_outputs
     return dataset.cfg.datasets[0], {
         'train_rates_heldin': heldin_outputs[Output.rates].squeeze(2).numpy(),
         'train_rates_heldout': heldout_outputs[Output.heldout_rates].numpy(),
@@ -94,6 +104,7 @@ def create_submission_dict(wandb_run):
     }
 
 #%%
+wandb_runs = [get_wandb_run(wandb_id) for wandb_id in ids]
 submit_dict = create_submission_dict(wandb_runs[0])
 # test = heldin_outputs[Output.rates].squeeze(2).numpy()
 # test = test_heldin_outputs[Output.rates].squeeze(2).numpy()
@@ -106,11 +117,14 @@ for trial in range(len(test)):
 # plt.plot(test[0,:,0])
 print("done")
 #%%
+wandb_runs = [get_wandb_run(wandb_id) for wandb_id in ids]
 # Create spikes for NLB submission https://github.com/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb
 suffix = '' # no suffix needed for 5ms submissions
 output_dict = {}
 for r in wandb_runs:
     dataset_name, payload = create_submission_dict(r)
+    if dataset_name == "mc_maze_med":
+        dataset_name = "mc_maze_medium"
     output_dict[dataset_name] = payload
 
 print(output_dict.keys())
