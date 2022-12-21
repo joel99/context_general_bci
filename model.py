@@ -521,8 +521,13 @@ class BrainBertInterface(pl.LightningModule):
         else:
             grouped_params = self.parameters()
         try:
-            from apex.optimizers import FusedAdam
-            optimizer_cls = FusedAdam # In JY's experience, about 5% speedup on 3090 in PT 1.13
+            # from apex.optimizers import FusedAdam
+            # optimizer_cls = FusedAdam # In JY's experience, about 5% speedup on 3090 in PT 1.13
+            # However, literally spontaneous bug emerged where this doesn't train at all. What...?
+            # And this was after successfully training and not touching anything else...?
+            # The only plausible candidate is that env deactivating and reactivating lost some apex-critical state?
+            # IDK.
+            optimizer_cls = optim.AdamW
         except ImportError:
             logger.info("Didn't find Apex optimizer, defaulting to Pytorch AdamW")
             optimizer_cls = optim.AdamW

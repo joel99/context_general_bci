@@ -16,7 +16,10 @@ from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 
 query = "maze_small"
 query = "maze_med"
+query = "maze_med_ft"
 # query = "maze_large"
+# query = "maze_large_ft"
+query = "maze_all"
 wandb_run = wandb_query_latest(query, exact=True)[0]
 print(wandb_run.id)
 model, cfg, data_attrs = load_wandb_run(wandb_run)
@@ -24,7 +27,7 @@ print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
-# cfg.dataset.datasets = ['mc_maze_medium']
+cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
 #%%
 
@@ -32,6 +35,7 @@ dataset = SpikingDataset(cfg.dataset)
 dataset.restrict_to_train_set()
 dataset.build_context_index()
 
+# model.cfg.task.outputs = [Output.heldout_logrates]
 model.cfg.task.outputs = [Output.logrates]
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
@@ -52,11 +56,15 @@ heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 print(heldin_outputs.keys())
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 
+# test = heldin_outputs[Output.heldout_rates]
 test = heldin_outputs[Output.rates]
 num_trials = 1
 for trial in range(len(test)):
+    # plt.plot(test[trial][:,8])
     # plt.plot(test[trial][:,10])
-    plt.plot(test[trial][:,50])
+    # plt.plot(test[trial][:,11])
+    plt.plot(test[trial][:,12])
+    # plt.plot(test[trial][:,50])
     # plt.plot(test[trial][:,100])
     # plt.plot(test[trial][:,65])
     if trial > num_trials:

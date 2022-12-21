@@ -22,7 +22,7 @@ class SmallTransformerConfig(TransformerConfig):
 @dataclass
 class SmallTransformerConfigLessDrop(TransformerConfig):
     n_state: int = 128
-    dropout: float = 0.5
+    dropout: float = 0.3
 
 @dataclass
 class PretrainingModelConfig(ModelConfig):
@@ -34,7 +34,7 @@ class PretrainingModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_ramp_steps: int = 500
     lr_decay_steps: int = 10000
-    dropout: float = 0.5
+    dropout: float = 0.3
     hidden_size: int = 128
     session_embed_size: int = 128
     subject_embed_size: int = 128
@@ -59,9 +59,9 @@ cs.store(group="model", name="pretrain_small", node=PretrainingSmallModelConfig)
 
 @dataclass
 class FinetuningModelConfig(ModelConfig):
-    lr_init: float = 2e-5
-    lr_ramp_steps: int = 2000 # epochs tend to be small
-    lr_decay_steps: int = 10000 # epochs tend to be small
+    lr_init: float = 5e-5
+    lr_ramp_steps: int = 4000 # epochs tend to be small
+    lr_decay_steps: int = 40000 # epochs tend to be small
 
 cs.store(group="model", name="finetune", node=FinetuningModelConfig)
 
@@ -88,8 +88,8 @@ cs.store(group="train", name="pretrain", node=PretrainConfig)
 @dataclass
 class NLBTrainConfig(TrainConfig):
     epochs: int = 50000 # epochs tend to be small
-    batch_size: int = 128
-    patience: int = 3000
+    batch_size: int = 64
+    patience: int = 4000
 
 cs.store(group="train", name="nlb", node=NLBTrainConfig)
 cs.store(group="train", name="small", node=NLBTrainConfig) # alias

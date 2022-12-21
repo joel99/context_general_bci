@@ -1,40 +1,11 @@
 # @package _global_
-
-tag: timing_test_script
+tag: maze_all
 
 defaults:
   - /model: pretrain
-  - /dataset: maze_nlb
+  - /dataset: maze
   - /train: pretrain
-model:
-  dropout: 0.5
-  hidden_size: 128
-  session_embed_size: 128
-  transformer:
-    n_state: 128
-    dropout: 0.5
-  task:
-    mask_ratio: 0.25
-  lr_init: 1e-3
-  lr_ramp_steps: 5000
-dataset:
-  datasets:
-  - churchland_maze_jenkins.*
-  data_keys:
-  - DataKey.spikes
-  max_channels: 137
-  max_arrays: 2
-train:
-  epochs: 50
-  patience: 2500 # smaller epochs
-  profiler: 'simple'
 
-# Unimplemented, missing elements
-# - context forward and backward
-# - fixup init, pre-norm** (plausibly most important candidate right now, but still... really? we're in a _completely_ wrong regime of overfitting right now)
-# 1. cosine lr schedule (precise warmup steps)
-# 2. mask span
-# 3. not half precision
-# 4. learnable position
-# 6. trial length cropped to 140
-# 7. grad clip, scale factor after readin
+model:
+  subject_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.token_add
