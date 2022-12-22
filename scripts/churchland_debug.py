@@ -53,19 +53,27 @@ plt.plot(nwbfile.intervals['trials']['start_time'][:])
 
 # More time intervals?
 # print(nwbfile.trials.id)
-
 #%%
 unit = 2
-# unit = 20
+unit = 20
+
 # unit = 1
 # print(nwbfile.units.to_dataframe().electrode_group.unique())
 # print(nwbfile.units.spike_times)
-print(nwbfile.units.to_dataframe().obs_intervals.iloc[unit])
-plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,0])
+unit_df = nwbfile.units.to_dataframe()
+obs_int = unit_df.obs_intervals.iloc[unit]
+print(unit_df.obs_intervals.iloc[unit])
+plt.plot(unit_df.obs_intervals.iloc[unit][:,0])
 # plt.plot(nwbfile.units.to_dataframe().obs_intervals.iloc[unit][:,1])
 # plt.plot(nwbfile.units.to_dataframe().spike_times.iloc[unit])
 # print(nwbfile.units.to_dataframe().spike_times.iloc[1])
-# spikes = nwbfile.units.to_dataframe().spike_times.iloc[unit]
+def unit_stats(unit):
+    spikes = unit_df.spike_times.iloc[unit]
+    observed_time = (obs_int[:, 1] - obs_int[:, 0]).sum()
+    print(f"Unit {unit} avg FR: {(len(spikes) / observed_time):.2f} Hz")
+for t in range(20):
+    unit_stats(t)
+
 #%%
 is_monotonic = lambda spikes: np.all(np.diff(spikes) >= 0)
 all_units = nwbfile.units.to_dataframe()

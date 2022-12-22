@@ -2,6 +2,7 @@
 from typing import NamedTuple, Union, Dict, List, Tuple, Any, Optional
 from typing import get_type_hints, get_args
 from collections import defaultdict
+import re
 from enum import Enum
 import os.path as osp
 from pathlib import Path
@@ -57,30 +58,45 @@ def create_typed_cfg(cfg: Dict) -> RootConfig:
 
 WandbRun = Any
 
-def load_wandb_run(run: WandbRun, tag="val-") -> Tuple[BrainBertInterface, RootConfig, DataAttrs]:
+def load_wandb_run(run: WandbRun, tag="val_loss") -> Tuple[BrainBertInterface, RootConfig, DataAttrs]:
     run_data_attrs = from_dict(data_class=DataAttrs, data=run.config['data_attrs'])
     del run.config['data_attrs']
     cfg: RootConfig = OmegaConf.create(create_typed_cfg(run.config)) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
-    ckpt = get_latest_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag=tag)
+    ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag=tag)
     print(f"Loading {ckpt}")
     model = load_from_checkpoint(ckpt)
     # model = BrainBertInterface.load_from_checkpoint(ckpt, cfg=cfg)
     return model, cfg, run_data_attrs
 
-def get_newest_ckpt_in_dir(ckpt_dir: Path, tag="val-"):
+def get_best_ckpt_in_dir(ckpt_dir: Path, tag="val_loss", higher_is_better=False):
+    if 'bps' in tag:
+        higher_is_better = True
     # Newest is best since we have early stopping callback, and modelcheckpoint only saves early stopped checkpoints (not e.g. latest)
     res = sorted(ckpt_dir.glob("*.ckpt"), key=osp.getmtime)
     res = [r for r in res if tag in r.name]
-    return res[-1]
+    if tag:
+        # names are of the form {key1}={value1}-{key2}={value2}-...-{keyn}={valuen}.ckpt
+        # write regex that parses out the value associated with the tag key
+        values = []
+        for r in res:
+            start = r.stem.find(f'{tag}=')
+            end = r.stem.find('-', start+len(tag)+2) # ignore negative
+            if end == -1:
+                end = len(r.stem)
+            values.append(float(r.stem[start+len(tag)+1:end].split('=')[-1]))
+        if higher_is_better:
+            return res[np.argmax(values)]
+        return res[np.argmin(values)]
+    return res[-1] # default to newest
 
-def get_latest_ckpt_from_wandb_id(
+def get_best_ckpt_from_wandb_id(
         wandb_project,
         wandb_id,
-        tag = ""
+        tag = "val_loss"
     ):
     wandb_id = wandb_id.split('-')[-1]
     ckpt_dir = Path(wandb_project) / wandb_id / "checkpoints" # curious, something about checkpoint dumping isn't right
-    return get_newest_ckpt_in_dir(ckpt_dir, tag=tag)
+    return get_best_ckpt_in_dir(ckpt_dir, tag=tag)
 
 def get_wandb_run(wandb_id, wandb_project='context_general_bci', wandb_user="joelye9"):
     wandb_id = wandb_id.split('-')[-1]

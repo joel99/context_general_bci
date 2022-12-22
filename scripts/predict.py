@@ -3,6 +3,9 @@ from collections import defaultdict
 from typing import Dict, List
 from omegaconf import OmegaConf
 
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+
 from matplotlib import pyplot as plt
 import seaborn as sns
 import torch
@@ -18,7 +21,7 @@ from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStra
 from contexts import context_registry
 from copy import deepcopy
 
-from utils import get_latest_ckpt_from_wandb_id, get_wandb_run, load_wandb_run
+from utils import get_wandb_run, load_wandb_run
 
 # dataset_name = 'mc_rtt'
 # dataset_name = 'mc_maze$'
@@ -37,9 +40,10 @@ ids = [
     # "maze_all_large_ft-fswsqcx3",
     # "maze_all_med_ft-1uwtb7qc",
     # "maze_all_small_ft-23vu306p"
-    "maze_large-2lt96j3t",
-    "maze_med-1vdsby2m",
-    "maze_small-lj0l4nn3"
+    # "maze_large-2lt96j3t",
+    # "maze_med-1vdsby2m",
+    # "maze_small-lj0l4nn3"
+    "rtt_nlb_07-1p6bdyja"
 ]
 # wandb_run = get_wandb_run(wandb_id)
 # heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val-')
@@ -64,7 +68,7 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
 
 def create_submission_dict(wandb_run):
     print(f"creating submission for {wandb_run.id}")
-    heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_co_bps')
+    heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_Metric.co_bps')
     heldout_model.cfg.task.outputs = [Output.heldout_logrates]
 
     cfg.dataset.data_keys = [DataKey.spikes]
@@ -78,7 +82,7 @@ def create_submission_dict(wandb_run):
     test_dataset.build_context_index()
     if cfg.init_from_id:
         base_run = get_wandb_run(cfg.init_from_id)
-        heldin_model, *_ = load_wandb_run(base_run)
+        heldin_model, *_ = load_wandb_run(base_run, tag='val_loss')
         heldin_model.cfg.task.outputs = [Output.logrates]
     else:
         heldin_model = heldout_model
@@ -103,19 +107,19 @@ def create_submission_dict(wandb_run):
         'eval_rates_heldout': test_heldout_outputs[Output.heldout_rates].numpy(),
     }
 
-#%%
-wandb_runs = [get_wandb_run(wandb_id) for wandb_id in ids]
-submit_dict = create_submission_dict(wandb_runs[0])
-# test = heldin_outputs[Output.rates].squeeze(2).numpy()
-# test = test_heldin_outputs[Output.rates].squeeze(2).numpy()
-test = submit_dict['eval_rates_heldout']
-for trial in range(len(test)):
-    plt.plot(test[trial,:,20])
-    # plt.plot(test[trial,:,10])
-    if trial > 5:
-        break
-# plt.plot(test[0,:,0])
-print("done")
+# #%%
+# wandb_runs = [get_wandb_run(wandb_id) for wandb_id in ids]
+# submit_dict = create_submission_dict(wandb_runs[0])
+# # test = heldin_outputs[Output.rates].squeeze(2).numpy()
+# # test = test_heldin_outputs[Output.rates].squeeze(2).numpy()
+# test = submit_dict['eval_rates_heldout']
+# for trial in range(len(test)):
+#     plt.plot(test[trial,:,20])
+#     # plt.plot(test[trial,:,10])
+#     if trial > 5:
+#         break
+# # plt.plot(test[0,:,0])
+# print("done")
 #%%
 wandb_runs = [get_wandb_run(wandb_id) for wandb_id in ids]
 # Create spikes for NLB submission https://github.com/neurallatents/nlb_tools/blob/main/examples/tutorials/basic_example.ipynb

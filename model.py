@@ -249,6 +249,7 @@ class BrainBertInterface(pl.LightningModule):
                 logger.info(f"Transferred task pipeline {k}.")
                 self.task_pipelines[k].load_state_dict(transfer_model.task_pipelines[k].state_dict())
             else:
+                logger.info(f"New task pipeline {k}.")
                 self.novel_params.extend(self._wrap_keys(f'task_pipelines.{k}', self.task_pipelines[k].named_parameters()))
 
     def freeze_backbone(self):
@@ -513,8 +514,7 @@ class BrainBertInterface(pl.LightningModule):
     def configure_optimizers(self):
         scheduler = None
         if self.cfg.accelerate_new_params > 1.0:
-            params = self.named_parameters()
-            import pdb;pdb.set_trace()
+            params = list(self.named_parameters())
             grouped_params = [
                 {"params": [p for n, p in params if n in self.novel_params], 'lr': self.cfg.lr_init * self.cfg.accelerate_new_params},
                 {"params": [p for n, p in params if n not in self.novel_params], 'lr': self.cfg.lr_init},
@@ -612,5 +612,24 @@ def load_from_checkpoint(checkpoint_path: str, cfg: ModelConfig | None = None, d
     if data_attrs is None:
         data_attrs = old_model.data_attrs
     new_cls = BrainBertInterface(cfg=cfg, data_attrs=data_attrs)
+    new_cls.transfer_io(old_model)
+    return new_cls
+
+def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs):
+    r"""
+        Transfer model to new cfg and data_attrs.
+        Intended to be for inference
+    """
+    if new_cfg is None and new_data_attrs is None:
+        return old_model
+    if new_cfg is not None:
+        transfer_cfg(src_cfg=old_model.cfg, target_cfg=new_cfg)
+        if old_model.diff_cfg(new_cfg):
+            raise Exception("Unsupported config diff")
+    else:
+        new_cfg = old_model.cfg
+    if new_data_attrs is None:
+        new_data_attrs = old_model.data_attrs
+    new_cls = BrainBertInterface(cfg=new_cfg, data_attrs=new_data_attrs)
     new_cls.transfer_io(old_model)
     return new_cls

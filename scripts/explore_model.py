@@ -1,4 +1,11 @@
 #%%
+import logging
+import sys
+logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print
+
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+
 from matplotlib import pyplot as plt
 import seaborn as sns
 import torch
@@ -8,36 +15,39 @@ import pytorch_lightning as pl
 # Load BrainBertInterface and SpikingDataset to make some predictions
 from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
 from data import SpikingDataset, DataAttrs
-from model import BrainBertInterface
+from model import transfer_model, logger
 
 from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
-
 query = "maze_small"
 query = "maze_med"
 query = "maze_large"
 # query = "maze_med_ft"
 # query = "maze_small_ft"
 # query = "maze_large_ft"
-query = "maze_all"
+# query = "maze_all"
+query = "rtt_all"
+# query = 'rtt_nlb_07'
+
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
-model, cfg, data_attrs = load_wandb_run(wandb_run)
+# model, cfg, data_attrs = load_wandb_run(wandb_run, tag='co_bps')
+model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 print(cfg.dataset.datasets)
-# cfg.dataset.datasets = cfg.dataset.datasets[:1]
-cfg.dataset.datasets = cfg.dataset.datasets[-1:]
+cfg.dataset.datasets = cfg.dataset.datasets[:1]
+# cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_medium']
-cfg.dataset.datasets = ['mc_maze_small']
+# cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
-#%%
-
 dataset = SpikingDataset(cfg.dataset)
 dataset.restrict_to_train_set()
 dataset.build_context_index()
-
+data_attrs = dataset.get_data_attrs()
+model = transfer_model(model, model.cfg, data_attrs)
+#%%
 # model.cfg.task.outputs = [Output.heldout_logrates]
 model.cfg.task.outputs = [Output.logrates]
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
@@ -56,22 +66,29 @@ trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
 # heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 #%%
+print(data_attrs)
+#%%
+from utils import prep_plt
+
 print(heldin_outputs.keys())
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 
 # test = heldin_outputs[Output.heldout_rates]
 test = heldin_outputs[Output.rates]
-num_trials = 1
-for trial in range(len(test)):
-    # plt.plot(test[trial][:,8])
-    plt.plot(test[trial][:,10])
+print(test.shape)
+num_trials = 5
+colors = sns.color_palette("husl", num_trials)
+ax = prep_plt()
+for trial in range(num_trials):
+    plt.plot(test[trial][:,8])
+    # plt.plot(test[trial][:,10])
     # plt.plot(test[trial][:,11])
     # plt.plot(test[trial][:,12])
-    # plt.plot(test[trial][:,50])
+    # plt.plot(test[trial][:,30])
+    # ax.plot(test[trial][:,40], color=colors[trial])
     # plt.plot(test[trial][:,100])
     # plt.plot(test[trial][:,65])
-    if trial > num_trials:
-        break
+
 # plt.plot(test[0,:,0])
 print("done")
 

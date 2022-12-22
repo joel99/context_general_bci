@@ -20,11 +20,22 @@ from utils import prep_plt
 # dataset_name = 'mc_maze_small' # 107 sorted units
 dataset_name = 'mc_maze$' # 137 sorted units
 # dataset_name = 'churchland_maze_jenkins-0'
-dataset_name = 'churchland_maze_nitschke-1'
+# dataset_name = 'churchland_maze_nitschke-1'
 # dataset_name = 'churchland_maze_nitschke-3'
-dataset_name = 'churchland_maze_nitschke-2'
-dataset_name = 'mc_rtt'
-dataset_name = 'odoherty_rtt-Loco-20170215_02'
+# dataset_name = 'churchland_maze_nitschke-2'
+# dataset_name = 'churchland_maze_nitschke-3'
+
+# TODO - current inferred rates for RTT are wavy for some reason
+# dataset_name = 'mc_rtt'
+# dataset_name = 'odoherty_rtt-Loco-20170215_02'
+# dataset_name = 'odoherty_rtt-Loco-20170216_02'
+# dataset_name = 'odoherty_rtt-Loco-20170217_02'
+
+# dataset_name = 'odoherty_rtt-Indy-20160627_01'
+# dataset_name = 'odoherty_rtt-Indy-20160630_01'
+# dataset_name = 'odoherty_rtt-Indy-20160915_01'
+# dataset_name = 'odoherty_rtt-Indy-20160916_01'
+# dataset_name = 'odoherty_rtt-Indy-20160921_01'
 context = context_registry.query(alias=dataset_name)
 print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
@@ -37,9 +48,6 @@ default_cfg.datasets = [context.alias]
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
 
-#%%
-#%%
-# TODO compare with other maze datasets
 # import torch
 # lengths = []
 # for t in range(1000):
@@ -53,6 +61,16 @@ trial = 0
 
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
+
+# print diagnostics
+print(
+    f"Mean: {pop_spikes.float().mean():.2f}, "
+    f"Std: {pop_spikes.float().std():.2f}, "
+    f"Max: {pop_spikes.max():.2f}, "
+    f"Min: {pop_spikes.min():.2f}"
+    f"Shape: {pop_spikes.shape}"
+)
+
 pop_spikes = pop_spikes.flatten(1, 2)
 
 # path_to_old = './data/old_nlb/mc_maze.h5'
@@ -87,7 +105,8 @@ def plot_spikes(spikes, ax=None, vert_space=1):
     time_lim = spikes.shape[0] * dataset.cfg.bin_size_ms
     ax.set_xticks(np.linspace(0, spikes.shape[0], 5))
     ax.set_xticklabels(np.linspace(0, time_lim, 5))
-    ax.set_title(context.alias)
+    ax.set_title("Benchmark Maze (Sorted)")
+    # ax.set_title(context.alias)
     ax.set_xlabel('Time (ms)')
     ax.set_yticks([])
     return ax

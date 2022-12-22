@@ -23,7 +23,7 @@ import wandb
 from config import RootConfig, Metric
 from data import SpikingDataset
 from model import BrainBertInterface, load_from_checkpoint
-from utils import get_latest_ckpt_from_wandb_id
+from utils import get_best_ckpt_from_wandb_id
 
 r"""
     A note on usage:
@@ -54,7 +54,7 @@ def run_exp(cfg : RootConfig) -> None:
     data_attrs = dataset.get_data_attrs()
     logger.info(pformat(f"Data attributes: {data_attrs}"))
     if cfg.init_from_id:
-        init_ckpt = get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.init_from_id)
+        init_ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.init_from_id)
         logger.info(f"Initializing from {init_ckpt}")
         model = load_from_checkpoint(init_ckpt, cfg=cfg.model, data_attrs=data_attrs)
     else:
@@ -162,7 +162,7 @@ def run_exp(cfg : RootConfig) -> None:
             persistent_workers=num_workers > 0,
             collate_fn=val.collater_factory()
         ),
-        ckpt_path=get_latest_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
+        ckpt_path=get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )
     logger.info('Run complete')
 
