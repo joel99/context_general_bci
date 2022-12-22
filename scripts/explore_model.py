@@ -28,17 +28,20 @@ query = "maze_large"
 # query = "maze_small_ft"
 # query = "maze_large_ft"
 # query = "maze_all"
-query = "rtt_all"
-query = 'rtt_nlb_07'
+# query = "rtt_all"
+# query = 'rtt_nlb_07'
+query = 'rtt_all_ft_10x'
 
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
-# model, cfg, data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 cfg.dataset.datasets = cfg.dataset.datasets[:1]
+# print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
+# cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
@@ -46,7 +49,6 @@ dataset = SpikingDataset(cfg.dataset)
 dataset.restrict_to_train_set()
 dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
-#%%
 model = transfer_model(src_model, src_model.cfg, data_attrs)
 
 #%%
