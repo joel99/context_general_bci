@@ -84,6 +84,8 @@ def create_submission_dict(wandb_run):
         base_run = get_wandb_run(cfg.init_from_id)
         heldin_model, *_ = load_wandb_run(base_run, tag='val_loss')
         heldin_model.cfg.task.outputs = [Output.logrates]
+        # TODO make sure that the heldin model data attrs are transferred
+        raise NotImplementedError
     else:
         heldin_model = heldout_model
         heldin_model.cfg.task.outputs = [Output.logrates, Output.heldout_logrates]

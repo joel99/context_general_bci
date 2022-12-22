@@ -612,6 +612,7 @@ def load_from_checkpoint(checkpoint_path: str, cfg: ModelConfig | None = None, d
     if data_attrs is None:
         data_attrs = old_model.data_attrs
     new_cls = BrainBertInterface(cfg=cfg, data_attrs=data_attrs)
+    new_cls.backbone.load_state_dict(old_model.backbone.state_dict())
     new_cls.transfer_io(old_model)
     return new_cls
 
@@ -631,5 +632,6 @@ def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data
     if new_data_attrs is None:
         new_data_attrs = old_model.data_attrs
     new_cls = BrainBertInterface(cfg=new_cfg, data_attrs=new_data_attrs)
+    new_cls.backbone.load_state_dict(old_model.backbone.state_dict())
     new_cls.transfer_io(old_model)
     return new_cls

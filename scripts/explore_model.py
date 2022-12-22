@@ -18,6 +18,7 @@ from data import SpikingDataset, DataAttrs
 from model import transfer_model, logger
 
 from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
+from utils import prep_plt
 
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
 query = "maze_small"
@@ -28,14 +29,13 @@ query = "maze_large"
 # query = "maze_large_ft"
 # query = "maze_all"
 query = "rtt_all"
-# query = 'rtt_nlb_07'
+query = 'rtt_nlb_07'
 
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
 # model, cfg, data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_loss')
-print(cfg.dataset.datasets)
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 cfg.dataset.datasets = cfg.dataset.datasets[:1]
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
@@ -46,7 +46,9 @@ dataset = SpikingDataset(cfg.dataset)
 dataset.restrict_to_train_set()
 dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
-model = transfer_model(model, model.cfg, data_attrs)
+#%%
+model = transfer_model(src_model, src_model.cfg, data_attrs)
+
 #%%
 # model.cfg.task.outputs = [Output.heldout_logrates]
 model.cfg.task.outputs = [Output.logrates]
@@ -66,9 +68,6 @@ trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
 # heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 #%%
-print(data_attrs)
-#%%
-from utils import prep_plt
 
 print(heldin_outputs.keys())
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
