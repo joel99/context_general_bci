@@ -386,9 +386,9 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     @torch.inference_mode()
-    # def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=True) -> Dict[str, torch.Tensor]:
     def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=False) -> Dict[str, torch.Tensor]:
         r"""
+            Note: kind of annoying to change keywords here manually (no args can be passed in)
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
         """
@@ -503,13 +503,16 @@ class BrainBertInterface(pl.LightningModule):
         self.common_log(metrics, prefix='val', sync_dist=True)
         return metrics['loss']
 
-    def test_step(self, batch, batch_idx, transform_logrates=True):
+    def test_step(self, batch, batch_idx):
         r"""
-            Note test step isn't capable of returning non-metrics.
+            Note test step isn't capable of returning non-metrics. (use `predict` to get outputs)
         """
         metrics = self._step(batch)
+        # for m in metrics:
+        #     if isinstance(m, Metric):
+        #         print(f'{m} : {metrics[m]}')
         self.common_log(metrics, prefix='test')
-        return metrics['loss']
+        return metrics
 
     def configure_optimizers(self):
         scheduler = None

@@ -154,6 +154,8 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
     all_lists = defaultdict(list)
     for batch in batch_out:
         for k, v in batch.items():
+            if isinstance(v, float) or isinstance(v, int):
+                v = [v]
             all_lists[k].extend(v)
     out = {}
     for k, v in all_lists.items():

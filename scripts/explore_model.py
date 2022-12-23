@@ -3,9 +3,6 @@ import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print
 
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
-
 from matplotlib import pyplot as plt
 import seaborn as sns
 import torch
@@ -29,31 +26,35 @@ query = "maze_large"
 # query = "maze_large_ft"
 # query = "maze_all"
 # query = "rtt_all"
-# query = 'rtt_nlb_07'
-query = 'rtt_all_ft_10x'
+query = 'rtt_nlb_07'
+# query = 'rtt_all_ft_10x'
 
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+print(cfg)
 cfg.dataset.datasets = cfg.dataset.datasets[:1]
-# print(cfg.dataset.datasets)
+cfg.model.task.tasks = [ModelTask.infill]
+cfg.model.task.metrics = [Metric.bps]
+cfg.model.task.outputs = [Output.logrates]
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
+print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
 dataset.restrict_to_train_set()
 dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
-model = transfer_model(src_model, src_model.cfg, data_attrs)
-
+model = transfer_model(src_model, cfg.model, data_attrs)
 #%%
 # model.cfg.task.outputs = [Output.heldout_logrates]
 model.cfg.task.outputs = [Output.logrates]
+# model.cfg.task.metrics = [Metric.bps]
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,
@@ -66,12 +67,14 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
 dataloader = get_dataloader(dataset)
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
 
-# heldin_outputs = stack_batch(trainer.test(model, dataloader))
+heldin_metrics = stack_batch(trainer.test(model, dataloader))
 # heldin_outputs = stack_batch(trainer.predict(model, dataloader))
-heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+# heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+
 #%%
 
 print(heldin_outputs.keys())
+#%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 
 # test = heldin_outputs[Output.heldout_rates]
