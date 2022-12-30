@@ -509,9 +509,6 @@ class BrainBertInterface(pl.LightningModule):
         """
         # metrics = self._step(batch, eval_mode=False)
         metrics = self._step(batch, eval_mode=True)
-        # for m in metrics:
-        #     if isinstance(m, Metric):
-        #         print(f'{m} : {metrics[m]}')
         self.common_log(metrics, prefix='test')
         return metrics
 

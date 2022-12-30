@@ -30,19 +30,20 @@ query = "maze_large"
 # query = 'rtt_nlb_07'
 
 query = "rtt_indy1"
-# query = "rtt_indy2"
+query = "rtt_indy2"
 # query = "rtt_indy2_noembed"
 # query = 'rtt_all_ft_10x'
 
-wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
-# wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
+# wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
+wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 cfg.dataset.datasets = cfg.dataset.datasets[:1]
 cfg.model.task.tasks = [ModelTask.infill]
-cfg.model.task.metrics = [Metric.bps]
+cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.logrates]
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
@@ -75,7 +76,6 @@ dataloader = get_dataloader(dataset)
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
 
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
-# heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 #%%

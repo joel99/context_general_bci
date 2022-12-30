@@ -17,6 +17,7 @@ model:
     - ModelTask.infill
     metrics:
     - Metric.bps
+    - Metric.all_loss
 dataset:
   datasets:
   - odoherty_rtt-Indy-20161005_06
