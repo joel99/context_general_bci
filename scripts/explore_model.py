@@ -2,7 +2,6 @@
 import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print
-
 from matplotlib import pyplot as plt
 import seaborn as sns
 import torch
@@ -26,15 +25,21 @@ query = "maze_large"
 # query = "maze_large_ft"
 # query = "maze_all"
 # query = "rtt_all"
-query = 'rtt_nlb_07'
+# query = "rtt_all_256"
+# query = "rtt_nlb_infill_only"
+# query = 'rtt_nlb_07'
+
+query = "rtt_indy1"
+# query = "rtt_indy2"
+# query = "rtt_indy2_noembed"
 # query = 'rtt_all_ft_10x'
 
-wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
+wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
+# wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
 src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
-print(cfg)
 cfg.dataset.datasets = cfg.dataset.datasets[:1]
 cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps]
@@ -45,6 +50,8 @@ cfg.model.task.outputs = [Output.logrates]
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
+cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
 dataset.restrict_to_train_set()

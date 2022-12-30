@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_indy2
+tag: rtt_indy_nlb
 
 defaults:
   - /model: pretrain_small
@@ -17,11 +17,10 @@ model:
     - ModelTask.infill
     metrics:
     - Metric.bps
-    - Metric.all_loss
 dataset:
   datasets:
   - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161014_04
+  - mc_rtt
   data_keys:
   - DataKey.spikes
   meta_keys:

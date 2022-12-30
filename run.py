@@ -92,18 +92,19 @@ def run_exp(cfg : RootConfig) -> None:
     if cfg.model.lr_schedule != "fixed":
         callbacks.append(lr_monitor)
 
-    if Metric.co_bps in cfg.model.task.metrics:
-        callbacks.append(
-            ModelCheckpoint(
-                monitor='val_Metric.co_bps',
-                filename='val_co_bps-{epoch:02d}-{val_Metric.co_bps:.4f}',
-                save_top_k=2,
-                mode='max',
-                every_n_epochs=1,
-                # every_n_train_steps=cfg.train.val_check_interval,
-                dirpath=None
+    for m in [Metric.co_bps, Metric.bps]:
+        if m in cfg.model.task.metrics:
+            callbacks.append(
+                ModelCheckpoint(
+                    monitor=f'val_{m}',
+                    filename='val_' + m.value + '-{epoch:02d}-{val_' + str(m) + ':.4f}',
+                    save_top_k=2,
+                    mode='max',
+                    every_n_epochs=1,
+                    # every_n_train_steps=cfg.train.val_check_interval,
+                    dirpath=None
+                )
             )
-        )
 
     wandb_logger = WandbLogger(project=cfg.wandb_project)
 

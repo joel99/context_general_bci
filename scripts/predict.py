@@ -138,4 +138,6 @@ print(output_dict[dataset_name + suffix].keys()) # sanity check
 # for rtt, expected shapes are 1080 / 272, 120, 98 / 32
 print(output_dict[dataset_name + suffix]['train_rates_heldin'].shape) # should be trial x time x neuron
 # print(output_dict[dataset_name + suffix]['train_rates_heldout'])
-save_to_h5(output_dict, "submission.h5")
+# save_to_h5(output_dict, "submission.h5")
+#%%
+print(output_dict[dataset_name+suffix]['train_rates_heldin'].sum())

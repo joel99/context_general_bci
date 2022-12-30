@@ -29,6 +29,7 @@ class Metric(Enum):
     co_bps = 'co-bps'
     block_co_bps = 'block-co-bps'
     kinematic_r2 = 'kinematic_r2'
+    all_loss = 'all_loss'
 
 class Output(Enum):
     # Various keys for different vectors model produces

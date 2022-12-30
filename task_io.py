@@ -48,7 +48,7 @@ class TaskPipeline(nn.Module):
         raise NotImplementedError # Nothing in main model to use this
         return []
 
-    def update_batch(self, batch: Dict[str, torch.Tensor]):
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         r"""
             Currently redundant with get_temporal_context - need to refactor.
             It could be that this forces a one-time modification.
@@ -63,10 +63,11 @@ class TaskPipeline(nn.Module):
         raise NotImplementedError # nothing in main model to use this
         return []
 
-    def forward(self, batch, backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
+    def forward(self, batch, backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         r"""
-            If compute_metrics is False, only return outputs. (Typically used in inference)
-            Else also log metrics.
+            By default only return outputs. (Typically used in inference)
+            - compute_metrics: also return metrics.
+            - eval_mode: Run IO in eval mode (e.g. no masking)
         """
         raise NotImplementedError
 
@@ -176,11 +177,20 @@ class RatePrediction(TaskPipeline):
 
 class SelfSupervisedInfill(RatePrediction):
     does_update_root = True
-    def update_batch(self, batch: Dict[str, torch.Tensor]):
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         spikes = batch[DataKey.spikes]
+        target = spikes[..., 0]
+        if eval_mode:
+            batch.update({
+                # don't actually mask
+                'is_masked': torch.zeros(spikes.size()[:3], dtype=torch.bool, device=spikes.device),
+                'spike_target': target
+            })
+            return batch
         is_masked = torch.bernoulli(
             torch.full(spikes.size()[:3], self.cfg.mask_ratio, device=spikes.device)
         )
+
         mask_type = torch.rand_like(is_masked)
         mask_token = mask_type < self.cfg.mask_token_ratio
         mask_random = (mask_type >= self.cfg.mask_token_ratio) & (mask_type < self.cfg.mask_token_ratio + self.cfg.mask_random_ratio)
@@ -189,15 +199,13 @@ class SelfSupervisedInfill(RatePrediction):
             mask_token.bool() & is_masked,
             mask_random.bool() & is_masked,
         )
-        target = spikes[..., 0]
-        spikes = spikes.clone()
 
         b, t, a, c, _ = spikes.shape
         if LENGTH_KEY in batch:
             times = rearrange(batch[LENGTH_KEY], 'b -> b 1 1') # 1 = a
         else:
             times = torch.full((b, 1, a), t, device=spikes.device)
-
+        spikes = spikes.clone()
         if self.cfg.mask_random_shuffle:
             # How can we generate a random time if we have different bounds? Use a large number and take modulo, roughly fair
             # (note permute doesn't really work if we have ragged times, we risk shuffling in padding)
@@ -217,7 +225,7 @@ class SelfSupervisedInfill(RatePrediction):
         })
         return batch
 
-    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.logrates in self.cfg.outputs:
@@ -229,6 +237,8 @@ class SelfSupervisedInfill(RatePrediction):
         loss: torch.Tensor = self.loss(rates, spikes)
         # Infill update mask
         loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
+        if Metric.all_loss in self.cfg.metrics:
+            batch_out[Metric.all_loss] = loss[loss_mask].mean().detach()
         loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
@@ -249,7 +259,7 @@ class NextStepPrediction(TaskPipeline):
 
 class ICMSNextStepPrediction(NextStepPrediction):
     does_update_root = True
-    def update_batch(self, batch: Dict[str, torch.Tensor]):
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         # Remove final timestep, prepend "initial" quiet recording (for causal)
         spikes = batch[DataKey.spikes]
         spikes = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
@@ -277,7 +287,7 @@ class HeldoutPrediction(RatePrediction):
             data_attrs=data_attrs,
         )
 
-    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True) -> torch.Tensor:
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         # torch.autograd.set_detect_anomaly(True)
         backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
         # backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')

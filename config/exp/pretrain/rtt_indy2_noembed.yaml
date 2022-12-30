@@ -1,13 +1,14 @@
 # @package _global_
-tag: rtt_indy2
+tag: rtt_indy2_noembed
 
 defaults:
   - /model: pretrain_small
   - /dataset: rtt_nlb
   - /train: nlb
 model:
-  subject_embed_strategy: EmbedStrat.token
-  array_embed_strategy: EmbedStrat.token_add
+  session_embed_strategy: EmbedStrat.none
+  subject_embed_strategy: EmbedStrat.none
+  array_embed_strategy: EmbedStrat.none
   dropout: 0.6
   transformer:
     dropout: 0.6

@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack, unpack # baby steps...
 from omegaconf import OmegaConf
 import logging
+from pprint import pformat
 
 from config import (
     ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey, TaskConfig
@@ -43,6 +44,8 @@ class BrainBertInterface(pl.LightningModule):
         self.bind_io()
 
         self.novel_params: List[str] = [] # for fine-tuning
+        num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
+        assert num_updates <= 1, "Only one task pipeline should update the root"
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
@@ -186,7 +189,7 @@ class BrainBertInterface(pl.LightningModule):
         transfer_data_attrs: DataAttrs = transfer_model.data_attrs
         transfer_cfg: ModelConfig = transfer_model.cfg
         if self.cfg.task != transfer_cfg.task:
-            logger.info(f'Task config updated from {transfer_cfg.task} to {self.cfg.task}')
+            logger.info(pformat(f'Task config updated from {transfer_cfg.task} to {self.cfg.task}'))
         def try_transfer(module_name: str):
             if (module := getattr(self, module_name, None)) is not None:
                 if (transfer_module := getattr(transfer_model, module_name, None)) is not None:
@@ -203,43 +206,43 @@ class BrainBertInterface(pl.LightningModule):
                     else:
                         self.novel_params.extend(self._wrap_keys(module_name, module.named_parameters()))
                     logger.info(f'New {module_name} weights.')
+        def try_transfer_embed(
+            embed_name: str, # Used for looking up possibly existing attribute
+            new_attrs: List[str],
+            old_attrs: List[str] ,
+        ) -> nn.Embedding:
+            if new_attrs == old_attrs:
+                try_transfer(embed_name)
+                return
+            if not hasattr(self, embed_name):
+                return
+            embed = getattr(self, embed_name)
+            if not old_attrs:
+                self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
+                logger.info(f'New {embed_name} weights.')
+                return
+            if not new_attrs:
+                logger.warning(f"No {embed_name} provided in new model despite old model dependency. HIGH CHANCE OF ERROR.")
+                return
+            num_reassigned = 0
+            for n_idx, target in enumerate(new_attrs):
+                if target in old_attrs:
+                    embed.weight.data[n_idx] = getattr(transfer_model, embed_name).weight.data[old_attrs.index(target)]
+                    num_reassigned += 1
+            logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
+            if num_reassigned == 0:
+                logger.warning(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
+            if num_reassigned < len(new_attrs):
+                # There is no non-clunky granular parameter assignment (probably) but we don't need it either
+                self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
 
-        if self.data_attrs != transfer_data_attrs:
-            def try_transfer_embed(
-                embed_name: str, # Used for looking up possibly existing attribute
-                new_attrs: List[str],
-                old_attrs: List[str] ,
-            ) -> nn.Embedding:
-                if new_attrs == old_attrs:
-                    try_transfer(embed_name)
-                    return
-                embed = getattr(self, embed_name)
-                if not old_attrs:
-                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
-                    logger.info(f'New {embed_name} weights.')
-                    return
-                if not new_attrs:
-                    logger.warning(f"No {embed_name} provided in new model despite old model dependency. HIGH CHANCE OF ERROR.")
-                    return
-                num_reassigned = 0
-                for n_idx, target in enumerate(new_attrs):
-                    if target in old_attrs:
-                        embed.weight.data[n_idx] = getattr(transfer_model, embed_name).weight.data[old_attrs.index(target)]
-                        num_reassigned += 1
-                logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
-                if num_reassigned == 0:
-                    logger.warning(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
-                if num_reassigned < len(new_attrs):
-                    # There is no non-clunky granular parameter assignment (probably) but we don't need it either
-                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
+        try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
+        try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
+        try_transfer_embed('array_embed', self.data_attrs.context.array, transfer_data_attrs.context.array)
 
-            try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
-            try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
-            try_transfer_embed('array_embed', self.data_attrs.context.array, transfer_data_attrs.context.array)
-
-            try_transfer('session_flag')
-            try_transfer('subject_flag')
-            try_transfer('array_flag')
+        try_transfer('session_flag')
+        try_transfer('subject_flag')
+        try_transfer('array_flag')
 
         try_transfer('context_project')
         try_transfer('readin')
@@ -307,7 +310,6 @@ class BrainBertInterface(pl.LightningModule):
             elif self.cfg.array_embed_strategy == EmbedStrat.concat:
                 array = repeat(array, 'b a h -> b t a h', t=state_in.shape[1])
                 project_context.append(array)
-
         # TODO support temporal embed + temporal project
         # Do not concat static context - list default is easier to deal with
         # static_context = rearrange(static_context, 't0 b h -> b t0 h') if static_context else None
@@ -346,7 +348,7 @@ class BrainBertInterface(pl.LightningModule):
             import pdb;pdb.set_trace()
         return outputs
 
-    def _step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def _step(self, batch: Dict[str, torch.Tensor], eval_mode=False) -> Dict[str, torch.Tensor]:
         r"""
             batch provided contains all configured data_keys and meta_keys
             - The distinction with `forward` is not currently clear, but `_step` is specifically oriented around training.
@@ -366,19 +368,16 @@ class BrainBertInterface(pl.LightningModule):
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
-        num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
-        assert num_updates <= 1, "Only one task pipeline should update the root"
+
         # import pdb;pdb.set_trace()
         for task in self.cfg.task.tasks:
-            self.task_pipelines[task.value].update_batch(batch)
-
+            self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T A H
-
         # Create outputs for configured task
         batch_out: Dict[str, torch.Tensor] = {}
         running_loss = 0
         for task in self.cfg.task.tasks:
-            update = self.task_pipelines[task.value](batch, features)
+            update = self.task_pipelines[task.value](batch, features, eval_mode=eval_mode)
             if 'loss' in update:
                 running_loss = running_loss + update['loss'] # uniform weight
             batch_out.update(update)
@@ -503,11 +502,13 @@ class BrainBertInterface(pl.LightningModule):
         self.common_log(metrics, prefix='val', sync_dist=True)
         return metrics['loss']
 
+    @torch.inference_mode()
     def test_step(self, batch, batch_idx):
         r"""
             Note test step isn't capable of returning non-metrics. (use `predict` to get outputs)
         """
-        metrics = self._step(batch)
+        # metrics = self._step(batch, eval_mode=False)
+        metrics = self._step(batch, eval_mode=True)
         # for m in metrics:
         #     if isinstance(m, Metric):
         #         print(f'{m} : {metrics[m]}')
