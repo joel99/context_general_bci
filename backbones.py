@@ -47,6 +47,7 @@ class TemporalTransformer(nn.Module):
                     dropout=self.cfg.dropout,
                     batch_first=False, # we use this to stick to pytorch defaults. Who knows if it's more efficient internally? But closer to docs.
                     activation=self.cfg.activation,
+                    norm_first=self.cfg.pre_norm,
                 ),
                 self.cfg.n_layers,
             )

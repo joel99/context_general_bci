@@ -27,9 +27,9 @@ dataset_name = 'mc_maze$' # 137 sorted units
 
 # TODO - current inferred rates for RTT are wavy for some reason
 # dataset_name = 'mc_rtt'
-# dataset_name = 'odoherty_rtt-Loco-20170215_02'
-# dataset_name = 'odoherty_rtt-Loco-20170216_02'
-# dataset_name = 'odoherty_rtt-Loco-20170217_02'
+dataset_name = 'odoherty_rtt-Loco-20170215_02'
+dataset_name = 'odoherty_rtt-Loco-20170216_02'
+dataset_name = 'odoherty_rtt-Loco-20170217_02'
 
 # dataset_name = 'odoherty_rtt-Indy-20160627_01'
 # dataset_name = 'odoherty_rtt-Indy-20160630_01'
@@ -61,7 +61,6 @@ trial = 0
 
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
-
 # print diagnostics
 print(
     f"Mean: {pop_spikes.float().mean():.2f}, "
@@ -72,6 +71,7 @@ print(
 )
 
 pop_spikes = pop_spikes.flatten(1, 2)
+pop_spikes = pop_spikes[:, :96]
 
 # path_to_old = './data/old_nlb/mc_maze.h5'
 # with h5py.File(path_to_old, 'r') as f:
@@ -105,8 +105,8 @@ def plot_spikes(spikes, ax=None, vert_space=1):
     time_lim = spikes.shape[0] * dataset.cfg.bin_size_ms
     ax.set_xticks(np.linspace(0, spikes.shape[0], 5))
     ax.set_xticklabels(np.linspace(0, time_lim, 5))
-    ax.set_title("Benchmark Maze (Sorted)")
-    # ax.set_title(context.alias)
+    # ax.set_title("Benchmark Maze (Sorted)")
+    ax.set_title(context.alias)
     ax.set_xlabel('Time (ms)')
     ax.set_yticks([])
     return ax

@@ -68,6 +68,7 @@ class TransformerConfig:
     feedforward_factor: float = 1.
     dropout: float = 0.2 # applies generically
     activation: str = 'gelu'
+    pre_norm: bool = False
     # causal: bool = True # Pretty sure this should be passed in by task, not configured
 
     # Optional pattern for phasing in config?
