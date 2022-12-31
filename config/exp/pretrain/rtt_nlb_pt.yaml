@@ -1,27 +1,29 @@
 # @package _global_
-tag: rtt_all_sans
+tag: rtt_nlb_pt
 
 defaults:
-  - /model: pretrain
-  - /dataset: rtt
-  - /train: pretrain
+  - /model: pretrain_small
+  - /dataset: rtt_nlb
+  - /train: nlb
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
+  dropout: 0.7
+  transformer:
+    dropout: 0.7
+    n_heads: 2
   task:
     tasks:
     - ModelTask.infill
+    # - ModelTask.heldout_decoding
     metrics:
     - Metric.bps
-    - Metric.all_loss
+    # - Metric.co_bps
+    # - Metric.block_co_bps
 dataset:
-  datasets: ['odoherty_rtt*']
-  odoherty_rtt:
-      arrays:
-      - Indy-M1
-      - Loco-M1
   data_keys:
   - DataKey.spikes
+  # - DataKey.heldout_spikes
   meta_keys:
   - MetaKey.unique
   - MetaKey.session

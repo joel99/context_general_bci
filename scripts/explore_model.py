@@ -29,10 +29,13 @@ query = "maze_large"
 # query = "rtt_nlb_infill_only"
 # query = 'rtt_nlb_07'
 
-query = "rtt_indy1"
-query = "rtt_indy2"
+# query = "rtt_indy_nlb"
+# query = "rtt_indy1"
+# query = "rtt_indy2"
 # query = "rtt_indy2_noembed"
-# query = 'rtt_all_ft_10x'
+query = "rtt_all_sans_add"
+query = "rtt_indy_sans_256_d01"
+# query = "rtt_indy_sans"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]

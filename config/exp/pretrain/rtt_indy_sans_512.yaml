@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: rtt_indy_sans_512
 
 defaults:
   - /model: pretrain

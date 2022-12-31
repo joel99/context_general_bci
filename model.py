@@ -287,6 +287,8 @@ class BrainBertInterface(pl.LightningModule):
             if self.cfg.session_embed_strategy == EmbedStrat.token:
                 session = session + self.session_flag # B x H
                 static_context.append(session)
+            elif self.cfg.session_embed_strategy == EmbedStrat.token_add:
+                state_in = state_in + rearrange(session, 'b h -> b 1 1 h')
             elif self.cfg.session_embed_strategy == EmbedStrat.concat:
                 session = repeat(session, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(session)
@@ -296,6 +298,8 @@ class BrainBertInterface(pl.LightningModule):
             if self.cfg.subject_embed_strategy == EmbedStrat.token:
                 subject = subject + self.subject_flag
                 static_context.append(subject)
+            elif self.cfg.subject_embed_strategy == EmbedStrat.token_add:
+                state_in = state_in + rearrange(subject, 'b h -> b 1 1 h')
             elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
                 subject = repeat(subject, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(subject)
