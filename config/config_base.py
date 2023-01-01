@@ -60,6 +60,8 @@ class TaskConfig:
 
     freeze_backbone: bool = False
 
+    linear_head: bool = False
+
 @dataclass
 class TransformerConfig:
     n_state: int = 256
@@ -76,6 +78,8 @@ class TransformerConfig:
 
     # Position
     learnable_position: bool = False
+    scale_sin: bool = False # per https://proceedings.mlr.press/v162/hua22a/hua22a.pdf
+
     max_trial_length: int = 1500 # Ideally we can bind this to DatasetConfig.max_trial_length
 
 class EmbedStrat(Enum):
@@ -300,6 +304,7 @@ class RootConfig:
 
     # wandb ids
     init_from_id: str = "" # for initializing weights
+    init_tag: str = "bps"
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
 
     exp: Any = MISSING # delta config, provide via yaml and on CLI as `+exp=<test>.yaml`

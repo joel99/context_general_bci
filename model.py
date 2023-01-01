@@ -53,6 +53,7 @@ class BrainBertInterface(pl.LightningModule):
         """
         self_copy = self.cfg.copy()
         self_copy = OmegaConf.merge(ModelConfig(), self_copy) # backport novel config
+        cfg = OmegaConf.merge(ModelConfig(), cfg)
         # Things that are allowed to change on init (actually most things should be allowed to change, but just register them explicitly here as needed)
         for safe_attr in [
             'task',

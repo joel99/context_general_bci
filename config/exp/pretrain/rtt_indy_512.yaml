@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_all_512
+tag: rtt_indy_512
 
 defaults:
   - /model: pretrain
@@ -23,7 +23,7 @@ model:
     - Metric.bps
     - Metric.all_loss
 dataset:
-  datasets: ['odoherty_rtt*']
+  datasets: ['odoherty_rtt-Indy.*']
   odoherty_rtt:
       arrays:
       - Indy-M1

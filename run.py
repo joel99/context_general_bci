@@ -54,7 +54,10 @@ def run_exp(cfg : RootConfig) -> None:
     data_attrs = dataset.get_data_attrs()
     logger.info(pformat(f"Data attributes: {data_attrs}"))
     if cfg.init_from_id:
-        init_ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.init_from_id)
+        init_ckpt = get_best_ckpt_from_wandb_id(
+            cfg.wandb_project, cfg.init_from_id,
+            tag=cfg.init_tag
+        )
         logger.info(f"Initializing from {init_ckpt}")
         model = load_from_checkpoint(init_ckpt, cfg=cfg.model, data_attrs=data_attrs)
     else:

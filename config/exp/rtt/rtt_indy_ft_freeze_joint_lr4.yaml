@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: rtt_nlb_ft
+tag: rtt_indy_ft_freeze_joint_lr4
 
 defaults:
   - /model: finetune
@@ -10,17 +10,23 @@ defaults:
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
-  dropout: 0.7
   transformer:
-    dropout: 0.7
-    n_heads: 2
+    n_state: 256
+    dropout: 0.1
+  hidden_size: 256
+  session_embed_size: 256
+  subject_embed_size: 256
+  array_embed_size: 256
+  dropout: 0.1
   task:
     tasks:
+    - ModelTask.infill
     - ModelTask.heldout_decoding
     metrics:
+    - Metric.bps
     - Metric.co_bps
     - Metric.block_co_bps
-  # accelerate_new_params: 10.0
+    freeze_backbone: True
   lr_init: 5e-4
 dataset:
   datasets:
@@ -31,5 +37,6 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-
-init_from_id: "rtt_nlb_pt-35llyrnm"
+train:
+  batch_size: 32
+init_from_id: "rtt_indy_sans_256_d01-2x77wfo8"

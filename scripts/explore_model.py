@@ -33,10 +33,17 @@ query = "maze_large"
 # query = "rtt_indy1"
 # query = "rtt_indy2"
 # query = "rtt_indy2_noembed"
-query = "rtt_all_sans_add"
-query = "rtt_indy_sans_256_d01"
-query = "rtt_all_256"
-# query = "rtt_indy_sans"
+# query = "rtt_all_sans_add"
+# query = "rtt_indy_sans_256_d01"
+# query = "rtt_all_256"
+# query = "rtt_all_512"
+# query = "rtt_indy_loco"
+
+query = "rtt_loco1"
+# query = "rtt_loco1_d3"
+# query = "rtt_loco"
+# query = "rtt_loco"
+# query = 'rtt_indy_other'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -45,17 +52,18 @@ print(wandb_run.id)
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
 src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
-cfg.dataset.datasets = cfg.dataset.datasets[:1]
+# cfg.dataset.datasets = cfg.dataset.datasets[:1]
 cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.logrates]
-# cfg.dataset.datasets = cfg.dataset.datasets[-1:]
+cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
-cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
@@ -80,32 +88,49 @@ dataloader = get_dataloader(dataset)
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
 
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
-# heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 #%%
-
-print(heldin_outputs.keys())
-#%%
+heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 
 # test = heldin_outputs[Output.heldout_rates]
 test = heldin_outputs[Output.rates]
 print(test.shape)
-num_trials = 5
-colors = sns.color_palette("husl", num_trials)
+num = 10
+num = 3
+colors = sns.color_palette("husl", num)
 ax = prep_plt()
-for trial in range(num_trials):
-    plt.plot(test[trial][:,8])
-    # plt.plot(test[trial][:,10])
-    # plt.plot(test[trial][:,11])
-    # plt.plot(test[trial][:,12])
-    # plt.plot(test[trial][:,30])
+for trial in range(num):
+    # ax.plot(test[trial][:20,11])
+    ax.plot(test[trial][:,12])
     # ax.plot(test[trial][:,40], color=colors[trial])
-    # plt.plot(test[trial][:,100])
-    # plt.plot(test[trial][:,65])
+
+trial = 20
+from scipy.ndimage import gaussian_filter1d
+# for channel in range(num):
+# #     if channel != 2:
+# #         continue
+# #     # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
+#     # ax.plot(test[trial][:,channel], color=colors[channel])
+#     ax.plot(gaussian_filter1d(test[trial,:,channel], sigma=3), color=colors[channel])
+
+    # smooth the signal with a gaussian kernel
+
+# from scipy import signal
+# peaks, _ = signal.find_peaks(test[trial,:,2], distance=4)
+# print(peaks)
+# print(len(peaks))
+# for p in peaks:
+#     ax.axvline(p, color='k', linestyle='--')
+
+
+
+# relabel xtick unit from 5ms to ms
+ax.set_xticklabels(ax.get_xticks() * 5)
+ax.set_xlabel('Time (ms)')
 
 # plt.plot(test[0,:,0])
-print("done")
+ax.set_title(f'FR Inference: {query}')
 
 #%%
 # Debugging (for mc_maze dataset)

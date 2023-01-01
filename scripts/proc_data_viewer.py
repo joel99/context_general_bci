@@ -28,10 +28,18 @@ dataset_name = 'mc_maze$' # 137 sorted units
 # TODO - current inferred rates for RTT are wavy for some reason
 # dataset_name = 'mc_rtt'
 dataset_name = 'odoherty_rtt-Loco-20170215_02'
-dataset_name = 'odoherty_rtt-Loco-20170216_02'
-dataset_name = 'odoherty_rtt-Loco-20170217_02'
 
+# dataset_name = 'odoherty_rtt-Loco-20170216_02'
+# dataset_name = 'odoherty_rtt-Loco-20170217_02'
+# dataset_name = 'odoherty_rtt-Loco-20170228_02'
+# dataset_name = 'odoherty_rtt-Loco-20170301_05'
+# dataset_name = 'odoherty_rtt-Loco-20170302_02'
+# dataset_name = 'odoherty_rtt-Loco-20170227_04'
+# dataset_name = 'odoherty_rtt-Loco-20170210_03'
+
+# dataset_name = 'odoherty_rtt-Indy.*'
 # dataset_name = 'odoherty_rtt-Indy-20160627_01'
+dataset_name = 'odoherty_rtt-Indy-20161005_06'
 # dataset_name = 'odoherty_rtt-Indy-20160630_01'
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
 # dataset_name = 'odoherty_rtt-Indy-20160916_01'
@@ -53,7 +61,7 @@ dataset.build_context_index()
 # for t in range(1000):
 #     lengths.append(dataset[t][DataKey.spikes].size(0))
 # print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
-
+print(len(dataset))
 #%%
 trial = 0
 # trial = 10
@@ -62,6 +70,11 @@ trial = 0
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
 # print diagnostics
+print(pop_spikes[::2].sum(0))
+print(pop_spikes[1::2].sum(0))
+# sns.histplot(pop_spikes[::2].sum(0))
+# sns.histplot(pop_spikes[1::2].sum(0) - pop_spikes[0::2].sum(0))
+#%%
 print(
     f"Mean: {pop_spikes.float().mean():.2f}, "
     f"Std: {pop_spikes.float().std():.2f}, "

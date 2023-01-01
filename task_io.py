@@ -85,17 +85,20 @@ class RatePrediction(TaskPipeline):
             cfg=cfg,
             data_attrs=data_attrs
         )
-        decoder_layers = [
-            nn.Linear(backbone_out_size, backbone_out_size),
-            nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
-            nn.Linear(backbone_out_size, channel_count)
-        ]
+        self.cfg = cfg.task
+        if getattr(self.cfg, 'linear_head', False):
+            decoder_layers = [nn.Linear(backbone_out_size, channel_count)]
+        else:
+            decoder_layers = [
+                nn.Linear(backbone_out_size, backbone_out_size),
+                nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+                nn.Linear(backbone_out_size, channel_count)
+            ]
 
         if not cfg.lograte:
             decoder_layers.append(nn.ReLU())
         self.out = nn.Sequential(*decoder_layers)
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
-        self.cfg = cfg.task
 
     def get_masks(self, loss: torch.Tensor, batch, channel_key=CHANNEL_KEY):
         b, t, a, c = loss.size()
@@ -227,6 +230,11 @@ class SelfSupervisedInfill(RatePrediction):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         rates: torch.Tensor = self.out(backbone_features)
+
+        # ! Debug!
+        # from scipy.ndimage import gaussian_filter1d
+        # rates = torch.tensor(gaussian_filter1d(rates.cpu(), sigma=3, axis=1), device=backbone_features.device)
+
         batch_out = {}
         if Output.logrates in self.cfg.outputs:
             batch_out[Output.logrates] = rates
