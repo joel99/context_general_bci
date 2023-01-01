@@ -1,14 +1,14 @@
 # @package _global_
-tag: test
+tag: rtt_indy_nlb
 
 defaults:
   - /model: pretrain_small
   - /dataset: rtt_nlb
   - /train: nlb
 model:
+  readin_strategy: EmbedStrat.unique_project
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
-  readin_strategy: EmbedStrat.unique_project
   dropout: 0.6
   transformer:
     dropout: 0.6

@@ -126,6 +126,12 @@ class BrainBertInterface(pl.LightningModule):
                 assert self.cfg.array_embed_size == self.cfg.hidden_size
                 self.array_flag = nn.Parameter(torch.zeros(self.data_attrs.max_arrays, self.cfg.array_embed_size))
 
+        if project_size is not self.cfg.hidden_size:
+            self.context_project = nn.Sequential(
+                nn.Linear(project_size, self.cfg.hidden_size),
+                nn.ReLU() if self.cfg.activation == 'relu' else nn.GELU(),
+            )
+
         if self.data_attrs.max_channel_count > 0: # there is padding
             channel_count = self.data_attrs.max_channel_count
         else:
@@ -144,14 +150,12 @@ class BrainBertInterface(pl.LightningModule):
                 subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
             ) * self.data_attrs.spike_dim
 
-        if project_size is not self.cfg.hidden_size:
-            self.context_project = nn.Sequential(
-                nn.Linear(project_size, self.cfg.hidden_size),
-                nn.ReLU() if self.cfg.activation == 'relu' else nn.GELU(),
-            )
-
-        self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
-
+        if self.cfg.readin_strategy == EmbedStrat.project or self.cfg.readin_strategy == EmbedStrat.token:
+            # Token is the legacy default
+            self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
+        elif self.cfg.readin_strategy == EmbedStrat.unique_project:
+            num_contexts = len(self.data_attrs.context.session) # ! currently assuming no session overlap
+            self.readin = nn.Parameter(torch.randn(num_contexts, channel_count, self.cfg.hidden_size))
         for k in self.cfg.task.tasks:
             if k == ModelTask.icms_one_step_ahead:
                 # TODO add readin for the stim array (similar attr)
@@ -278,7 +282,12 @@ class BrainBertInterface(pl.LightningModule):
         temporal_context = []
         for task in self.cfg.task.tasks:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
-        state_in = self.readin(state_in) # b t a h
+        if self.cfg.readin_strategy == EmbedStrat.project or self.cfg.readin_strategy == EmbedStrat.token:
+            state_in = self.readin(state_in) # b t a h
+        elif self.cfg.readin_strategy == EmbedStrat.unique_project:
+            # use session (in lieu of context) to index readin parameter (b x in x out)
+            readin_matrix = torch.index_select(self.readin, 0, batch[MetaKey.session])
+            state_in = torch.einsum('btai,bih->btah', state_in, readin_matrix)
 
         static_context = []
         project_context = [] # only for static info

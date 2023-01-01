@@ -85,7 +85,9 @@ class EmbedStrat(Enum):
     token_add = 'token_add' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
     concat = 'concat' # concat embedding and downproject
 
-    project = 'project' # just for array inputs
+    # raw data input specific
+    project = 'project'
+    unique_project = 'unique_project' # learn a separate projection per context
 
 @dataclass
 class ModelConfig:
