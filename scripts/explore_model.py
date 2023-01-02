@@ -93,16 +93,24 @@ heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]
-rates = heldin_outputs[Output.rates]
-print(rates.shape)
-num = 10
-num = 3
-colors = sns.color_palette("husl", num)
+rates = heldin_outputs[Output.rates] # b t c
+spikes = heldin_outputs[Output.spikes][:,:,0] # b t a c -> b t c
 ax = prep_plt()
+
+num = 3
+channel = 2
+
+colors = sns.color_palette("husl", num)
+
 for trial in range(num):
-    # ax.plot(test[trial][:20,11])
-    ax.plot(rates[trial][:,12])
-    # ax.plot(test[trial][:,40], color=colors[trial])
+    ax.plot(rates[trial][:,channel], color=colors[trial])
+
+y_lim = ax.get_ylim()[1]
+# plot spike raster
+for trial in range(num):
+    spike_times = spikes[trial,:,channel].nonzero()
+    y_height = y_lim * (trial+1) / num
+    ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
 trial = 20
 from scipy.ndimage import gaussian_filter1d
