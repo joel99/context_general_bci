@@ -132,6 +132,8 @@ class RatePrediction(TaskPipeline):
             For evaluation.
             length_mask: B T
             channel_mask: B A C
+
+            block: Whether to get null from full batch (more variable, but std defn)
         """
         # convenience logic for allowing direct passing of record with additional features
         if is_lograte:
@@ -148,7 +150,7 @@ class RatePrediction(TaskPipeline):
             spikes[~length_mask] = 0
         if channel_mask is not None:
             nll_model[~channel_mask.unsqueeze(1).expand_as(nll_model)] = 0.
-            spikes[~channel_mask.unsqueeze(1).expand_as(spikes)] = 0
+            # spikes[~channel_mask.unsqueeze(1).expand_as(spikes)] = 0 # redundant
 
         nll_model = reduce(nll_model, 'b t a c -> b a c', 'sum')
 
@@ -245,6 +247,7 @@ class SelfSupervisedInfill(RatePrediction):
         loss: torch.Tensor = self.loss(rates, spikes)
         # Infill update mask
         loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
+        # import pdb;pdb.set_trace()
         if Metric.all_loss in self.cfg.metrics:
             batch_out[Metric.all_loss] = loss[loss_mask].mean().detach()
         loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')

@@ -8,6 +8,7 @@ import torch
 import pandas as pd
 import h5py
 from scipy.interpolate import interp1d
+from scipy.signal import resample_poly
 
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, SubjectArrayRegistry
@@ -40,28 +41,21 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
         sampling_rate: int = 1000 # Hz, true for ODohery data
     ):
         assert cfg.odoherty_rtt.chop_size_ms % cfg.bin_size_ms == 0, "Chop size must be a multiple of bin size"
-        assert cfg.odoherty_rtt.load_covariates == False, "Covariates not supported yet"
         with h5py.File(datapath, 'r') as h5file:
             orig_timestamps = np.squeeze(h5file['t'][:])
             time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
             if cfg.odoherty_rtt.load_covariates:
-                def upsample(array, factor, kind='cubic'):
-                    if factor > 1:
-                        ip_fn = interp1d(np.arange(array.shape[0]), array, kind=kind, fill_value='extrapolate', axis=0)
-                        upsampled = ip_fn(np.arange(0, array.shape[0]-1, round(1 / factor, 4)))
-                    else:
-                        upsampled = array
-                    return upsampled
-
-                # sampled at 250Hz, upsample to 1000Hz to match 1ms bin width
-                # TODO proper down interpolation? Nah, low priority
-                target_rate = round(0.001 / cfg.bin_size_ms)
-                upsample_factor = target_rate / 250
-                finger_pos = upsample(h5file['finger_pos'][()].T, 4)
-                cursor_pos = upsample(h5file['cursor_pos'][()].T, 4)
-                target_pos = upsample(h5file['target_pos'][()].T, 4, kind='previous')
-                cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
-                raise NotImplementedError #  Need to do something useful (just stack it with spikes)
+                covariate_sampling = 250 # Hz
+                def resample(key):
+                    return torch.tensor(
+                        resample_poly(h5file[key][()].T, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
+                    )
+                bhvr_vars = {}
+                for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
+                    bhvr_vars[bhvr] = resample(bhvr)
+                # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
+                finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
+                bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel)
 
             int_arrays = [h5file[ref][()][:,0] for ref in h5file['chan_names'][0]]
             make_chan_name = lambda array: ''.join([chr(num) for num in array])
@@ -91,13 +85,25 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                 min_spike_time.append(ms_spike_times[0])
         min_spike_time = max(min(min_spike_time), 0) # some spikes come before marked trial start
         spike_arr: torch.Tensor = spike_arr[min_spike_time:, :]
-        full_spikes = spike_arr.unfold(
-            0, cfg.odoherty_rtt.chop_size_ms, cfg.odoherty_rtt.chop_size_ms
-        ) # Trial x C x chop_size (time)
-        full_spikes = reduce(
-            rearrange(full_spikes, 'b c (time bin) -> b time c bin', bin=cfg.bin_size_ms),
-            'b time c bin -> b time c 1', 'sum'
-        )
+
+        def compress_vector(vec: torch.Tensor, compression='sum'):
+            # vec: at sampling resolution
+            full_vec = vec.unfold(0, cfg.odoherty_rtt.chop_size_ms, cfg.odoherty_rtt.chop_size_ms) # Trial x C x chop_size (time)
+            return reduce(
+                rearrange(full_vec, 'b c (time bin) -> b time c bin', bin=cfg.bin_size_ms),
+                'b time c bin -> b time c 1', compression
+            )
+        def chop_vector(vec: torch.Tensor):
+            # vec - already at target resolution, just needs chopping
+            chops = round(cfg.odoherty_rtt.chop_size_ms / cfg.bin_size_ms)
+            return rearrange(
+                vec.unfold(0, chops, chops),
+                'trial hidden time -> trial time hidden'
+             ) # Trial x C x chop_size (time)
+        full_spikes = compress_vector(spike_arr)
+        if cfg.odoherty_rtt.load_covariates:
+            for bhvr in bhvr_vars:
+                bhvr_vars[bhvr] = chop_vector(bhvr_vars[bhvr])
 
         meta_payload = {}
         meta_payload['path'] = []
@@ -120,6 +126,7 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                     spike_payload[a] = spikes.clone()
             single_payload = {
                 DataKey.spikes: spike_payload,
+                DataKey.bhvr_vel: bhvr_vars[DataKey.bhvr_vel][t],
             }
             single_path = cache_root / f'{t}.pth'
             meta_payload['path'].append(single_path)

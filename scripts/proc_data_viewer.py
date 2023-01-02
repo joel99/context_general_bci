@@ -39,7 +39,7 @@ dataset_name = 'odoherty_rtt-Loco-20170215_02'
 
 # dataset_name = 'odoherty_rtt-Indy.*'
 # dataset_name = 'odoherty_rtt-Indy-20160627_01'
-dataset_name = 'odoherty_rtt-Indy-20161005_06'
+# dataset_name = 'odoherty_rtt-Indy-20161005_06'
 # dataset_name = 'odoherty_rtt-Indy-20160630_01'
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
 # dataset_name = 'odoherty_rtt-Indy-20160916_01'
@@ -50,6 +50,7 @@ print(context)
 # context = context_registry.query_by_datapath(datapath)
 
 default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
+default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 5
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 default_cfg.datasets = [context.alias]
@@ -64,6 +65,18 @@ dataset.build_context_index()
 print(len(dataset))
 #%%
 trial = 0
+trial = 10
+trial_vel = dataset[trial][DataKey.bhvr_vel]
+
+# Show kinematic trace by integrating trial_vel
+trial_pos = trial_vel.cumsum(0)
+trial_pos = trial_pos - trial_pos[0]
+# Plot
+fig, ax = plt.subplots(2, 1, sharex=True)
+ax[0].plot(trial_vel)
+ax[1].plot(trial_pos)
+
+#%%
 # trial = 10
 # trial = 26
 

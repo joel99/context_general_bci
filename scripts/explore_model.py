@@ -19,7 +19,8 @@ from utils import prep_plt
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
 query = "maze_small"
 query = "maze_med"
-query = "maze_large"
+# query = "maze_large"
+query = "maze_nlb"
 # query = "maze_med_ft"
 # query = "maze_small_ft"
 # query = "maze_large_ft"
@@ -39,7 +40,7 @@ query = "maze_large"
 # query = "rtt_all_512"
 # query = "rtt_indy_loco"
 
-query = "rtt_loco1"
+# query = "rtt_loco1"
 # query = "rtt_loco1_d3"
 # query = "rtt_loco"
 # query = "rtt_loco"
@@ -55,15 +56,15 @@ src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
-cfg.model.task.outputs = [Output.logrates]
+cfg.model.task.outputs = [Output.logrates, Output.spikes]
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
-# cfg.dataset.datasets = ['mc_maze_medium']
+cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
-cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
+# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
@@ -73,7 +74,6 @@ data_attrs = dataset.get_data_attrs()
 model = transfer_model(src_model, cfg.model, data_attrs)
 #%%
 # model.cfg.task.outputs = [Output.heldout_logrates]
-model.cfg.task.outputs = [Output.logrates]
 # model.cfg.task.metrics = [Metric.bps]
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
@@ -92,17 +92,16 @@ heldin_metrics = stack_batch(trainer.test(model, dataloader))
 #%%
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
-
 # test = heldin_outputs[Output.heldout_rates]
-test = heldin_outputs[Output.rates]
-print(test.shape)
+rates = heldin_outputs[Output.rates]
+print(rates.shape)
 num = 10
 num = 3
 colors = sns.color_palette("husl", num)
 ax = prep_plt()
 for trial in range(num):
     # ax.plot(test[trial][:20,11])
-    ax.plot(test[trial][:,12])
+    ax.plot(rates[trial][:,12])
     # ax.plot(test[trial][:,40], color=colors[trial])
 
 trial = 20

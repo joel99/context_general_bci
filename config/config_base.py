@@ -39,6 +39,7 @@ class Output(Enum):
     heldout_rates = 'heldout_rates'
     poisson_loss = 'poisson_loss'
     features = 'features'
+    spikes = 'spikes' # for debugging
 
 @dataclass
 class TaskConfig:
@@ -159,6 +160,8 @@ class DataKey(Enum):
     stim = 'stim' # icms
     heldout_spikes = 'heldout_spikes' # for co-bps
 
+    bhvr_vel = 'bhvr_vel'
+
 class MetaKey(Enum):
     r"""
         Keys that are (potentially) tracked in `meta_df`
@@ -205,7 +208,7 @@ class ExperimentalConfig:
 @dataclass
 class RTTConfig(ExperimentalConfig):
     chop_size_ms: int = 1000
-    load_covariates: bool = False
+    load_covariates: bool = True
 
     def reproc_dict(self):
         return {'chop_size_ms': self.chop_size_ms}

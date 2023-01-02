@@ -384,11 +384,13 @@ class BrainBertInterface(pl.LightningModule):
         """
 
         # import pdb;pdb.set_trace()
+        batch_out: Dict[str, torch.Tensor] = {}
+        if Output.spikes in self.cfg.task.outputs:
+            batch_out[Output.spikes] = batch[DataKey.spikes]
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T A H
         # Create outputs for configured task
-        batch_out: Dict[str, torch.Tensor] = {}
         running_loss = 0
         for task in self.cfg.task.tasks:
             update = self.task_pipelines[task.value](batch, features, eval_mode=eval_mode)
@@ -419,13 +421,13 @@ class BrainBertInterface(pl.LightningModule):
         pack_info = {}
         for k in batch:
             batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
-
+        batch_out: Dict[str, torch.Tensor] = {}
+        if Output.spikes in self.cfg.task.outputs:
+            batch_out[Output.spikes] = batch[DataKey.spikes]
         if mask:
             assert ModelTask.infill in self.cfg.task.tasks
             self.task_pipelines[ModelTask.infill.value].update_batch(batch)
-
         features = self(batch)
-        batch_out: Dict[str, torch.Tensor] = {}
         for task in self.cfg.task.tasks:
             batch_out.update(
                 self.task_pipelines[task.value](batch, features, compute_metrics=False)
