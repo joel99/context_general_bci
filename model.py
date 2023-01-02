@@ -155,7 +155,11 @@ class BrainBertInterface(pl.LightningModule):
             # Token is the legacy default
             self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
         elif self.cfg.readin_strategy == EmbedStrat.unique_project:
-            self.readin = ReadinMatrix(channel_count, self.data_attrs, self.cfg)
+            self.readin = ReadinMatrix(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
+
+        if self.cfg.readout_strategy == EmbedStrat.unique_project:
+            self.readout = ReadinMatrix(self.cfg.hidden_size, channel_count, self.data_attrs, self.cfg)
+
         for k in self.cfg.task.tasks:
             if k == ModelTask.icms_one_step_ahead:
                 # TODO add readin for the stim array (similar attr)
@@ -171,7 +175,11 @@ class BrainBertInterface(pl.LightningModule):
             return channel_count
         self.task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
-                self.backbone.out_size, get_target_size(k), self.cfg, self.data_attrs
+                channel_count if task_modules[k].unique_space and self.cfg.readout_strategy is not EmbedStrat.none \
+                    else self.backbone.out_size,
+                get_target_size(k),
+                self.cfg,
+                self.data_attrs
             ) for k in self.cfg.task.tasks
         })
 
@@ -387,10 +395,18 @@ class BrainBertInterface(pl.LightningModule):
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T A H
+        if self.cfg.readout_strategy == EmbedStrat.mirror_project:
+            unique_space_features = self.readin(features, batch, readin=False)
+        elif self.cfg.readout_strategy == EmbedStrat.unique_project:
+            unique_space_features = self.readout(features, batch)
         # Create outputs for configured task
         running_loss = 0
         for task in self.cfg.task.tasks:
-            update = self.task_pipelines[task.value](batch, features, eval_mode=eval_mode)
+            update = self.task_pipelines[task.value](
+                batch,
+                unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features,
+                eval_mode=eval_mode
+            )
             if 'loss' in update:
                 running_loss = running_loss + update['loss'] # uniform weight
             batch_out.update(update)
@@ -425,9 +441,17 @@ class BrainBertInterface(pl.LightningModule):
             assert ModelTask.infill in self.cfg.task.tasks
             self.task_pipelines[ModelTask.infill.value].update_batch(batch)
         features = self(batch)
+        if self.cfg.readout_strategy == EmbedStrat.mirror_project:
+            unique_space_features = self.readin(features, batch, readin=False)
+        elif self.cfg.readout_strategy == EmbedStrat.unique_project:
+            unique_space_features = self.readout(features, batch)
         for task in self.cfg.task.tasks:
             batch_out.update(
-                self.task_pipelines[task.value](batch, features, compute_metrics=False)
+                self.task_pipelines[task.value](
+                    batch,
+                    unique_space_features if self.task_pipelines[task.value].unique_space else features,
+                    compute_metrics=False
+                )
             )
         if transform_logrates:
             if Output.logrates in batch_out:

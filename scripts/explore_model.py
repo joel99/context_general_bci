@@ -44,7 +44,7 @@ query = "maze_nlb"
 # query = "rtt_loco1_d3"
 # query = "rtt_loco"
 # query = "rtt_loco"
-query = 'rtt_indy_linear'
+query = 'rtt_indy_256_linear'
 # query = 'test'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]

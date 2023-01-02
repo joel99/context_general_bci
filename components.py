@@ -1,6 +1,7 @@
 from typing import Optional, List, Any, Dict, Mapping
 import torch
 import torch.nn as nn
+from torch.nn import init
 import torch.nn.functional as F
 import math
 from einops import rearrange, pack, unpack, repeat
@@ -9,21 +10,36 @@ from config import TransformerConfig, ModelConfig
 from data import DataAttrs, MetaKey
 
 class ReadinMatrix(nn.Module):
-    # get that canonical state
-    def __init__(self, channel_count: int, data_attrs: DataAttrs, cfg: ModelConfig):
+    # get that canonical state, using readin bottleneck
+    def __init__(self, in_count: int, out_count: int, data_attrs: DataAttrs, cfg: ModelConfig):
         super().__init__()
         num_contexts = len(data_attrs.context.session) # ! currently assuming no session overlap
-        self.unique_readin = nn.Parameter(torch.randn(num_contexts, channel_count, cfg.readin_dim))
-        self.project_out = nn.Linear(cfg.readin_dim, cfg.hidden_size)
+        self.unique_readin = nn.Parameter(
+            init.kaiming_uniform_(
+                torch.empty(num_contexts, in_count, cfg.readin_dim),
+                a=math.sqrt(5)
+            )
+        )
+        self.project = nn.Parameter(
+            init.kaiming_uniform_(
+                torch.empty(cfg.readin_dim, out_count),
+            )
+        )
 
-    def forward(self, state_in: torch.Tensor, batch: Dict[str, torch.Tensor]):
+
+    def forward(self, state_in: torch.Tensor, batch: Dict[str, torch.Tensor], readin=True):
         r"""
             state_in: B T A H
         """
         # use session (in lieu of context) to index readin parameter (b x in x out)
         readin_matrix = torch.index_select(self.unique_readin, 0, batch[MetaKey.session])
-        state_in = torch.einsum('btai,bih->btah', state_in, readin_matrix)
-        state_in = self.project_out(state_in)
+        if readin:
+            state_in = torch.einsum('btai,bih->btah', state_in, readin_matrix)
+            state_in = torch.matmul(state_in, self.project)
+        else: # readout
+            readin_matrix = rearrange(readin_matrix, 'b i h -> b h i')
+            state_in = torch.matmul(state_in, self.project.T) # b t a h x h readin
+            state_in = torch.einsum('btah,bhi->btai', state_in, readin_matrix)
         return state_in
 
     def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):

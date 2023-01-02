@@ -93,6 +93,7 @@ class EmbedStrat(Enum):
     # raw data input specific
     project = 'project'
     unique_project = 'unique_project' # learn a separate projection per context
+    mirror_project = 'mirror_project'
 
 @dataclass
 class ModelConfig:
@@ -145,6 +146,7 @@ class ModelConfig:
     # Only when readin strategy is `token` does array embed get used.
     readin_strategy: EmbedStrat = EmbedStrat.token
     readin_dim: int = 32 # think of this as "PCs" or whatever
+    readout_strategy: EmbedStrat = EmbedStrat.none
 
     # Timestep level
     # "concat" becomes a valid strategy at this point

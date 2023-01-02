@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test
+tag: maze_nlb_unique_out
 
 defaults:
   - /model: pretrain_small
@@ -16,8 +16,7 @@ dataset:
   # - DataKey.heldout_spikes
 model:
   readin_strategy: EmbedStrat.unique_project
-  readout_strategy: EmbedStrat.mirror_project
-  # readout_strategy: EmbedStrat.unique_project
+  readout_strategy: EmbedStrat.unique_project
   dropout: 0.4
   transformer:
     dropout: 0.4

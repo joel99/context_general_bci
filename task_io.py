@@ -21,10 +21,9 @@ class TaskPipeline(nn.Module):
     r"""
         Task IO - manages decoder layers, loss functions
         i.e. is responsible for returning loss, decoder outputs, and metrics
-        # TODO manage input
-        # TODO manage additional metrics
     """
     does_update_root = False
+    unique_space = False
 
     def __init__(
         self,
@@ -87,7 +86,6 @@ class RatePrediction(TaskPipeline):
         )
         self.cfg = cfg.task
         if self.cfg.linear_head:
-        # if getattr(self.cfg, 'linear_head', False):
             decoder_layers = [nn.Linear(backbone_out_size, channel_count)]
         else:
             decoder_layers = [
@@ -183,6 +181,7 @@ class RatePrediction(TaskPipeline):
 
 class SelfSupervisedInfill(RatePrediction):
     does_update_root = True
+    unique_space = True
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         spikes = batch[DataKey.spikes]
         target = spikes[..., 0]
