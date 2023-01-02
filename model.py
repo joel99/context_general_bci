@@ -17,7 +17,7 @@ from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
-from backbones import TemporalTransformer
+from components import TemporalTransformer, ReadinMatrix
 from task_io import task_modules
 
 logger = logging.getLogger(__name__)
@@ -155,8 +155,7 @@ class BrainBertInterface(pl.LightningModule):
             # Token is the legacy default
             self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
         elif self.cfg.readin_strategy == EmbedStrat.unique_project:
-            num_contexts = len(self.data_attrs.context.session) # ! currently assuming no session overlap
-            self.readin = nn.Parameter(torch.randn(num_contexts, channel_count, self.cfg.hidden_size))
+            self.readin = ReadinMatrix(channel_count, self.data_attrs, self.cfg)
         for k in self.cfg.task.tasks:
             if k == ModelTask.icms_one_step_ahead:
                 # TODO add readin for the stim array (similar attr)
@@ -203,6 +202,7 @@ class BrainBertInterface(pl.LightningModule):
                         # Currently will fail for array flag transfer, no idea what the right policy is right now
                         module.data = transfer_module.data
                     else:
+                        # TODO transfer for `ReadinMatrix`
                         module.load_state_dict(transfer_module.state_dict())
                     logger.info(f'Transferred {module_name} weights.')
                 else:
@@ -283,13 +283,10 @@ class BrainBertInterface(pl.LightningModule):
         temporal_context = []
         for task in self.cfg.task.tasks:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
-        if self.cfg.readin_strategy == EmbedStrat.project or self.cfg.readin_strategy == EmbedStrat.token:
-            state_in = self.readin(state_in) # b t a h
-        elif self.cfg.readin_strategy == EmbedStrat.unique_project:
-            # use session (in lieu of context) to index readin parameter (b x in x out)
-            readin_matrix = torch.index_select(self.readin, 0, batch[MetaKey.session])
-            state_in = torch.einsum('btai,bih->btah', state_in, readin_matrix)
-
+        if self.cfg.readin_strategy == EmbedStrat.unique_project:
+            state_in = self.readin(state_in, batch) # b t a h
+        else:
+            state_in = self.readin(state_in)
         static_context = []
         project_context = [] # only for static info
         if self.cfg.session_embed_strategy is not EmbedStrat.none:

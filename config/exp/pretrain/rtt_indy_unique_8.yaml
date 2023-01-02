@@ -1,13 +1,15 @@
 # @package _global_
-tag: rtt_indy_256_linear
+tag: rtt_indy_unique_8
 
 defaults:
   - /model: pretrain
   - /dataset: rtt
   - /train: pretrain
 model:
-  subject_embed_strategy: EmbedStrat.token
-  array_embed_strategy: EmbedStrat.token_add
+  readin_strategy: EmbedStrat.unique_project
+  readin_dim: 8
+  subject_embed_strategy: EmbedStrat.none
+  array_embed_strategy: EmbedStrat.none
   transformer:
     n_state: 256
     dropout: 0.1

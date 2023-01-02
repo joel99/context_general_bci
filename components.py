@@ -1,11 +1,33 @@
-from typing import Optional, List
+from typing import Optional, List, Any, Dict, Mapping
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 from einops import rearrange, pack, unpack, repeat
 
-from config import TransformerConfig
+from config import TransformerConfig, ModelConfig
+from data import DataAttrs, MetaKey
+
+class ReadinMatrix(nn.Module):
+    # get that canonical state
+    def __init__(self, channel_count: int, data_attrs: DataAttrs, cfg: ModelConfig):
+        super().__init__()
+        num_contexts = len(data_attrs.context.session) # ! currently assuming no session overlap
+        self.unique_readin = nn.Parameter(torch.randn(num_contexts, channel_count, cfg.readin_dim))
+        self.project_out = nn.Linear(cfg.readin_dim, cfg.hidden_size)
+
+    def forward(self, state_in: torch.Tensor, batch: Dict[str, torch.Tensor]):
+        r"""
+            state_in: B T A H
+        """
+        # use session (in lieu of context) to index readin parameter (b x in x out)
+        readin_matrix = torch.index_select(self.unique_readin, 0, batch[MetaKey.session])
+        state_in = torch.einsum('btai,bih->btah', state_in, readin_matrix)
+        state_in = self.project_out(state_in)
+        return state_in
+
+    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
+        return super().load_state_dict(state_dict, strict)
 
 class PositionalEncoding(nn.Module):
     def __init__(self, cfg: TransformerConfig):

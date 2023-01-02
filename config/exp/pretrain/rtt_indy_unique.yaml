@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_indy_pn
+tag: rtt_indy_unique
 
 defaults:
   - /model: pretrain
@@ -32,5 +32,4 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 train:
-  patience: 0
   batch_size: 256

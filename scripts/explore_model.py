@@ -44,7 +44,8 @@ query = "maze_nlb"
 # query = "rtt_loco1_d3"
 # query = "rtt_loco"
 # query = "rtt_loco"
-# query = 'rtt_indy_other'
+query = 'rtt_indy_linear'
+# query = 'test'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -60,10 +61,10 @@ cfg.model.task.outputs = [Output.logrates, Output.spikes]
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
-cfg.dataset.datasets = ['mc_maze_medium']
+# cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
-# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 
 print(cfg.dataset.datasets)

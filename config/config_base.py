@@ -144,8 +144,7 @@ class ModelConfig:
     # Readin strategy describes IO.
     # Only when readin strategy is `token` does array embed get used.
     readin_strategy: EmbedStrat = EmbedStrat.token
-
-
+    readin_dim: int = 32 # think of this as "PCs" or whatever
 
     # Timestep level
     # "concat" becomes a valid strategy at this point

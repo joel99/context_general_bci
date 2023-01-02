@@ -46,16 +46,19 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
             time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
             if cfg.odoherty_rtt.load_covariates:
                 covariate_sampling = 250 # Hz
-                def resample(key):
+                def resample(data):
                     return torch.tensor(
-                        resample_poly(h5file[key][()].T, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
+                        resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
                     )
                 bhvr_vars = {}
                 for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
-                    bhvr_vars[bhvr] = resample(bhvr)
+                    bhvr_vars[bhvr] = h5file[bhvr][()].T
                 # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
                 finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
-                bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel)
+                bhvr_vars[DataKey.bhvr_vel] = finger_vel
+                for bhvr in bhvr_vars:
+                    bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
+                    # If we resample and then diff, we get aliasing
 
             int_arrays = [h5file[ref][()][:,0] for ref in h5file['chan_names'][0]]
             make_chan_name = lambda array: ''.join([chr(num) for num in array])
@@ -126,7 +129,7 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                     spike_payload[a] = spikes.clone()
             single_payload = {
                 DataKey.spikes: spike_payload,
-                DataKey.bhvr_vel: bhvr_vars[DataKey.bhvr_vel][t],
+                DataKey.bhvr_vel: bhvr_vars[DataKey.bhvr_vel][t].clone(),
             }
             single_path = cache_root / f'{t}.pth'
             meta_payload['path'].append(single_path)

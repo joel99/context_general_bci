@@ -31,5 +31,4 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 train:
-  patience: 0
   batch_size: 256

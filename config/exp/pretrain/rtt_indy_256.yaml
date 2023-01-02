@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_indy_256_linear
+tag: rtt_indy_256
 
 defaults:
   - /model: pretrain
@@ -16,8 +16,6 @@ model:
   subject_embed_size: 256
   array_embed_size: 256
   dropout: 0.1
-  task:
-    linear_head: True
 dataset:
   datasets: ['odoherty_rtt-Indy.*']
   odoherty_rtt:
