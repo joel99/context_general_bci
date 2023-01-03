@@ -85,7 +85,9 @@ class RatePrediction(TaskPipeline):
             data_attrs=data_attrs
         )
         self.cfg = cfg.task
-        if self.cfg.linear_head:
+        if getattr(self.cfg, 'unique_no_head', False):
+            decoder_layers = []
+        elif self.cfg.linear_head:
             decoder_layers = [nn.Linear(backbone_out_size, channel_count)]
         else:
             decoder_layers = [

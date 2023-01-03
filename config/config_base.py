@@ -62,6 +62,7 @@ class TaskConfig:
     freeze_backbone: bool = False
 
     linear_head: bool = False
+    unique_no_head: bool = False # overrides above
 
 @dataclass
 class TransformerConfig:
@@ -146,7 +147,9 @@ class ModelConfig:
     # Only when readin strategy is `token` does array embed get used.
     readin_strategy: EmbedStrat = EmbedStrat.token
     readin_dim: int = 32 # think of this as "PCs" or whatever
+    readin_compress: bool = True # factorize according to above dim
     readout_strategy: EmbedStrat = EmbedStrat.none
+    readout_dim: int = 0 # use original space
 
     # Timestep level
     # "concat" becomes a valid strategy at this point

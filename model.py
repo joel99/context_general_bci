@@ -158,7 +158,13 @@ class BrainBertInterface(pl.LightningModule):
             self.readin = ReadinMatrix(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
 
         if self.cfg.readout_strategy == EmbedStrat.unique_project:
-            self.readout = ReadinMatrix(self.cfg.hidden_size, channel_count, self.data_attrs, self.cfg)
+            self.readout = ReadinMatrix(
+                self.cfg.hidden_size,
+                self.cfg.readout_dim if getattr(self.cfg, 'readout_dim', 0) else channel_count,
+                self.data_attrs,
+                self.cfg
+            )
+            # like PC readout
 
         for k in self.cfg.task.tasks:
             if k == ModelTask.icms_one_step_ahead:
@@ -175,7 +181,7 @@ class BrainBertInterface(pl.LightningModule):
             return channel_count
         self.task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
-                channel_count if task_modules[k].unique_space and self.cfg.readout_strategy is not EmbedStrat.none \
+                self.cfg.hidden_size if task_modules[k].unique_space and self.cfg.readout_strategy is not EmbedStrat.none \
                     else self.backbone.out_size,
                 get_target_size(k),
                 self.cfg,

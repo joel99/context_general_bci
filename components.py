@@ -14,17 +14,19 @@ class ReadinMatrix(nn.Module):
     def __init__(self, in_count: int, out_count: int, data_attrs: DataAttrs, cfg: ModelConfig):
         super().__init__()
         num_contexts = len(data_attrs.context.session) # ! currently assuming no session overlap
+        self.compress = cfg.readin_compress
         self.unique_readin = nn.Parameter(
             init.kaiming_uniform_(
-                torch.empty(num_contexts, in_count, cfg.readin_dim),
+                torch.empty(num_contexts, in_count, cfg.readin_dim if self.compress else out_count),
                 a=math.sqrt(5)
             )
         )
-        self.project = nn.Parameter(
-            init.kaiming_uniform_(
-                torch.empty(cfg.readin_dim, out_count),
+        if self.compress:
+            self.project = nn.Parameter(
+                init.kaiming_uniform_(
+                    torch.empty(cfg.readin_dim, out_count),
+                )
             )
-        )
 
 
     def forward(self, state_in: torch.Tensor, batch: Dict[str, torch.Tensor], readin=True):
@@ -35,10 +37,12 @@ class ReadinMatrix(nn.Module):
         readin_matrix = torch.index_select(self.unique_readin, 0, batch[MetaKey.session])
         if readin:
             state_in = torch.einsum('btai,bih->btah', state_in, readin_matrix)
-            state_in = torch.matmul(state_in, self.project)
+            if self.compress:
+                state_in = torch.matmul(state_in, self.project)
         else: # readout
             readin_matrix = rearrange(readin_matrix, 'b i h -> b h i')
-            state_in = torch.matmul(state_in, self.project.T) # b t a h x h readin
+            if self.compress:
+                state_in = torch.matmul(state_in, self.project.T) # b t a h x h readin
             state_in = torch.einsum('btah,bhi->btai', state_in, readin_matrix)
         return state_in
 
