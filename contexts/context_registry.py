@@ -14,7 +14,8 @@ from .context_info import (
     ReachingContextInfo,
     PassiveICMSContextInfo,
     RTTContextInfo,
-    DyerCOContextInfo
+    DyerCOContextInfo,
+    GallegoCOContextInfo,
 )
 
 from tasks import ExperimentalTask
@@ -133,4 +134,6 @@ context_registry = ContextRegistry([
     DyerCOContextInfo.build(('mihi', 2), ExperimentalTask.dyer_co, alias='dyer_co_mihi_2'),
     DyerCOContextInfo.build(('chewie', 1), ExperimentalTask.dyer_co, alias='dyer_co_chewie_1'),
     DyerCOContextInfo.build(('chewie', 2), ExperimentalTask.dyer_co, alias='dyer_co_chewie_2'),
+
+    *GallegoCOContextInfo.build_from_dir('./data/gallego_co', task=ExperimentalTask.gallego_co),
 ])

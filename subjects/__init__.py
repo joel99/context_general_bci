@@ -21,6 +21,8 @@ class SubjectName(OrderedEnum):
     nitschke = "Nitschke"
     mihi = "Mihi"
     chewie = "Chewie"
+    han = "Han"
+    lando = "Lando"
 
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
 from .array_registry import SubjectArrayRegistry, create_spike_payload

@@ -294,23 +294,37 @@ class DyerCOContextInfo(ReachingContextInfo):
             datapath=datapath,
         )
 
-# @dataclass
-# class GallegoCOContextInfo(ReachingContextInfo):
-#     @classmethod
-#     def build_from_dir(cls, task: ExperimentalTask, arrays=["main"], root='./data/gallego_co/'):
-#         datapath = Path(root) / f'{handle}.mat'
-#         subject = SubjectArrayRegistry.query_by_subject(
-#             datapath.name.split('-')[-2].lower()
-#         )
-#         session = int(datapath.stem.split('-')[-1])
-#         return GallegoCOContextInfo(
-#             subject=subject,
-#             task=task,
-#             _arrays=arrays,
-#             alias=alias,
-#             session=session,
-#             datapath=datapath,
-#         )
+GALLEGO_ARRAY_MAP = {
+    'Lando': ['LeftS1Area2'],
+    'Hans': ['LeftS1Area2'],
+    'Chewie': ['M1', 'PMd'],
+    'Mihi': ['M1', 'PMd'],
+}
+@dataclass
+class GallegoCOContextInfo(ReachingContextInfo):
+    @classmethod
+    def build_from_dir(cls, root, task: ExperimentalTask, arrays=["main"]):
+        def make_info(datapath: Path):
+            alias = datapath.stem
+            subject, _, date = alias.split('_') # task is CO always
+            subject = subject.lower()
+            if subject == "mihili":
+                subject = "mihi" # alias
+            subject = SubjectArrayRegistry.query_by_subject(subject)
+            session = int(date)
+            if subject.name == SubjectName.mihi and session in [20140303, 20140306]: # in Dyer release
+                return None
+            arrays = GALLEGO_ARRAY_MAP.get(subject.name.value)
+            return GallegoCOContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=arrays,
+                alias=alias,
+                session=int(date),
+                datapath=datapath,
+            )
+        infos = map(make_info, Path(root).glob("*.mat"))
+        return filter(lambda x: x is not None, infos)
 
 # Not all have S1 - JY would prefer registry to always be right rather than detecting this post-hoc during loading
 # So we do a pre-sweep and log down which sessions have which arrays here

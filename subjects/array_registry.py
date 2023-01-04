@@ -64,6 +64,8 @@ class SubjectArrayRegistry:
 
 def create_spike_payload(spikes: torch.Tensor, arrays_to_use: List[str]) -> Dict[str, torch.Tensor]:
     spike_payload = {}
+    if spikes.ndim == 2:
+        spikes = spikes.unsqueeze(-1) # add dim for spike features
     for a in arrays_to_use:
         array = SubjectArrayRegistry.query_by_array(a)
         if array.is_exact:

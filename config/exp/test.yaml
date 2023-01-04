@@ -14,12 +14,13 @@ dataset:
   # - dyer_co_chewie_2
   data_keys:
   - DataKey.spikes
+  max_channels: 187
 model:
-  # dropout: 0.8
-  # transformer:
-  #   dropout: 0.8
-  #   n_heads: 2
-  #   n_layers: 4
+  dropout: 0.8
+  transformer:
+    dropout: 0.8
+    n_heads: 2
+    n_layers: 4
   task:
     tasks:
     - ModelTask.infill

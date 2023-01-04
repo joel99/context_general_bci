@@ -45,12 +45,30 @@ class Loco(SubjectInfo): # RTT https://zenodo.org/record/3854034
 class Mihi(SubjectInfo):
     name = SubjectName.mihi
     _arrays = {
-        'main': SortedArrayInfo(_max_channels=187),
+        'main': SortedArrayInfo(_max_channels=187), # single-session (Dyer)
+        'M1': SortedArrayInfo(_max_channels=52), # dual
+        'PMd': SortedArrayInfo(_max_channels=121), # dual
     }
 
 @SubjectArrayRegistry.register
 class Chewie(SubjectInfo):
     name = SubjectName.chewie
     _arrays = {
-        'main': SortedArrayInfo(_max_channels=174),
+        'main': SortedArrayInfo(_max_channels=174), # single-session (Dyer)
+        'M1': SortedArrayInfo(_max_channels=88), # left hemisphere
+        'PMd': SortedArrayInfo(_max_channels=211), # left hemisphere
+    }
+
+@SubjectArrayRegistry.register
+class Han(SubjectInfo):
+    name = SubjectName.han
+    _arrays = {
+        'LeftS1Area2': SortedArrayInfo(_max_channels=96), # saw highest 83
+    }
+
+@SubjectArrayRegistry.register
+class Lando(SubjectInfo):
+    name = SubjectName.lando
+    _arrays = {
+        'LeftS1Area2': SortedArrayInfo(_max_channels=64), # saw highest 46
     }

@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test3
+tag: test5
 
 defaults:
   - /model: pretrain_small
@@ -8,13 +8,11 @@ defaults:
   - /train: nlb
 dataset:
   datasets:
-  # - dyer_co_mihi_1
-  # - dyer_co_mihi_2
-  - dyer_co_chewie_1
-  # - dyer_co_chewie_2
+  - Chewie_CO_20161021
   data_keys:
   - DataKey.spikes
   max_channels: 187
+  bin_size_ms: 30
 model:
   dropout: 0.8
   transformer:

@@ -17,7 +17,7 @@ from analyze_utils import prep_plt
 
 # dataset_name = 'mc_maze_large' # 122 sorted units
 # dataset_name = 'mc_maze_medium' # 114 sorted units
-dataset_name = 'mc_maze_small' # 107 sorted units
+# dataset_name = 'mc_maze_small' # 107 sorted units
 # dataset_name = 'mc_maze$' # 137 sorted units
 # dataset_name = 'churchland_maze_jenkins-0'
 # dataset_name = 'churchland_maze_jenkins-1'
@@ -48,6 +48,9 @@ dataset_name = 'mc_maze_small' # 107 sorted units
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
 # dataset_name = 'odoherty_rtt-Indy-20160916_01'
 # dataset_name = 'odoherty_rtt-Indy-20160921_01'
+
+dataset_name = 'dyer_co_mihi_2'
+dataset_name = 'dyer_co_chewie_2'
 context = context_registry.query(alias=dataset_name)
 print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
@@ -82,8 +85,8 @@ print(len(dataset))
 # ax[1].plot(trial_pos)
 
 #%%
-# trial = 10
-trial = 26
+trial = 10
+# trial = 26
 
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
