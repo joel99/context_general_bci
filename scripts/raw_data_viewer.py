@@ -55,7 +55,7 @@ with h5py.File(datapath, 'r') as h5file:
         for bhvr in bhvr_vars:
             bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
 #%%
-from utils import prep_plt
+from analyze_utils import prep_plt
 
 print(bhvr_vars.keys())
 

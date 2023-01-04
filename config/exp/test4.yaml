@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test
+tag: test4
 
 defaults:
   - /model: pretrain_small
@@ -8,10 +8,10 @@ defaults:
   - /train: nlb
 dataset:
   datasets:
-  - dyer_co_mihi_1
+  # - dyer_co_mihi_1
   # - dyer_co_mihi_2
   # - dyer_co_chewie_1
-  # - dyer_co_chewie_2
+  - dyer_co_chewie_2
   data_keys:
   - DataKey.spikes
 model:

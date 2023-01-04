@@ -170,6 +170,8 @@ class DataKey(Enum):
     heldout_spikes = 'heldout_spikes' # for co-bps
 
     bhvr_vel = 'bhvr_vel'
+    bhvr_acc = 'bhvr_acc'
+    bhvr_force = 'bhvr_force'
 
 class MetaKey(Enum):
     r"""
@@ -239,6 +241,11 @@ class MazeConfig(ExperimentalConfig):
         }
 
 @dataclass
+class DyerCOConfig(ExperimentalConfig):
+    load_covariates: bool = True
+    velocity_threshold: float = 5.
+
+@dataclass
 class NLBConfig(ExperimentalConfig):
     heldout_neurons: int = 32 # for RTT
 
@@ -289,6 +296,7 @@ class DatasetConfig:
     nlb_rtt: NLBConfig = NLBConfig()
     churchland_maze: MazeConfig = MazeConfig()
     odoherty_rtt: RTTConfig = RTTConfig()
+    dyer_co: DyerCOConfig = DyerCOConfig()
 
 @dataclass
 class TrainConfig:

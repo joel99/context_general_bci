@@ -15,6 +15,7 @@ class ExperimentalTask(OrderedEnum):
     churchland_maze = "churchland_maze"
     odoherty_rtt = "odoherty_rtt"
     dyer_co = "dyer_co"
+    gallego_co = "gallego_co"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 # Exports
@@ -22,3 +23,5 @@ from .passive_icms import ICMSLoader
 from .nlb import MazeLoader, RTTLoader
 from .rtt import ODohertyRTTLoader
 from .maze import ChurchlandMazeLoader
+from .myow_co import DyerCOLoader
+from .gallego_co import GallegoCOLoader

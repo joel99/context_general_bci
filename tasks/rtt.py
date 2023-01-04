@@ -11,7 +11,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import resample_poly
 
 from config import DataKey, DatasetConfig
-from subjects import SubjectInfo, SubjectArrayRegistry
+from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 from einops import rearrange, reduce
 
@@ -117,18 +117,8 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
             return None
             raise NotImplementedError
         for t in range(full_spikes.size(0)):
-            spikes = full_spikes[t]
-            spike_payload = {}
-            for a in arrays_to_use:
-                array = SubjectArrayRegistry.query_by_array(a)
-                if array.is_exact:
-                    array = SubjectArrayRegistry.query_by_array_geometric(a)
-                    spike_payload[a] = spikes[:, array.as_indices()].clone()
-                else:
-                    assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
-                    spike_payload[a] = spikes.clone()
             single_payload = {
-                DataKey.spikes: spike_payload,
+                DataKey.spikes: create_spike_payload(full_spikes[t], arrays_to_use),
                 DataKey.bhvr_vel: bhvr_vars[DataKey.bhvr_vel][t].clone(),
             }
             single_path = cache_root / f'{t}.pth'

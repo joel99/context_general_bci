@@ -13,8 +13,8 @@ from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStra
 from data import SpikingDataset, DataAttrs
 from model import transfer_model, logger
 
-from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
-from utils import prep_plt
+from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
+from analyze_utils import prep_plt
 
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
 # query = "maze_small"

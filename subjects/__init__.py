@@ -23,7 +23,7 @@ class SubjectName(OrderedEnum):
     chewie = "Chewie"
 
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
-from .array_registry import SubjectArrayRegistry
+from .array_registry import SubjectArrayRegistry, create_spike_payload
 # ? Should we be referencing this instance or the class in calls? IDK
 subject_array_registry = SubjectArrayRegistry()
 

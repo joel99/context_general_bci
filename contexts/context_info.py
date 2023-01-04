@@ -17,7 +17,7 @@ from tasks import ExperimentalTask, ExperimentalTaskRegistry
 StimCommand = NamedTuple("StimCommand", times=np.ndarray, channels=np.ndarray, current=np.ndarray)
 CommandPayload = Dict[Path, StimCommand]
 
-
+logger = logging.getLogger(__name__)
 
 @dataclass(kw_only=True)
 class ContextInfo:
@@ -97,6 +97,7 @@ class ContextInfo:
 
     def load(self, cfg: DatasetConfig, cache_root: Path):
         loader = ExperimentalTaskRegistry.get_loader(self.task)
+        logger.info(f"Preprocessing {self.task}: {self.datapath}...")
         return loader.load(
             self.datapath,
             cfg=cfg,
@@ -268,6 +269,48 @@ class ReachingContextInfo(ContextInfo):
             **super().get_search_index(),
             'session': self.session,
         }
+
+DYER_CO_FILENAMES = {
+    ('mihi', 1): 'full-mihi-03032014',
+    ('mihi', 2): 'full-mihi-03062014',
+    ('chewie', 1): 'full-chewie-10032013',
+    ('chewie', 2): 'full-chewie-12192013',
+}
+@dataclass
+class DyerCOContextInfo(ReachingContextInfo):
+    @classmethod
+    def build(cls, handle, task: ExperimentalTask, alias: str="", arrays=["main"], root='./data/dyer_co/'):
+        datapath = Path(root) / f'{DYER_CO_FILENAMES[handle]}.mat'
+        subject = SubjectArrayRegistry.query_by_subject(
+            datapath.name.split('-')[-2].lower()
+        )
+        session = int(datapath.stem.split('-')[-1])
+        return DyerCOContextInfo(
+            subject=subject,
+            task=task,
+            _arrays=arrays,
+            alias=alias,
+            session=session,
+            datapath=datapath,
+        )
+
+# @dataclass
+# class GallegoCOContextInfo(ReachingContextInfo):
+#     @classmethod
+#     def build_from_dir(cls, task: ExperimentalTask, arrays=["main"], root='./data/gallego_co/'):
+#         datapath = Path(root) / f'{handle}.mat'
+#         subject = SubjectArrayRegistry.query_by_subject(
+#             datapath.name.split('-')[-2].lower()
+#         )
+#         session = int(datapath.stem.split('-')[-1])
+#         return GallegoCOContextInfo(
+#             subject=subject,
+#             task=task,
+#             _arrays=arrays,
+#             alias=alias,
+#             session=session,
+#             datapath=datapath,
+#         )
 
 # Not all have S1 - JY would prefer registry to always be right rather than detecting this post-hoc during loading
 # So we do a pre-sweep and log down which sessions have which arrays here

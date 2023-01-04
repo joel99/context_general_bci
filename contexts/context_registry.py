@@ -13,7 +13,8 @@ from .context_info import (
     ContextInfo,
     ReachingContextInfo,
     PassiveICMSContextInfo,
-    RTTContextInfo
+    RTTContextInfo,
+    DyerCOContextInfo
 )
 
 from tasks import ExperimentalTask
@@ -127,4 +128,9 @@ context_registry = ContextRegistry([
     *ReachingContextInfo.build_several('./data/churchland_reaching/000070/sub-Nitschke', ExperimentalTask.churchland_maze, alias_prefix='churchland_maze_nitschke'),
 
     *RTTContextInfo.build_several('./data/odoherty_rtt/', alias_prefix='odoherty_rtt'),
+
+    DyerCOContextInfo.build(('mihi', 1), ExperimentalTask.dyer_co, alias='dyer_co_mihi_1'),
+    DyerCOContextInfo.build(('mihi', 2), ExperimentalTask.dyer_co, alias='dyer_co_mihi_2'),
+    DyerCOContextInfo.build(('chewie', 1), ExperimentalTask.dyer_co, alias='dyer_co_chewie_1'),
+    DyerCOContextInfo.build(('chewie', 2), ExperimentalTask.dyer_co, alias='dyer_co_chewie_2'),
 ])

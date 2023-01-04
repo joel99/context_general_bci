@@ -21,7 +21,7 @@ from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStra
 from contexts import context_registry
 from copy import deepcopy
 
-from utils import get_wandb_run, load_wandb_run
+from analyze_utils import get_wandb_run, load_wandb_run
 
 # dataset_name = 'mc_rtt'
 # dataset_name = 'mc_maze$'

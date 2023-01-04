@@ -1,24 +1,29 @@
 # @package _global_
-tag: test
+
+tag: test2
 
 defaults:
-  - /model: pretrain
-  - /train: small
-model:
-  readin_strategy: EmbedStrat.token
+  - /model: pretrain_small
+  - /dataset: maze_nlb
+  - /train: nlb
 dataset:
-  bin_size_ms: 5
   datasets:
-  # - mc_maze_small
-  - churchland_maze_jenkins-.*
-  - churchland_maze_nitschke-.*
-
+  # - dyer_co_mihi_1
+  - dyer_co_mihi_2
+  # - dyer_co_chewie_1
+  # - dyer_co_chewie_2
   data_keys:
-  - "spikes"
-
-  max_arrays: 2
-  max_channels: 96
+  - DataKey.spikes
+model:
+  # dropout: 0.8
+  # transformer:
+  #   dropout: 0.8
+  #   n_heads: 2
+  #   n_layers: 4
+  task:
+    tasks:
+    - ModelTask.infill
+    metrics:
+    - Metric.bps
 train:
-  epochs: 100
-  # epochs: 2000
-  batch_size: 128
+  patience: 6000

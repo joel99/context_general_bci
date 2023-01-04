@@ -1,10 +1,13 @@
 #%%
 r"""
-A handful of clearly sorted ~700 trials from MYOW
-https://github.com/nerdslab/myow-neuro
-- Adapted from myow/data/monkey_neural_dataset.py
+Gallego CO release (10/29/22)
+https://doi.org/10.5061/dryad.xd2547dkt
 
-Data was pulled by git clone and copy of raw data folder.
+```
+In these experiments, monkeys controlled a cursor on a screen using a two-link, planar manipulandum. Monkeys performed a simple center-out task to one of the eight possible targets, after a variable delayed period. During this reaching task, we tracked the endpoint position of the hand using sensors on the manipulandum. In addition to the behavioral data, we collected neural data from one or two of these areas using Blackrock Utah multielectrode arrays, yielding ~100 to ~200 channels of extracellular recordings per monkey. Recordings from these channels were thresholded online to detect spikes, which were sorted offline into putative single units.
+```
+
+Data was pulled by GUI download + transfer to cluster. (no CLI)
 """
 from typing import List
 from pathlib import Path
@@ -24,8 +27,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 @ExperimentalTaskRegistry.register
-class DyerCOLoader(ExperimentalTaskLoader):
-    name = ExperimentalTask.dyer_co
+class GallegoCOLoader(ExperimentalTaskLoader):
+    name = ExperimentalTask.gallego_co
 
     @classmethod
     def load(
@@ -38,6 +41,7 @@ class DyerCOLoader(ExperimentalTaskLoader):
         dataset_alias: str,
         **kwargs,
     ):
+        raise NotImplementedError
         mat_dict = loadmat(datapath)
 
         # load matrix

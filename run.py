@@ -23,7 +23,7 @@ import wandb
 from config import RootConfig, Metric
 from data import SpikingDataset
 from model import BrainBertInterface, load_from_checkpoint
-from utils import get_best_ckpt_from_wandb_id
+from analyze_utils import get_best_ckpt_from_wandb_id
 
 r"""
     A note on usage:

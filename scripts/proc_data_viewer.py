@@ -13,7 +13,7 @@ from data import SpikingDataset
 from matplotlib import pyplot as plt
 import seaborn as sns
 from omegaconf import OmegaConf
-from utils import prep_plt
+from analyze_utils import prep_plt
 
 # dataset_name = 'mc_maze_large' # 122 sorted units
 # dataset_name = 'mc_maze_medium' # 114 sorted units

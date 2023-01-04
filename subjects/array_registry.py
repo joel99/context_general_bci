@@ -62,7 +62,17 @@ class SubjectArrayRegistry:
         return cls._subject_registry[id]
 
 
-
+def create_spike_payload(spikes: torch.Tensor, arrays_to_use: List[str]) -> Dict[str, torch.Tensor]:
+    spike_payload = {}
+    for a in arrays_to_use:
+        array = SubjectArrayRegistry.query_by_array(a)
+        if array.is_exact:
+            array = SubjectArrayRegistry.query_by_array_geometric(a)
+            spike_payload[a] = spikes[:, array.as_indices()].clone()
+        else:
+            assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
+            spike_payload[a] = spikes.clone()
+    return spike_payload
 
 # ==== Defunct
 
