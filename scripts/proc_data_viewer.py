@@ -17,17 +17,21 @@ from utils import prep_plt
 
 # dataset_name = 'mc_maze_large' # 122 sorted units
 # dataset_name = 'mc_maze_medium' # 114 sorted units
-# dataset_name = 'mc_maze_small' # 107 sorted units
-dataset_name = 'mc_maze$' # 137 sorted units
+dataset_name = 'mc_maze_small' # 107 sorted units
+# dataset_name = 'mc_maze$' # 137 sorted units
 # dataset_name = 'churchland_maze_jenkins-0'
+# dataset_name = 'churchland_maze_jenkins-1'
+# dataset_name = 'churchland_maze_jenkins-2'
+# dataset_name = 'churchland_maze_jenkins-3'
+# dataset_name = 'churchland_maze_nitschke-0'
 # dataset_name = 'churchland_maze_nitschke-1'
-# dataset_name = 'churchland_maze_nitschke-3'
 # dataset_name = 'churchland_maze_nitschke-2'
 # dataset_name = 'churchland_maze_nitschke-3'
+# dataset_name = 'churchland_maze_nitschke-4'
 
 # TODO - current inferred rates for RTT are wavy for some reason
 # dataset_name = 'mc_rtt'
-dataset_name = 'odoherty_rtt-Loco-20170215_02'
+# dataset_name = 'odoherty_rtt-Loco-20170215_02'
 
 # dataset_name = 'odoherty_rtt-Loco-20170216_02'
 # dataset_name = 'odoherty_rtt-Loco-20170217_02'
@@ -50,7 +54,8 @@ print(context)
 # context = context_registry.query_by_datapath(datapath)
 
 default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
-default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+default_cfg.data_keys = [DataKey.spikes]
+# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 5
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 default_cfg.datasets = [context.alias]
@@ -63,22 +68,22 @@ dataset.build_context_index()
 #     lengths.append(dataset[t][DataKey.spikes].size(0))
 # print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
 print(len(dataset))
-#%%
-trial = 0
-trial = 10
-trial_vel = dataset[trial][DataKey.bhvr_vel]
+# #%%
+# trial = 0
+# trial = 10
+# trial_vel = dataset[trial][DataKey.bhvr_vel]
 
-# Show kinematic trace by integrating trial_vel
-trial_pos = trial_vel.cumsum(0)
-trial_pos = trial_pos - trial_pos[0]
-# Plot
-fig, ax = plt.subplots(2, 1, sharex=True)
-ax[0].plot(trial_vel)
-ax[1].plot(trial_pos)
+# # Show kinematic trace by integrating trial_vel
+# trial_pos = trial_vel.cumsum(0)
+# trial_pos = trial_pos - trial_pos[0]
+# # Plot
+# fig, ax = plt.subplots(2, 1, sharex=True)
+# ax[0].plot(trial_vel)
+# ax[1].plot(trial_pos)
 
 #%%
 # trial = 10
-# trial = 26
+trial = 26
 
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
@@ -87,7 +92,6 @@ print(pop_spikes[::2].sum(0))
 print(pop_spikes[1::2].sum(0))
 # sns.histplot(pop_spikes[::2].sum(0))
 # sns.histplot(pop_spikes[1::2].sum(0) - pop_spikes[0::2].sum(0))
-#%%
 print(
     f"Mean: {pop_spikes.float().mean():.2f}, "
     f"Std: {pop_spikes.float().std():.2f}, "

@@ -14,6 +14,7 @@ class ExperimentalTask(OrderedEnum):
     nlb_rtt = "nlb_rtt"
     churchland_maze = "churchland_maze"
     odoherty_rtt = "odoherty_rtt"
+    dyer_co = "dyer_co"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 # Exports

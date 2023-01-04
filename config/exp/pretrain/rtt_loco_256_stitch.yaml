@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_indy_nlb
+tag: rtt_loco_256_stitch
 
 defaults:
   - /model: pretrain
@@ -7,24 +7,33 @@ defaults:
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
-  # array_embed_strategy: EmbedStrat.token_add
+  array_embed_strategy: EmbedStrat.token_add
+  dropout: 0.1
   transformer:
-    n_state: 256
     dropout: 0.1
+    n_heads: 2
+    n_state: 256
   hidden_size: 256
   session_embed_size: 256
   subject_embed_size: 256
   array_embed_size: 256
-  dropout: 0.1
+
+  readin_strategy: EmbedStrat.unique_project
+  readout_strategy: EmbedStrat.unique_project
+  readin_compress: False
+  readin_dim: 256
+  readout_dim: 256
+
   task:
     tasks:
     - ModelTask.infill
     metrics:
     - Metric.bps
+    - Metric.all_loss
 dataset:
   datasets:
-  - odoherty_rtt-Indy.*
-  - mc_rtt
+  - odoherty_rtt-Loco.*
+  # - odoherty_rtt-Indy-20161014_04
   data_keys:
   - DataKey.spikes
   meta_keys:
@@ -36,5 +45,3 @@ dataset:
     arrays:
     - Indy-M1
     - Loco-M1
-train:
-  batch_size: 256

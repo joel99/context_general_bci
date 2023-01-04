@@ -47,7 +47,6 @@ class TaskConfig:
         These are _model_ tasks, not experimental tasks.
         Beginning experiments will be pretrain -> fine-tune, but we will try to make migrating to multi-task easy.
     """
-    # TODO support multitask tuning (rather, think of a scenario where that would be needed?)
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill])
 
     # infill
@@ -63,6 +62,9 @@ class TaskConfig:
 
     linear_head: bool = False
     unique_no_head: bool = False # overrides above
+
+    # kinematic decode
+    behavior_lag: int = 0
 
 @dataclass
 class TransformerConfig:
@@ -91,10 +93,13 @@ class EmbedStrat(Enum):
     token_add = 'token_add' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
     concat = 'concat' # concat embedding and downproject
 
-    # raw data input specific
+    # readin specific
     project = 'project'
     unique_project = 'unique_project' # learn a separate projection per context
     mirror_project = 'mirror_project'
+
+    readin_cross_attn = 'cross_attn'
+    contextual_mlp = 'contextual_mlp'
 
 @dataclass
 class ModelConfig:
@@ -146,7 +151,7 @@ class ModelConfig:
     # Readin strategy describes IO.
     # Only when readin strategy is `token` does array embed get used.
     readin_strategy: EmbedStrat = EmbedStrat.token
-    readin_dim: int = 32 # think of this as "PCs" or whatever
+    readin_dim: int = 32 # a multipurpose readin hidden size. Used differently in readin matrix and readin attention
     readin_compress: bool = True # factorize according to above dim
     readout_strategy: EmbedStrat = EmbedStrat.none
     readout_dim: int = 0 # use original space

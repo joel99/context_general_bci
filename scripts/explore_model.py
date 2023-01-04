@@ -17,18 +17,21 @@ from utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 from utils import prep_plt
 
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
-query = "maze_small"
-query = "maze_med"
+# query = "maze_small"
+# query = "maze_med"
 # query = "maze_large"
-query = "maze_nlb"
+# query = "maze_nlb"
 # query = "maze_med_ft"
 # query = "maze_small_ft"
 # query = "maze_large_ft"
 # query = "maze_all"
+# query = "maze_nlb_stitch_out"
+
 # query = "rtt_all"
 # query = "rtt_all_256"
 # query = "rtt_nlb_infill_only"
 # query = 'rtt_nlb_07'
+# query = 'rtt_nlb_pt'
 
 # query = "rtt_indy_nlb"
 # query = "rtt_indy1"
@@ -37,15 +40,21 @@ query = "maze_nlb"
 # query = "rtt_all_sans_add"
 # query = "rtt_indy_sans_256_d01"
 # query = "rtt_all_256"
-# query = "rtt_all_512"
+query = "rtt_all_512"
 # query = "rtt_indy_loco"
 
+# query = "rtt_loco"
 # query = "rtt_loco1"
-# query = "rtt_loco1_d3"
-# query = "rtt_loco"
-# query = "rtt_loco"
-query = 'rtt_indy_256_linear'
+# query = "rtt_loco_test1"
+# query = "rtt_loco_test2"
+# query = "rtt_loco_test3"
+query = "rtt_loco_test4"
+# query = 'rtt_indy_256_linear'
 # query = 'test'
+
+# query = 'rtt_loco_d2'
+# query = 'rtt_loco_512'
+# query = 'rtt_loco_256_stitch'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -64,8 +73,13 @@ cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
-cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
-# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
+cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
+# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170214_02']
+# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
+
+# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
+
 
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
@@ -73,6 +87,7 @@ dataset.restrict_to_train_set()
 dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
 model = transfer_model(src_model, cfg.model, data_attrs)
+print(f'{len(dataset)} examples')
 #%%
 # model.cfg.task.outputs = [Output.heldout_logrates]
 # model.cfg.task.metrics = [Metric.bps]
@@ -98,28 +113,34 @@ rates = heldin_outputs[Output.rates] # b t c
 spikes = heldin_outputs[Output.spikes][:,:,0] # b t a c -> b t c
 ax = prep_plt()
 
-num = 3
-channel = 2
+num = 10
+# channel = 5
+# channel = 10
+# channel = 18
+# channel = 19
+# channel = 20
+# channel = 80
 
 colors = sns.color_palette("husl", num)
 
-for trial in range(num):
-    ax.plot(rates[trial][:,channel], color=colors[trial])
+# for trial in range(num):
+#     ax.plot(rates[trial][:,channel], color=colors[trial])
 
 y_lim = ax.get_ylim()[1]
 # plot spike raster
-for trial in range(num):
-    spike_times = spikes[trial,:,channel].nonzero()
-    y_height = y_lim * (trial+1) / num
-    ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
+# for trial in range(num):
+#     spike_times = spikes[trial,:,channel].nonzero()
+#     y_height = y_lim * (trial+1) / num
+#     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
+# trial = 10
 trial = 20
+# trial = 80
+# trial = 85
 from scipy.ndimage import gaussian_filter1d
-# for channel in range(num):
-# #     if channel != 2:
-# #         continue
-# #     # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
-#     # ax.plot(test[trial][:,channel], color=colors[channel])
+for channel in range(num):
+    # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
+    ax.plot(rates[trial][:,channel * 3], color=colors[channel])
 #     ax.plot(gaussian_filter1d(test[trial,:,channel], sigma=3), color=colors[channel])
 
     # smooth the signal with a gaussian kernel

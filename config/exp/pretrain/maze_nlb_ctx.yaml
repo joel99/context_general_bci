@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test
+tag: maze_nlb_ctx
 
 defaults:
   - /model: pretrain_small
@@ -18,7 +18,7 @@ model:
   session_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.none
   array_embed_strategy: EmbedStrat.none
-  readin_strategy: EmbedStrat.readin_cross_attn
+  readin_strategy: EmbedStrat.contextual_mlp
   readout_strategy: EmbedStrat.contextual_mlp
   readin_compress: False
   readin_dim: 128
@@ -28,7 +28,6 @@ model:
     dropout: 0.4
     n_heads: 2
   task:
-    unique_no_head: True
     tasks:
     - ModelTask.infill
     # - ModelTask.heldout_decoding

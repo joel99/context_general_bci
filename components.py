@@ -5,19 +5,25 @@ from torch.nn import init
 import torch.nn.functional as F
 import math
 from einops import rearrange, pack, unpack, repeat
+import logging
 
 from config import TransformerConfig, ModelConfig
 from data import DataAttrs, MetaKey
 
+logger = logging.getLogger(__name__)
+
 class ReadinMatrix(nn.Module):
-    # get that canonical state, using readin bottleneck
+    r"""
+        Linear projection to transform input population to canonical (probably PC-related) input.
+        Optional rank bottleneck (`readin_compress`)
+    """
     def __init__(self, in_count: int, out_count: int, data_attrs: DataAttrs, cfg: ModelConfig):
         super().__init__()
-        num_contexts = len(data_attrs.context.session) # ! currently assuming no session overlap
+        self.contexts = data_attrs.context.session # ! currently assuming no session overlap
         self.compress = cfg.readin_compress
         self.unique_readin = nn.Parameter(
             init.kaiming_uniform_(
-                torch.empty(num_contexts, in_count, cfg.readin_dim if self.compress else out_count),
+                torch.empty(len(self.contexts), in_count, cfg.readin_dim if self.compress else out_count),
                 a=math.sqrt(5)
             )
         )
@@ -46,8 +52,119 @@ class ReadinMatrix(nn.Module):
             state_in = torch.einsum('btah,bhi->btai', state_in, readin_matrix)
         return state_in
 
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
-        return super().load_state_dict(state_dict, strict)
+    def load_state_dict(self, transfer_state_dict: Mapping[str, Any], transfer_attrs: DataAttrs):
+        state_dict = {}
+        if self.compress:
+            state_dict['project'] = transfer_state_dict['project']
+        num_reassigned = 0
+        current_state = self.state_dict()['unique_readin']
+        for n_idx, target in enumerate(self.contexts):
+            if target in transfer_attrs.context.session:
+                s_idx = transfer_attrs.context.session.index(target)
+                current_state[n_idx] = transfer_state_dict[f'unique_readin'][s_idx]
+                num_reassigned += 1
+        logger.info(f'Loaded {num_reassigned} of {len(self.contexts)} readin matrices.')
+        state_dict['unique_readin'] = current_state # unnecessary?
+        return super().load_state_dict(state_dict)
+
+class ReadinCrossAttention(nn.Module):
+    r"""
+        A linear projection is disadvantaged in two ways:
+        - couples value with relevance
+        - requires a separate projection (~Channel x Hidden) for each context
+            - extra parameters may be statistically inefficient (though computational footprint is negligible)
+
+        We thus apply a cross-attention readin strategy, which outsources context-specific parameters to the context embeddings.
+        Hopefully they have enough capacity. Also, this module has high memory costs (several GB) due to hidden-vector per channel in value computation
+        # ! Actually, wayy too much memory. We actually go over 14G just scaling on Indy.
+        # Also, initial testing shows little promise in small-scale Maze nlb.
+
+        - individual channels get learned position embeddings
+        - position embedding + context specific embedding (e.g. session embed) concat and project to
+            - key
+            - value
+            - TODO add more context embeds (subject, array)
+            - TODO decouple these context embeds with global step context embed
+        - global query vectors of size H
+            - TODO develop task-queries
+
+        Readout strategies:
+        - take backbone, pos embed and context embed, project to H
+        - TODO should readout include task embed? (maybe as a global pre-transform, to be symmetric)
+    """
+    def __init__(self, in_count: int, out_count: int, data_attrs: DataAttrs, cfg: ModelConfig):
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(cfg.readin_dim))
+        self.channel_position_embeds = nn.Parameter(init.kaiming_uniform_(torch.empty(in_count, cfg.readin_dim), a=math.sqrt(5)))
+        self.scale = math.sqrt(cfg.readin_dim)
+        self.key_project = nn.Sequential(
+            nn.Linear(cfg.readin_dim + cfg.session_embed_size, cfg.readin_dim),
+            nn.GELU(),
+            nn.Linear(cfg.readin_dim, cfg.readin_dim)
+        )
+        self.value_project = nn.Sequential(
+            nn.Linear(1 + cfg.readin_dim + cfg.session_embed_size, cfg.readin_dim),
+            nn.GELU(),
+            nn.Linear(cfg.readin_dim, out_count)
+        )
+
+    def forward(self, state_in: torch.Tensor, session: torch.Tensor, subject: torch.Tensor, array: torch.Tensor):
+        r"""
+            state_in: B T A C
+            session: B x H
+            subject: B x H
+            array: B x A x H
+        """
+        b, t, a, c = state_in.size()
+        h = session.size(-1)
+        r = self.channel_position_embeds.size(-1)
+        keys = self.key_project(torch.cat([
+            rearrange(self.channel_position_embeds, 'c r -> 1 c r').expand(b, c, r), # add batch dim
+            rearrange(session, 'b h -> b 1 h').expand(b, c, h) # add input-channel dim
+        ], dim=-1)) # b c r
+        values = self.value_project(torch.cat([
+            rearrange(self.channel_position_embeds, 'c r -> 1 1 1 c r').expand(b, t, a, c, r), # add B T A
+            rearrange(session, 'b h -> b 1 1 1 h').expand(b, t, a, c, h), # add T A C dim
+            state_in.unsqueeze(-1),
+        ], dim=-1)) # b t a c h
+
+        # perform cross attention
+        scores = torch.einsum('bcr, r->bc', keys, self.query) / self.scale
+        normalized_scores = F.softmax(scores, dim=-1)
+
+        state_in = torch.einsum('bc, btach -> btah', normalized_scores, values) # b q c x b t a c h
+        return state_in
+
+class ContextualMLP(nn.Module):
+    def __init__(self, in_count: int, out_count: int, cfg: ModelConfig):
+        super().__init__()
+        # self.channel_position_embeds = nn.Parameter(init.kaiming_uniform_(torch.empty(out_count, cfg.readin_dim), a=math.sqrt(5)))
+        self.readout_project = nn.Sequential(
+            nn.Linear(in_count + cfg.session_embed_size, cfg.readin_dim),
+            nn.GELU(),
+            nn.Linear(cfg.readin_dim, out_count)
+            # nn.Linear(cfg.readin_dim, cfg.readin_dim)
+        )
+
+    def forward(self, state_in: torch.Tensor, batch: Dict[str, torch.Tensor]):
+        r"""
+            state_in: B T A H
+            session: B x H
+            subject: B x H
+            array: B x A x H
+
+            out: B T A H (or C)
+        """
+
+        return self.readout_project(torch.cat([
+        # queries = self.readout_project(torch.cat([
+            state_in,
+            rearrange(batch['session'], 'b h -> b 1 1 h').expand(*state_in.size()[:-1], -1),
+        ], -1))
+        # To show up in a given index, a query must have a high score against that index embed
+        # return torch.einsum('btah, ch -> btac', queries, self.channel_position_embeds)
+
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, cfg: TransformerConfig):

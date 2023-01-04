@@ -87,7 +87,7 @@ class RatePrediction(TaskPipeline):
         self.cfg = cfg.task
         if getattr(self.cfg, 'unique_no_head', False):
             decoder_layers = []
-        elif self.cfg.linear_head:
+        elif getattr(self.cfg, 'linear_head', False):
             decoder_layers = [nn.Linear(backbone_out_size, channel_count)]
         else:
             decoder_layers = [
@@ -334,6 +334,14 @@ class HeldoutPrediction(RatePrediction):
 
         return batch_out
 
+class BehaviorRegression(TaskPipeline):
+    def __init__(
+        self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
+    ):
+        pass
+
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
+        raise NotImplementedError
 
 
 # TODO convert to registry
@@ -341,4 +349,5 @@ task_modules = {
     ModelTask.infill: SelfSupervisedInfill,
     ModelTask.icms_one_step_ahead: ICMSNextStepPrediction, # ! not implemented, above logic is infill specific
     ModelTask.heldout_decoding: HeldoutPrediction,
+    ModelTask.kinematic_decoding: BehaviorRegression,
 }

@@ -19,6 +19,8 @@ class SubjectName(OrderedEnum):
     indy = "Indy"
     loco = "Loco"
     nitschke = "Nitschke"
+    mihi = "Mihi"
+    chewie = "Chewie"
 
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
 from .array_registry import SubjectArrayRegistry

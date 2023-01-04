@@ -17,7 +17,7 @@ from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
-from components import TemporalTransformer, ReadinMatrix
+from components import TemporalTransformer, ReadinMatrix, ReadinCrossAttention, ContextualMLP
 from task_io import task_modules
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,8 @@ class BrainBertInterface(pl.LightningModule):
             'lr_ramp_init_factor',
             'lr_decay_steps',
             'lr_min',
-            'accelerate_new_params'
+            'accelerate_new_params',
+            "readout_dim" # TODO it's here due to legacy model, move to transfer_cfg
         ]:
             setattr(self_copy, safe_attr, getattr(cfg, safe_attr))
 
@@ -155,16 +156,25 @@ class BrainBertInterface(pl.LightningModule):
             # Token is the legacy default
             self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
         elif self.cfg.readin_strategy == EmbedStrat.unique_project:
-            self.readin = ReadinMatrix(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
+            self.readin = ReadinMatrix(channel_count, self.cfg.
+            hidden_size, self.data_attrs, self.cfg)
+        elif self.cfg.readin_strategy == EmbedStrat.contextual_mlp:
+            self.readin = ContextualMLP(channel_count, self.cfg.hidden_size, self.cfg)
+        elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
+            self.readin = ReadinCrossAttention(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
 
-        if self.cfg.readout_strategy == EmbedStrat.unique_project:
+        if getattr(self.cfg, 'readout_strategy', EmbedStrat.none) == EmbedStrat.unique_project:
             self.readout = ReadinMatrix(
                 self.cfg.hidden_size,
-                self.cfg.readout_dim if getattr(self.cfg, 'readout_dim', 0) else channel_count,
+                self.cfg.readout_dim if getattr(self.cfg, 'readout_dim', 0) else 128, # ! REMOVE
+                # self.cfg.readout_dim if getattr(self.cfg, 'readout_dim', 0) else channel_count,
                 self.data_attrs,
                 self.cfg
             )
             # like PC readout
+        elif getattr(self.cfg, 'readout_strategy', EmbedStrat.none) == EmbedStrat.contextual_mlp:
+            self.readout = ContextualMLP(self.cfg.hidden_size, self.cfg.hidden_size, self.cfg)
+            # for simplicity, project out to hidden size - task IO will take care of the other items
 
         for k in self.cfg.task.tasks:
             if k == ModelTask.icms_one_step_ahead:
@@ -181,7 +191,7 @@ class BrainBertInterface(pl.LightningModule):
             return channel_count
         self.task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
-                self.cfg.hidden_size if task_modules[k].unique_space and self.cfg.readout_strategy is not EmbedStrat.none \
+                self.cfg.hidden_size if task_modules[k].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none \
                     else self.backbone.out_size,
                 get_target_size(k),
                 self.cfg,
@@ -216,8 +226,10 @@ class BrainBertInterface(pl.LightningModule):
                         # Currently will fail for array flag transfer, no idea what the right policy is right now
                         module.data = transfer_module.data
                     else:
-                        # TODO transfer for `ReadinMatrix`
-                        module.load_state_dict(transfer_module.state_dict())
+                        if isinstance(module, ReadinMatrix):
+                            module.load_state_dict(transfer_module.state_dict(), transfer_data_attrs)
+                        else:
+                            module.load_state_dict(transfer_module.state_dict())
                     logger.info(f'Transferred {module_name} weights.')
                 else:
                     if isinstance(module, nn.Parameter):
@@ -265,6 +277,7 @@ class BrainBertInterface(pl.LightningModule):
 
         try_transfer('context_project')
         try_transfer('readin')
+        try_transfer('readout')
 
         for k in self.task_pipelines:
             if k in transfer_model.task_pipelines:
@@ -297,25 +310,44 @@ class BrainBertInterface(pl.LightningModule):
         temporal_context = []
         for task in self.cfg.task.tasks:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
-        if self.cfg.readin_strategy == EmbedStrat.unique_project:
-            state_in = self.readin(state_in, batch) # b t a h
-        else:
-            state_in = self.readin(state_in)
-        static_context = []
-        project_context = [] # only for static info
+
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             session: torch.Tensor = self.session_embed(batch[MetaKey.session]) # B x H
+        else:
+            session = None
+        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
+            subject: torch.Tensor = self.subject_embed(batch[MetaKey.subject]) # B x H
+        else:
+            subject = None
+        if self.cfg.array_embed_strategy is not EmbedStrat.none:
+            array: torch.Tensor = self.array_embed(batch[MetaKey.array])
+        else:
+            array = None
+
+        if self.cfg.readin_strategy == EmbedStrat.contextual_mlp or self.cfg.readout_strategy == EmbedStrat.contextual_mlp:
+            batch['session'] = session # hacky
+
+        if self.cfg.readin_strategy in [EmbedStrat.contextual_mlp, EmbedStrat.unique_project]:
+            state_in = self.readin(state_in, batch) # b t a h
+        elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
+            state_in = self.readin(state_in, session, subject, array)
+        else: # standard project
+            state_in = self.readin(state_in)
+
+        static_context = []
+        project_context = [] # only for static info
+
+        if self.cfg.session_embed_strategy is not EmbedStrat.none:
             if self.cfg.session_embed_strategy == EmbedStrat.token:
                 session = session + self.session_flag # B x H
                 static_context.append(session)
             elif self.cfg.session_embed_strategy == EmbedStrat.token_add:
                 state_in = state_in + rearrange(session, 'b h -> b 1 1 h')
-            elif self.cfg.session_embed_strategy == EmbedStrat.concat:
+            elif self.cfg.session_embed_strategy == EmbedStrat.concat: # concat deprecated for readin strategy etc
                 session = repeat(session, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(session)
 
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
-            subject: torch.Tensor = self.subject_embed(batch[MetaKey.subject]) # B x H
             if self.cfg.subject_embed_strategy == EmbedStrat.token:
                 subject = subject + self.subject_flag
                 static_context.append(subject)
@@ -326,7 +358,6 @@ class BrainBertInterface(pl.LightningModule):
                 project_context.append(subject)
 
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            array: torch.Tensor = self.array_embed(batch[MetaKey.array])
             if self.cfg.array_embed_strategy == EmbedStrat.token:
                 array = array + self.array_flag
                 static_context.extend(array.unbind(1)) # path not yet tested
@@ -339,8 +370,8 @@ class BrainBertInterface(pl.LightningModule):
         # Do not concat static context - list default is easier to deal with
         # static_context = rearrange(static_context, 't0 b h -> b t0 h') if static_context else None
         if project_context: # someone wanted it
-            # B T' H, and we want to merge into B T A H (specifically add T' to each token)
             raise NotImplementedError # not tested
+            # B T' H, and we want to merge into B T A H (specifically add T' to each token)
             augmented_tokens, ps = pack([state_in, *project_context], 'b * a h')
             augmented_tokens = self.context_project(augmented_tokens)
             state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
@@ -401,16 +432,16 @@ class BrainBertInterface(pl.LightningModule):
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T A H
-        if self.cfg.readout_strategy == EmbedStrat.mirror_project:
+        if getattr(self.cfg, 'readout_strategy', EmbedStrat.none) == EmbedStrat.mirror_project:
             unique_space_features = self.readin(features, batch, readin=False)
-        elif self.cfg.readout_strategy == EmbedStrat.unique_project:
+        elif getattr(self.cfg, 'readout_strategy', EmbedStrat.none) in [EmbedStrat.unique_project, EmbedStrat.contextual_mlp]:
             unique_space_features = self.readout(features, batch)
         # Create outputs for configured task
         running_loss = 0
         for task in self.cfg.task.tasks:
             update = self.task_pipelines[task.value](
                 batch,
-                unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features,
+                unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none else features,
                 eval_mode=eval_mode
             )
             if 'loss' in update:
@@ -455,7 +486,7 @@ class BrainBertInterface(pl.LightningModule):
             batch_out.update(
                 self.task_pipelines[task.value](
                     batch,
-                    unique_space_features if self.task_pipelines[task.value].unique_space else features,
+                    unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none  else features,
                     compute_metrics=False
                 )
             )
@@ -615,6 +646,7 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
         Motivation: Some cfg we don't want to bother repeatedly specifying; just take from the init-ing ckpt.
         Should be mutually exclusive from `diff_cfg` list.
     """
+    src_cfg = OmegaConf.merge(ModelConfig(), src_cfg) # backport novel config
     for attr in [
         "hidden_size",
         "activation",
@@ -628,6 +660,7 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
         "array_embed_strategy",
         "readin_strategy",
         "transformer",
+        "readout_strategy",
     ]:
         setattr(target_cfg, attr, getattr(src_cfg, attr))
 

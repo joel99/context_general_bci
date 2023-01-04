@@ -23,6 +23,7 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+  readout_dim: 128
 
 init_from_id: "maze_all-339tvoxc"
 # init_from_id: "maze_all-307jsaky"

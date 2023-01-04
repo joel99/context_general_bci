@@ -40,3 +40,17 @@ class Loco(SubjectInfo): # RTT https://zenodo.org/record/3854034
         'M1': GeometricArrayInfo(array=np.arange(96)),
         'S1': GeometricArrayInfo(array=np.arange(96) + 96),
     }
+
+@SubjectArrayRegistry.register
+class Mihi(SubjectInfo):
+    name = SubjectName.mihi
+    _arrays = {
+        'main': SortedArrayInfo(_max_channels=187),
+    }
+
+@SubjectArrayRegistry.register
+class Chewie(SubjectInfo):
+    name = SubjectName.chewie
+    _arrays = {
+        'main': SortedArrayInfo(_max_channels=174),
+    }

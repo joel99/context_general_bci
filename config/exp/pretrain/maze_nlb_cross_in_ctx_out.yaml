@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test
+tag: maze_nlb_cross_in_ctx_out
 
 defaults:
   - /model: pretrain_small
