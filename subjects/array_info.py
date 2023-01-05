@@ -108,6 +108,10 @@ class SubjectInfo:
         return f"{cls.name.value}-{array_id}"
 
     @classmethod
+    def unwrap_array(cls, array_id: str):
+        return array_id.split('-')[-1]
+
+    @classmethod
     def has_array(cls, array_id: ArrayID, unwrapped=True): # unwrapped
         if unwrapped:
             return array_id in cls.arrays

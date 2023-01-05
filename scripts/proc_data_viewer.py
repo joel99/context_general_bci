@@ -51,6 +51,8 @@ from analyze_utils import prep_plt
 
 dataset_name = 'dyer_co_mihi_2'
 dataset_name = 'dyer_co_chewie_2'
+dataset_name = 'Chewie_CO_20161021'
+
 context = context_registry.query(alias=dataset_name)
 print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
@@ -60,7 +62,9 @@ default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 default_cfg.data_keys = [DataKey.spikes]
 # default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 5
+default_cfg.bin_size_ms = 30
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
+default_cfg.max_channels = 250
 default_cfg.datasets = [context.alias]
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
@@ -86,7 +90,7 @@ print(len(dataset))
 
 #%%
 trial = 10
-# trial = 26
+trial = 26
 
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]

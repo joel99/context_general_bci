@@ -297,6 +297,8 @@ class DatasetConfig:
     churchland_maze: MazeConfig = MazeConfig()
     odoherty_rtt: RTTConfig = RTTConfig()
     dyer_co: DyerCOConfig = DyerCOConfig()
+    gallego_co: ExperimentalConfig = ExperimentalConfig()
+
 
 @dataclass
 class TrainConfig:

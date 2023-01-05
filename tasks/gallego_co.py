@@ -25,8 +25,6 @@ from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 
-from utils import loadmat
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,7 +45,6 @@ class GallegoCOLoader(ExperimentalTaskLoader):
         **kwargs,
     ):
         df: pd.DataFrame = pyaldata.mat2dataframe(datapath, shift_idx_fields=True)
-        import pdb;pdb.set_trace()
         assert cfg.bin_size_ms == df.bin_size[0] * 1000, "bin_size_ms must equal bin_size in the data"
         # assert cfg.bin_size_ms % (df.bin_size[0] * 1000) == 0, "bin_size_ms must be a multiple of bin_size in the data"
         # ! Todo implement "resample" utilities for bhvr + spikes
@@ -58,8 +55,8 @@ class GallegoCOLoader(ExperimentalTaskLoader):
         for trial_id in range(len(df)):
             spike_payload = {}
             for array in arrays_to_use:
-                if f'{array}_spikes' in df.columns:
-                    spike_payload[array] = torch.tensor(df[f'{array}_spikes'][trial_id])
+                if f'{SubjectInfo.unwrap_array(array)}_spikes' in df.columns:
+                    spike_payload[array] = torch.tensor(df[f'{SubjectInfo.unwrap_array(array)}_spikes'][trial_id]).unsqueeze(-1)
             single_payload = {
                 DataKey.spikes: spike_payload,
                 DataKey.bhvr_vel: torch.tensor(df.vel[trial_id]), # T x H

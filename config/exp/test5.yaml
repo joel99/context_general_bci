@@ -11,7 +11,8 @@ dataset:
   - Chewie_CO_20161021
   data_keys:
   - DataKey.spikes
-  max_channels: 187
+  max_channels: 211
+  max_arrays: 2
   bin_size_ms: 30
 model:
   dropout: 0.8
