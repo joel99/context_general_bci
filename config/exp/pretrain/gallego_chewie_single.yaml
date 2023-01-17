@@ -1,14 +1,15 @@
 # @package _global_
 
-tag: gallego
+tag: gallego_chewie_single
 
 defaults:
   - /model: pretrain
   - /train: pretrain
 dataset:
   datasets:
-  - Chewie_CO.*
-  - Mihili_CO.*
+  - Chewie_CO_20150313
+  # - Chewie_CO.*
+  # - Mihili_CO.*
   data_keys:
   - DataKey.spikes
   max_channels: 211

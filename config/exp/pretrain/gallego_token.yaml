@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: gallego
+tag: gallego_token
 
 defaults:
   - /model: pretrain
@@ -33,11 +33,11 @@ model:
   subject_embed_size: 256
   array_embed_size: 256
 
-  readin_strategy: EmbedStrat.unique_project
-  readout_strategy: EmbedStrat.unique_project
-  readin_compress: False
-  readin_dim: 256
-  readout_dim: 256
+  # readin_strategy: EmbedStrat.unique_project
+  # readout_strategy: EmbedStrat.unique_project
+  # readin_compress: False
+  # readin_dim: 256
+  # readout_dim: 256
 
   task:
     tasks:

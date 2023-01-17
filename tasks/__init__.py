@@ -13,6 +13,7 @@ class ExperimentalTask(OrderedEnum):
     nlb_maze = "nlb_maze"
     nlb_rtt = "nlb_rtt"
     churchland_maze = "churchland_maze"
+    churchland_misc = "churchland_misc"
     odoherty_rtt = "odoherty_rtt"
     dyer_co = "dyer_co"
     gallego_co = "gallego_co"

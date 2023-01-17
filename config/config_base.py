@@ -277,7 +277,8 @@ class DatasetConfig:
     # ==== Data parsing/processing ====
     bin_size_ms: int = 2
     pad_batches: bool = True # else, trim batches to the shortest trial
-    max_trial_length: int = 1500 # in bins
+    max_trial_length: int = 1500 # in bins. for preproc
+    max_length_ms: int = 0 # in ms, in dataloader
 
     # Pad to this number of channels per array group
     # If set to 0, will skip padding checks.

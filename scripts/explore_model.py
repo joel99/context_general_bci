@@ -55,6 +55,7 @@ query = "rtt_loco_test4"
 # query = 'rtt_loco_d2'
 # query = 'rtt_loco_512'
 # query = 'rtt_loco_256_stitch'
+query = 'test'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -79,6 +80,7 @@ cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
+cfg.dataset.datasets = ['Chewie_CO_20150313']
 
 
 print(cfg.dataset.datasets)
@@ -133,8 +135,8 @@ y_lim = ax.get_ylim()[1]
 #     y_height = y_lim * (trial+1) / num
 #     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
-# trial = 10
-trial = 20
+trial = 10
+# trial = 20
 # trial = 80
 # trial = 85
 from scipy.ndimage import gaussian_filter1d
@@ -155,7 +157,7 @@ for channel in range(num):
 
 
 # relabel xtick unit from 5ms to ms
-ax.set_xticklabels(ax.get_xticks() * 5)
+ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
 ax.set_xlabel('Time (ms)')
 
 # plt.plot(test[0,:,0])

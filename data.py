@@ -314,17 +314,21 @@ class SpikingDataset(Dataset):
     def collater_factory(self):
         if not self.cfg.pad_batches:
             raise NotImplementedError("Need to implement trimming")
+        max_bins = round(self.cfg.max_length_ms / self.cfg.bin_size_ms)
         def collater(batch):
             r"""
                 batch: list of dicts
             """
             stack_batch = {}
             for k in batch[0].keys():
+                crop_seq = [b[k] for b in batch]
+                if max_bins and isinstance(k, DataKey):
+                    crop_seq = [b[k][-max_bins:] for b in batch] # terminal crop - most trials have long start paddings (e.g. Gallego)
                 if k == DataKey.spikes: # T A C H
-                    stack_batch[LENGTH_KEY] = torch.tensor([b[k].shape[0] for b in batch])
-                    stack_batch[k] = pad_sequence([b[k] for b in batch], batch_first=True)
+                    stack_batch[k] = pad_sequence(crop_seq, batch_first=True)
+                    stack_batch[LENGTH_KEY] = torch.tensor([cs.shape[0] for cs in crop_seq])
                 else:
-                    stack_batch[k] = torch.stack([b[k] for b in batch], 0)
+                    stack_batch[k] = torch.stack(crop_seq, 0)
             return stack_batch
         return collater
 

@@ -14,12 +14,12 @@ from pyaldata import *
 
 data_dir = Path("./data/gallego_co/")
 # for fname in data_dir.glob("*.mat"):
-    # df = mat2dataframe(fname, shift_idx_fields=True)
-    # print(fname)
-    # # print(df.columns)
-    # for c in df.columns:
-    #     if c.endswith('_spikes'):
-    #         print(c, df[c][0].shape)
+#     df = mat2dataframe(fname, shift_idx_fields=True)
+#     print(fname)
+#     # print(df.columns)
+#     for c in df.columns:
+#         if c.endswith('_spikes'):
+#             print(c, df[c][0].shape)
     # import pdb;pdb.set_trace()
 # fname = os.path.join(data_dir, "Han_CO_20171207.mat")
 # fname = os.path.join(data_dir, "Lando_CO_20171207.mat")
@@ -32,6 +32,11 @@ print("original: ", df.M1_spikes[0].shape)
 print(df.columns)
 print(df.head().bin_size)
 print(df.vel[0].shape)
+# print(df[['idx_goCueTime', 'idx_startTime', 'idx_endTime']])
+# print(df[['idx_goCueTime', 'idx_startTime', 'idx_endTime']])
+print(df[['idx_goCueTime', 'idx_trial_end', 'idx_startTime', 'idx_endTime']])
+# print(df[['idx_goCueTime', 'idx_tgtOnTime', 'idx_startTime', 'idx_endTime']])
+# print(df['idx_endTime'])
 #%%
 # print(df.M1_spikes[0].shape)
 # print(len(df.M1_spikes))

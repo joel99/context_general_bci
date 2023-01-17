@@ -300,6 +300,13 @@ GALLEGO_ARRAY_MAP = {
     'Chewie': ['M1', 'PMd'],
     'Mihi': ['M1', 'PMd'],
 }
+
+CHEWIE_ONLY_M1 = [
+    'Chewie_CO_20150313',
+    'Chewie_CO_20150630',
+    'Chewie_CO_20150319',
+    'Chewie_CO_20150629',
+]
 @dataclass
 class GallegoCOContextInfo(ReachingContextInfo):
     @classmethod
@@ -315,6 +322,8 @@ class GallegoCOContextInfo(ReachingContextInfo):
             if subject.name == SubjectName.mihi and session in [20140303, 20140306]: # in Dyer release
                 return None
             arrays = GALLEGO_ARRAY_MAP.get(subject.name.value)
+            if alias in CHEWIE_ONLY_M1:
+                arrays = ['M1']
             return GallegoCOContextInfo(
                 subject=subject,
                 task=task,
