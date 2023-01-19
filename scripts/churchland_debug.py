@@ -21,11 +21,127 @@ dataset_name = 'churchland_maze_nitschke-0'
 dataset_name = 'churchland_maze_nitschke-3'
 # dataset_name = 'churchland_maze_nitschke-1'
 # dataset_name = 'churchland_maze_nitschke-2'
+
+# Gdrive
+dataset_name = 'churchland_misc_nitschke-'
+dataset_name = 'churchland_misc_jenkins-'
+# dataset_name = 'churchland_misc_reggie-' # this seems hdf5
 context = context_registry.query(alias=dataset_name)
-path = context.datapath
-print(context.datapath)
-io = NWBHDF5IO(context.datapath, 'r')
-nwbfile = io.read()
+print(len(context))
+# Ok, some are hdf5, some are mat (all masquerade with .mat endings)
+path = context[0].datapath
+# path = context[1].datapath
+path = context[2].datapath
+# path = context[3].datapath # h5
+# path = context[4].datapath #
+# path = context.datapath
+print(path)
+
+#%%
+# io = NWBHDF5IO(context.datapath, 'r')
+# nwbfile = io.read()
+
+# try opening as h5py file
+import h5py
+f = h5py.File(path, 'r')
+#%%
+# test = pd.DataFrame(f['R']['handPos'])
+data = f['R']
+print(data.keys())
+# print(data['timeCerebusStart'][10, 0])
+# print(data['timeCerebusStart2'][10,0])
+# spike crossing start times
+start = data[data['timeCerebusStart'][10, 0]][:]
+start2 = data[data['timeCerebusStart2'][10, 0]][:]
+num_spikes = data[data['numTotalSpikes'][10, 0]][:]
+cue_on = data[data['timeCueOn'][10, 0]][:] # this is in trial time...
+
+# print(data['isSuccessful'][0, 0])
+ref = data['spikeRaster'][10, 0]
+spike_data = data[ref]['data'][:]
+spike_ir = data[ref]['ir'][:]
+spike_jc = data[ref]['jc'][:]
+# print(data['spikeRaster'][0])
+# test = data[data['spikeRaster'][0, 0]]
+# print(test)
+#%%
+print(start)
+print(np.unique(spike_ir, return_counts=True))
+# there are 1750 time points at which point spikes have been on
+# for each of these timepoints... there are 192 units
+# how do we know which ir corresponds to which time point? we can use total spikes...
+# print(num_spikes)
+#%%
+print(start.shape)
+print(start2.shape)
+print(cue_on)
+
+print(spike_data.shape)
+print(spike_data.all())
+print(spike_ir.shape)
+print(spike_ir)
+print(spike_ir.min(), spike_ir.max())
+print(spike_jc)
+print(spike_jc.shape)
+
+#%%
+print(test['data'][:].shape)
+print(test['ir'])
+print(test['jc'])
+
+#%%
+import scipy
+
+try:
+    mat = scipy.io.loadmat(path, simplify_cells=True)
+except NotImplementedError:
+    try:
+        import mat73
+    except ImportError:
+        raise ImportError("Must have mat73 installed to load mat73 files.")
+    else:
+        mat = mat73.loadmat(path)
+
+#%%
+
+#%%
+# print((mat['R'][0]['spikeRaster']).toarray().shape)
+test = pd.DataFrame(mat['R'])
+print(test.columns)
+print(test.timeCueOn)
+# print(test.spikeRaster)
+# print(test.spikeRaster.iloc[0].shape) # Ok, seems to be a sparse raster, need to find the time coords on this (but why do I actually need to? Nah...)
+# print(test.spikeRaster.iloc[0])
+# print(np.array(test.spikeRaster.iloc[0])[0, )
+# print(test.timeCueOn)
+# print(test.timeTargetOn)
+# # print(test.spikeRaster2)
+# # print(test.spikeRaster.iloc[0].sum(0)[0])
+# print(test.trialLength[0])
+# print(test.trialLength[100])
+# print(test.trialLength[500])
+
+#%%
+
+# Nitschke
+test = test[test.hasSpikes == 1]
+# Mark provided a filtering script, but we won't filter as thoroughly as they do for analysis
+# Specifically - we will leave: failure trials, atypical movement, poor units,
+# print(len(test.unit)) # length trials
+# print(len(test.unit.iloc[0])) # length both arrays (192)
+# print(len(test.unit.iloc[10]))
+print(len(test.unit.iloc[100][0]['spikeTimes']))
+print(test.unit.iloc[100][0]['spikeTimes'])
+# Get timebin
+print(test.columns)
+print(test.trialEndsTime.iloc[100])
+print(test.moveBeginsTime.iloc[100])
+print(test.commandFlyAppears.iloc[100])
+# print(test.hasSpikes)
+# print(mat['R'])
+#%%
+for t in test.iterrows():
+    print(t)
 
 #%%
 from matplotlib import pyplot as plt

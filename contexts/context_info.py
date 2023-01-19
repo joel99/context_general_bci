@@ -10,7 +10,7 @@ import logging
 from config import DatasetConfig
 from subjects import SubjectArrayRegistry, SubjectInfo, SubjectName
 from subjects.pitt_chicago import CRS02b, CRS07
-from tasks import ExperimentalTask, ExperimentalTaskRegistry
+from tasks import ExperimentalTask, ExperimentalTaskRegistry, churchland_misc
 
 # FYI: Inherited dataclasses don't call parent's __init__ by default. This is a known issue/feature:
 # https://bugs.python.org/issue43835
@@ -269,6 +269,35 @@ class ReachingContextInfo(ContextInfo):
             **super().get_search_index(),
             'session': self.session,
         }
+
+@dataclass
+class GDrivePathContextInfo(ContextInfo):
+    # for churchland_misc
+    def _id(self):
+        return f"{self.datapath}"
+
+    @classmethod
+    def build_from_dir(cls, datapath_folder_str: str):
+        datapath_folder = Path(datapath_folder_str)
+        all_info = []
+        for path in datapath_folder.glob("*.mat"):
+            subject = path.stem.split('-')[0]
+            if subject == 'nitschke':
+                arrays = ['PMd', 'M1']
+            elif subject == 'jenkins':
+                arrays = ['PMd'] # TODO
+            elif subject == 'reggie':
+                arrays = ['main'] # TODO
+            # find pre-registered path
+            all_info.append(GDrivePathContextInfo(
+                subject=SubjectArrayRegistry.query_by_subject(subject),
+                task=ExperimentalTask.churchland_misc,
+                _arrays=arrays,
+                datapath=path,
+                alias=f'churchland_misc_{path.stem}',
+            ))
+        return all_info
+
 
 DYER_CO_FILENAMES = {
     ('mihi', 1): 'full-mihi-03032014',

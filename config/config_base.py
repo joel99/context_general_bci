@@ -299,6 +299,7 @@ class DatasetConfig:
     odoherty_rtt: RTTConfig = RTTConfig()
     dyer_co: DyerCOConfig = DyerCOConfig()
     gallego_co: ExperimentalConfig = ExperimentalConfig()
+    churchland_misc: ExperimentalConfig = ExperimentalConfig()
 
 
 @dataclass

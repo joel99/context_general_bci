@@ -16,7 +16,7 @@ class Jenkins(SubjectInfo):
 
 @SubjectArrayRegistry.register
 class Nitschke(SubjectInfo):
-    # Churchland maze
+    # Churchland maze + misc, both unsorted two array datasets
     name = SubjectName.nitschke
     _arrays = {
         'PMd': GeometricArrayInfo(array=np.arange(96)),
@@ -71,4 +71,11 @@ class Lando(SubjectInfo):
     name = SubjectName.lando
     _arrays = {
         'LeftS1Area2': SortedArrayInfo(_max_channels=64), # saw highest 46
+    }
+
+@SubjectArrayRegistry.register
+class Reggie(SubjectInfo):
+    name = SubjectName.reggie
+    _arrays = {
+        'main': GeometricArrayInfo(array=np.arange(94)), # 94 determined by observation
     }

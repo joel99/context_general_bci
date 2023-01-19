@@ -16,6 +16,7 @@ from .context_info import (
     RTTContextInfo,
     DyerCOContextInfo,
     GallegoCOContextInfo,
+    GDrivePathContextInfo,
 )
 
 from tasks import ExperimentalTask
@@ -136,4 +137,5 @@ context_registry = ContextRegistry([
     DyerCOContextInfo.build(('chewie', 2), ExperimentalTask.dyer_co, alias='dyer_co_chewie_2'),
 
     *GallegoCOContextInfo.build_from_dir('./data/gallego_co', task=ExperimentalTask.gallego_co),
+    *GDrivePathContextInfo.build_from_dir('./data/churchland_misc'),
 ])

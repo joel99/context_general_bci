@@ -52,8 +52,11 @@ from analyze_utils import prep_plt
 dataset_name = 'dyer_co_mihi_2'
 dataset_name = 'dyer_co_chewie_2'
 dataset_name = 'Chewie_CO_20161021'
+dataset_name = 'churchland_misc_nitschke-.*'
+
 
 context = context_registry.query(alias=dataset_name)
+context = context[0]
 print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
@@ -62,7 +65,7 @@ default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 default_cfg.data_keys = [DataKey.spikes]
 # default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 5
-default_cfg.bin_size_ms = 30
+# default_cfg.bin_size_ms = 30
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 default_cfg.max_channels = 250
 default_cfg.datasets = [context.alias]

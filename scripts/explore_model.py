@@ -7,6 +7,7 @@ import seaborn as sns
 import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
+from einops import rearrange
 
 # Load BrainBertInterface and SpikingDataset to make some predictions
 from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
@@ -17,14 +18,14 @@ from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_quer
 from analyze_utils import prep_plt
 
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
-# query = "maze_small"
-# query = "maze_med"
-# query = "maze_large"
-# query = "maze_nlb"
+query = "maze_small"
+query = "maze_med"
+query = "maze_large"
+query = "maze_nlb"
 # query = "maze_med_ft"
 # query = "maze_small_ft"
 # query = "maze_large_ft"
-# query = "maze_all"
+query = "maze_all_256"
 # query = "maze_nlb_stitch_out"
 
 # query = "rtt_all"
@@ -39,23 +40,34 @@ from analyze_utils import prep_plt
 # query = "rtt_indy2_noembed"
 # query = "rtt_all_sans_add"
 # query = "rtt_indy_sans_256_d01"
+# query = "rtt_indy_stitch"
 # query = "rtt_all_256"
-query = "rtt_all_512"
+# query = "rtt_all_512"
 # query = "rtt_indy_loco"
 
 # query = "rtt_loco"
 # query = "rtt_loco1"
+# query = "rtt_loco2"
 # query = "rtt_loco_test1"
 # query = "rtt_loco_test2"
 # query = "rtt_loco_test3"
-query = "rtt_loco_test4"
+# query = "rtt_loco_test4"
 # query = 'rtt_indy_256_linear'
 # query = 'test'
 
 # query = 'rtt_loco_d2'
 # query = 'rtt_loco_512'
 # query = 'rtt_loco_256_stitch'
-query = 'test'
+# query = 'test'
+
+# query = 'nitschke_token'
+# query = 'nitschke'
+# query = 'nitschke_single'
+
+query = 'gallego_token'
+query = 'gallego'
+# query = 'gallego_chewie'
+# query = 'gallego_chewie_single'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -68,20 +80,25 @@ src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
 cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.logrates, Output.spikes]
+print(cfg.dataset.datasets)
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
-cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
+# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170214_02']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
 
+# cfg.dataset.datasets = ['mc_rtt']
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
-cfg.dataset.datasets = ['Chewie_CO_20150313']
-
+if 'gallego' in query:
+    cfg.dataset.datasets = ['Chewie_CO_20150313']
+    cfg.dataset.datasets = ['Mihili_CO_20140304']
+if 'nitschke' in query:
+    cfg.dataset.datasets = ['churchland_misc_nitschke-1D8KYfy5IwMmEZaKOEv-7U6-4s-7cKINK']
 
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
@@ -90,6 +107,7 @@ dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
+# print(context_registry.query(alias='Mihi'))
 #%%
 # model.cfg.task.outputs = [Output.heldout_logrates]
 # model.cfg.task.metrics = [Metric.bps]
@@ -112,7 +130,9 @@ heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]
 rates = heldin_outputs[Output.rates] # b t c
-spikes = heldin_outputs[Output.spikes][:,:,0] # b t a c -> b t c
+
+
+spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
 ax = prep_plt()
 
 num = 10
@@ -156,6 +176,8 @@ for channel in range(num):
 
 
 
+ax.set_ylabel('FR (Hz)')
+ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
 # relabel xtick unit from 5ms to ms
 ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
 ax.set_xlabel('Time (ms)')

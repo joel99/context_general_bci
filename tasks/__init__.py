@@ -26,3 +26,4 @@ from .rtt import ODohertyRTTLoader
 from .maze import ChurchlandMazeLoader
 from .myow_co import DyerCOLoader
 from .gallego_co import GallegoCOLoader
+from .churchland_misc import ChurchlandMiscLoader
