@@ -188,16 +188,20 @@ class SpikingDataset(Dataset):
             del meta[f'Unnamed: 0'] # index column
         for k in self.cfg.meta_keys:
             if k == MetaKey.array:
-                context_array = getattr(context_meta, k.name)
+                data_arrays = getattr(context_meta, k.name)
                 # Filter arrays using task configuration
                 task_arrays = getattr(self.cfg, context_meta.task.name).arrays
-                if task_arrays:
-                    context_array = [a for a in context_array if a in task_arrays]
+                if task_arrays: # if task subset is defined, use task array naming (which may be aliases)
+                    # keep the aliases that are relevant for this dataset - (slight hack)
+                    context_array = [a for a in task_arrays if SubjectArrayRegistry.resolve_alias(a)[0] in data_arrays]
+                    # context_array = [a for a in context_array if a in resolved_arrays]
                     if len(context_array) == 0:
                         raise Exception(
                             f"Session {session_path} has arrays {context_array} which has no elements in task configuration {task_arrays}.\n"
                             f"Remove or reconfigure (did you remember to add subject handle)?"
                         )
+                else:
+                    context_array = data_arrays
                 for i in range(self.cfg.max_arrays):
                     meta[f'array_{i}'] = context_array[i] if i < len(context_array) else ""
                 if len(context_array) > self.cfg.max_arrays:

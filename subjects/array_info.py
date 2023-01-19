@@ -31,13 +31,13 @@ class GeometricArrayInfo(ArrayInfo):
         r"""
             return indices where this array's data is typically stored in a broader dataset.
         """
-        indices = self.array[self.array != np.nan].flatten()
+        indices = self.array[~np.isnan(self.array)].flatten()
         if self.one_indexed:
             indices = indices - 1
         return indices
 
     def get_channel_count(self):
-        return (self.array != np.nan).sum()
+        return ~np.isnan(self.array).sum()
 
 
 @dataclass

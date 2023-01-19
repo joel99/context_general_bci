@@ -1,5 +1,6 @@
 {
     "files.exclude": {
+        "data/": true,
         "data/preprocessed/": true,
         "outputs/": true
     }

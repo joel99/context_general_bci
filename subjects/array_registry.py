@@ -32,7 +32,7 @@ class SubjectArrayRegistry:
             for array in to_register.arrays:
                 cls._array_registry[to_register.wrap_array(array)] = to_register.arrays[array]
             for alias in to_register.aliases:
-                cls._array_registry[to_register.wrap_array(alias)] = to_register.aliases[alias]
+                cls._alias_registry[to_register.wrap_array(alias)] = [to_register.wrap_array(a) for a in to_register.aliases[alias]]
             return to_register
         return wrap(to_register)
 

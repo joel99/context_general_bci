@@ -4,16 +4,21 @@ tag: test
 
 defaults:
   - /model: pretrain_small
-  - /dataset: maze_nlb
   - /train: nlb
 dataset:
   datasets:
-  - churchland_misc_nitschke-*
+  - CRS02bHome.data.00329
   data_keys:
   - DataKey.spikes
-  max_channels: 187
-  max_arrays: 2
-  max_length_ms: 3000
+  pitt_co:
+    arrays:
+    - CRS02b-lateral_m1
+    - CRS02b-medial_m1
+    - CRS02b-sensory
+  max_length_ms: 4000
+  max_arrays: 3
+  bin_size_ms: 5
+  max_channels: 96
 model:
   dropout: 0.8
   transformer:
@@ -27,3 +32,4 @@ model:
     - Metric.bps
 train:
   patience: 6000
+  batch_size: 8

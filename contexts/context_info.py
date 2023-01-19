@@ -364,6 +364,32 @@ class GallegoCOContextInfo(ReachingContextInfo):
         infos = map(make_info, Path(root).glob("*.mat"))
         return filter(lambda x: x is not None, infos)
 
+
+@dataclass
+class BCIContextInfo(ReachingContextInfo):
+    @classmethod
+    def build_from_dir(cls, root, task: ExperimentalTask, arrays=["main"]):
+        def make_info(datapath: Path):
+            alias = datapath.name
+            subject, _, session = alias.split('.')
+            if subject.endswith('Home'):
+                subject = subject[:-4]
+            elif subject.endswith('Lab'):
+                subject = subject[:-3]
+            return BCIContextInfo(
+                subject=SubjectArrayRegistry.query_by_subject(subject),
+                task=task,
+                _arrays=[
+                    'lateral_s1', 'medial_s1',
+                    'lateral_m1', 'medial_m1',
+                ],
+                alias=alias,
+                session=int(session),
+                datapath=datapath
+            )
+        infos = map(make_info, Path(root).glob("*"))
+        return filter(lambda x: x is not None, infos)
+
 # Not all have S1 - JY would prefer registry to always be right rather than detecting this post-hoc during loading
 # So we do a pre-sweep and log down which sessions have which arrays here
 RTT_SESSION_ARRAYS = {

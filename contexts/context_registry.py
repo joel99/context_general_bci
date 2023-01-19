@@ -17,6 +17,7 @@ from .context_info import (
     DyerCOContextInfo,
     GallegoCOContextInfo,
     GDrivePathContextInfo,
+    BCIContextInfo
 )
 
 from tasks import ExperimentalTask
@@ -138,4 +139,5 @@ context_registry = ContextRegistry([
 
     *GallegoCOContextInfo.build_from_dir('./data/gallego_co', task=ExperimentalTask.gallego_co),
     *GDrivePathContextInfo.build_from_dir('./data/churchland_misc'),
+    *BCIContextInfo.build_from_dir('./data/pitt_co/mat', task=ExperimentalTask.pitt_co),
 ])

@@ -11,7 +11,6 @@ r"""
 
 @dataclass
 class PittChicagoArrayInfo(GeometricArrayInfo):
-    geometric: bool = True
     one_indexed: bool = True
     pedestal_index: int = 0
 
@@ -116,18 +115,17 @@ class CRS02b(SubjectInfoPittChicago):
         [np.nan, np.nan, 52, 1, 11, 20, 32, 106, np.nan, np.nan, ]
     ])
     motor_arrays = [
-        PittChicagoArrayInfo(_motor_layout),
-        PittChicagoArrayInfo(_motor_layout, pedestal_index=1)
+        PittChicagoArrayInfo(array=_motor_layout),
+        PittChicagoArrayInfo(array=_motor_layout, pedestal_index=1)
     ]
 
     # NB: The last 8 even numbered channels are not wired (but typically recorded with the others to form a full 128 block)
+    # Don't actually need blacklisting mechanisms since only indexed channels are extracted
     # blacklist_channels = np.array([113, 115, 117, 119, 121, 123, 125, 127]) + 1
     # blacklist_pedestals = np.zeros(8, dtype=int)
 
-
-
     sensory_arrays = [
-        PittChicagoArrayInfo(np.array([ # Lateral (Anterior), wire bundle to right, viewing from pad side (electrodes down).
+        PittChicagoArrayInfo(array=np.array([ # Lateral (Anterior), wire bundle to right, viewing from pad side (electrodes down).
             [65,    np.nan,     72,     np.nan,     85,     91],
             [np.nan,    77, np.nan,         81, np.nan,     92],
             [67,    np.nan,     74,     np.nan,     87, np.nan],
@@ -140,7 +138,7 @@ class CRS02b(SubjectInfoPittChicago):
             [75,        70, np.nan,         86, np.nan,     95],
         ])), # - 65 + 1,
 
-        PittChicagoArrayInfo(np.array([ # Medial (Posterior) wire bundle to right, viewing from pad side (electrodes down)
+        PittChicagoArrayInfo(array=np.array([ # Medial (Posterior) wire bundle to right, viewing from pad side (electrodes down)
             [65, np.nan, 72, np.nan, 85, 91],
             [np.nan, 77, np.nan, 81, np.nan, 92],
             [67, np.nan, 74, np.nan, 87, np.nan],
@@ -172,8 +170,8 @@ class CRS07(SubjectInfoPittChicago):
         [np.nan, 53, 60,  5, 12, 18, 100, 110, 127, np.nan]
     ])
     motor_arrays = [
-        PittChicagoArrayInfo(_motor_layout),
-        PittChicagoArrayInfo(_motor_layout, pedestal_index=1)
+        PittChicagoArrayInfo(array=_motor_layout),
+        PittChicagoArrayInfo(array=_motor_layout, pedestal_index=1)
     ]
 
     _sensory_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down).
@@ -190,8 +188,8 @@ class CRS07(SubjectInfoPittChicago):
     ])#  - 65 + 1
 
     sensory_arrays = [
-        PittChicagoArrayInfo(_sensory_layout),
-        PittChicagoArrayInfo(_sensory_layout, pedestal_index=1)
+        PittChicagoArrayInfo(array=_sensory_layout),
+        PittChicagoArrayInfo(array=_sensory_layout, pedestal_index=1)
     ]
 
 @SubjectArrayRegistry.register
@@ -211,12 +209,12 @@ class BCI02(SubjectInfoPittChicago):
         [np.nan, 181., 188., 133., 140., 146., 228., 238., 255., np.nan]
     ])
     motor_arrays = [
-        PittChicagoArrayInfo(_motor_layout), # * BCI02's entire medial array is disabled
-        PittChicagoArrayInfo(_motor_layout, pedestal_index=1)
+        PittChicagoArrayInfo(array=_motor_layout), # * BCI02's entire medial array is disabled
+        PittChicagoArrayInfo(array=_motor_layout, pedestal_index=1)
     ]
 
     sensory_arrays = [
-        PittChicagoArrayInfo(np.array([ # Medial Sensory
+        PittChicagoArrayInfo(array=np.array([ # Medial Sensory
             [65., np.nan, 72., np.nan, 85., 91.],
             [np.nan, 77., np.nan, 81., np.nan, 92.],
             [67., np.nan, 74., np.nan, 87., np.nan],
@@ -229,7 +227,7 @@ class BCI02(SubjectInfoPittChicago):
             [75., 70., np.nan, 86., np.nan, 95.]
         ])), #  - 65 + 1, # Stim channels 1-32
 
-        PittChicagoArrayInfo(np.array([ # LateralSensory
+        PittChicagoArrayInfo(array=np.array([ # LateralSensory
             [193.,  np.nan, 200.,  np.nan, 213., 219.],
             [ np.nan, 205.,  np.nan, 209.,  np.nan, 220.],
             [195.,  np.nan, 202.,  np.nan, 215.,  np.nan],

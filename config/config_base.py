@@ -300,6 +300,7 @@ class DatasetConfig:
     dyer_co: DyerCOConfig = DyerCOConfig()
     gallego_co: ExperimentalConfig = ExperimentalConfig()
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
+    pitt_co: ExperimentalConfig = ExperimentalConfig()
 
 
 @dataclass
