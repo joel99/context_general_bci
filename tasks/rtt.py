@@ -54,7 +54,7 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                 for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
                     bhvr_vars[bhvr] = h5file[bhvr][()].T
                 # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
-                finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
+                finger_vel = np.gradient(bhvr_vars['finger_pos'][..., :3], axis=0) # ignore orientation if present
                 bhvr_vars[DataKey.bhvr_vel] = finger_vel
                 for bhvr in bhvr_vars:
                     bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])

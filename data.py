@@ -64,6 +64,8 @@ class DataAttrs:
     rtt_heldout_channel_count: int = 0 # Only for NLB, kinda hacky
     maze_heldout_channel_count: int = 0
 
+    behavior_dim: int = 3
+
 class SpikingDataset(Dataset):
     r"""
         Generic container for spiking data from intracortical microelectrode recordings.

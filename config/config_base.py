@@ -41,6 +41,34 @@ class Output(Enum):
     features = 'features'
     spikes = 'spikes' # for debugging
 
+    behavior = 'behavior'
+
+class DataKey(Enum):
+    # TODO need more thinking about this. Data is heterogenuous, can we maintain a single interface
+    # What is the right we to specify we want some type of array?
+    spikes = 'spikes'
+    stim = 'stim' # icms
+    heldout_spikes = 'heldout_spikes' # for co-bps
+
+    bhvr_vel = 'bhvr_vel'
+    bhvr_acc = 'bhvr_acc'
+    bhvr_force = 'bhvr_force'
+
+class MetaKey(Enum):
+    r"""
+        Keys that are (potentially) tracked in `meta_df`
+    """
+    trial = 'trial'
+    session = 'session'
+    subject = 'subject'
+    array = 'array'
+    task = 'task'
+    unique = 'unique' # default unique identifier
+
+    # Note these two are trial-wise metadata, and are stored in meta.csv. Currently easier to just store string 'split' and 'path' rather than parse out the enums from the csv.
+    split = 'split' # for NLB, sometimes data is loaded that has special labels/should be processed differently
+    path = 'path'
+
 @dataclass
 class TaskConfig:
     r"""
@@ -64,7 +92,8 @@ class TaskConfig:
     unique_no_head: bool = False # overrides above
 
     # kinematic decode
-    behavior_lag: int = 0
+    behavior_lag: int = 0 # in ms
+    behavior_target: DataKey = DataKey.bhvr_vel
 
 @dataclass
 class TransformerConfig:
@@ -161,32 +190,6 @@ class ModelConfig:
     stim_embed_strategy: EmbedStrat = EmbedStrat.token
     heldout_neuron_embed_strategy: EmbedStrat = EmbedStrat.token # Not even sure if there's a different way here.
     # There should maybe be a section for augmentation/ablation, but that is low pri.
-
-class DataKey(Enum):
-    # TODO need more thinking about this. Data is heterogenuous, can we maintain a single interface
-    # What is the right we to specify we want some type of array?
-    spikes = 'spikes'
-    stim = 'stim' # icms
-    heldout_spikes = 'heldout_spikes' # for co-bps
-
-    bhvr_vel = 'bhvr_vel'
-    bhvr_acc = 'bhvr_acc'
-    bhvr_force = 'bhvr_force'
-
-class MetaKey(Enum):
-    r"""
-        Keys that are (potentially) tracked in `meta_df`
-    """
-    trial = 'trial'
-    session = 'session'
-    subject = 'subject'
-    array = 'array'
-    task = 'task'
-    unique = 'unique' # default unique identifier
-
-    # Note these two are trial-wise metadata, and are stored in meta.csv. Currently easier to just store string 'split' and 'path' rather than parse out the enums from the csv.
-    split = 'split' # for NLB, sometimes data is loaded that has special labels/should be processed differently
-    path = 'path'
 
 @dataclass
 class ExperimentalConfig:

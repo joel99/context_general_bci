@@ -42,28 +42,28 @@ from analyze_utils import prep_plt
 # dataset_name = 'odoherty_rtt-Loco-20170210_03'
 
 # dataset_name = 'odoherty_rtt-Indy.*'
-# dataset_name = 'odoherty_rtt-Indy-20160627_01'
+dataset_name = 'odoherty_rtt-Indy-20160627_01'
 # dataset_name = 'odoherty_rtt-Indy-20161005_06'
 # dataset_name = 'odoherty_rtt-Indy-20160630_01'
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
 # dataset_name = 'odoherty_rtt-Indy-20160916_01'
 # dataset_name = 'odoherty_rtt-Indy-20160921_01'
 
-dataset_name = 'dyer_co_mihi_2'
-dataset_name = 'dyer_co_chewie_2'
-dataset_name = 'Chewie_CO_20161021'
-dataset_name = 'churchland_misc_nitschke-.*'
+# dataset_name = 'dyer_co_mihi_2'
+# dataset_name = 'dyer_co_chewie_2'
+# dataset_name = 'Chewie_CO_20161021'
+# dataset_name = 'churchland_misc_nitschke-.*'
 
 
 context = context_registry.query(alias=dataset_name)
-context = context[0]
+# context = context[0]
 print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 
 default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 default_cfg.data_keys = [DataKey.spikes]
-# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 5
 # default_cfg.bin_size_ms = 30
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
@@ -78,18 +78,19 @@ dataset.build_context_index()
 #     lengths.append(dataset[t][DataKey.spikes].size(0))
 # print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
 print(len(dataset))
-# #%%
-# trial = 0
+#%%
+trial = 0
 # trial = 10
-# trial_vel = dataset[trial][DataKey.bhvr_vel]
+trial_vel = dataset[trial][DataKey.bhvr_vel]
 
-# # Show kinematic trace by integrating trial_vel
-# trial_pos = trial_vel.cumsum(0)
-# trial_pos = trial_pos - trial_pos[0]
+# Show kinematic trace by integrating trial_vel
+print(trial_vel.shape)
+trial_pos = trial_vel.cumsum(0)
+trial_pos = trial_pos - trial_pos[0]
 # # Plot
-# fig, ax = plt.subplots(2, 1, sharex=True)
-# ax[0].plot(trial_vel)
-# ax[1].plot(trial_pos)
+fig, ax = plt.subplots(2, 1, sharex=True)
+ax[0].plot(trial_vel)
+ax[1].plot(trial_pos)
 
 #%%
 trial = 10

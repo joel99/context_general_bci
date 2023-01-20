@@ -31,10 +31,11 @@ query = "maze_all_256"
 # query = "rtt_all"
 # query = "rtt_all_256"
 # query = "rtt_nlb_infill_only"
-# query = 'rtt_nlb_07'
+query = 'rtt_nlb_07'
 # query = 'rtt_nlb_pt'
 
 # query = "rtt_indy_nlb"
+# query = "rtt_indy_nlb_stitch"
 # query = "rtt_indy1"
 # query = "rtt_indy2"
 # query = "rtt_indy2_noembed"
@@ -64,10 +65,14 @@ query = "maze_all_256"
 # query = 'nitschke'
 # query = 'nitschke_single'
 
-query = 'gallego_token'
-query = 'gallego'
+# query = 'gallego_token'
+# query = 'gallego'
 # query = 'gallego_chewie'
 # query = 'gallego_chewie_single'
+
+# query = 'pitt_single'
+query = 'pitt'
+query = 'pitt_obs'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -92,13 +97,15 @@ cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
 
 # cfg.dataset.datasets = ['mc_rtt']
-# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
 if 'gallego' in query:
     cfg.dataset.datasets = ['Chewie_CO_20150313']
     cfg.dataset.datasets = ['Mihili_CO_20140304']
 if 'nitschke' in query:
     cfg.dataset.datasets = ['churchland_misc_nitschke-1D8KYfy5IwMmEZaKOEv-7U6-4s-7cKINK']
+if 'pitt' in query:
+    cfg.dataset.datasets = ['CRS02bHome.data.00329']
 
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
@@ -107,8 +114,8 @@ dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
+trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
 # print(context_registry.query(alias='Mihi'))
-#%%
 # model.cfg.task.outputs = [Output.heldout_logrates]
 # model.cfg.task.metrics = [Metric.bps]
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
@@ -121,12 +128,13 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
     )
 
 dataloader = get_dataloader(dataset)
-trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
-
-heldin_metrics = stack_batch(trainer.test(model, dataloader))
 
 #%%
+print(query)
+heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+
+#%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]
 rates = heldin_outputs[Output.rates] # b t c
@@ -135,7 +143,7 @@ rates = heldin_outputs[Output.rates] # b t c
 spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
 ax = prep_plt()
 
-num = 10
+num = 20
 # channel = 5
 # channel = 10
 # channel = 18
@@ -156,13 +164,17 @@ y_lim = ax.get_ylim()[1]
 #     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
 trial = 10
-# trial = 20
+trial = 20
+trial = 15
+trial = 17
+trial = 18
 # trial = 80
 # trial = 85
 from scipy.ndimage import gaussian_filter1d
 for channel in range(num):
     # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
-    ax.plot(rates[trial][:,channel * 3], color=colors[channel])
+    ax.plot(rates[trial][:,channel * 2], color=colors[channel])
+    # ax.plot(rates[trial][:,channel * 3], color=colors[channel])
 #     ax.plot(gaussian_filter1d(test[trial,:,channel], sigma=3), color=colors[channel])
 
     # smooth the signal with a gaussian kernel
@@ -179,9 +191,9 @@ for channel in range(num):
 ax.set_ylabel('FR (Hz)')
 ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
 # relabel xtick unit from 5ms to ms
+ax.set_xlim(200, 600)
 ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
 ax.set_xlabel('Time (ms)')
-
 # plt.plot(test[0,:,0])
 ax.set_title(f'FR Inference: {query}')
 

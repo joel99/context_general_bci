@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch import nn, optim
+import torch.nn.functional as F
 import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack # baby steps...
 
@@ -33,6 +34,26 @@ class TaskPipeline(nn.Module):
         data_attrs: DataAttrs,
     ) -> None:
         super().__init__()
+
+    def get_masks(self, batch, channel_key=CHANNEL_KEY):
+        ref = batch[DataKey.spikes]
+        b, t, a, c = ref.size()
+        loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
+        if LENGTH_KEY in batch: # only some of b x t are valid
+            lengths = batch[LENGTH_KEY] # b of ints < t
+            length_mask = torch.arange(t, device=ref.device)[None, :] < lengths[:, None] # B T
+            loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
+            # import pdb;pdb.set_trace() # TODO needs testing in padding mode
+        else:
+            length_mask = None
+        if channel_key in batch: # only some of b x a x c are valid
+            channels = batch[channel_key] # b x a of ints < c
+            comparison = repeat(torch.arange(c, device=ref.device), 'c -> 1 a c', a=a)
+            channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
+            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
+        else:
+            channel_mask = None
+        return loss_mask, length_mask, channel_mask
 
     def get_temporal_context(self, batch: Dict[str, torch.Tensor]):
         r"""
@@ -100,26 +121,6 @@ class RatePrediction(TaskPipeline):
             decoder_layers.append(nn.ReLU())
         self.out = nn.Sequential(*decoder_layers)
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
-
-    def get_masks(self, loss: torch.Tensor, batch, channel_key=CHANNEL_KEY):
-        b, t, a, c = loss.size()
-        loss_mask = torch.ones(loss.size(), dtype=torch.bool, device=loss.device)
-        if LENGTH_KEY in batch: # only some of b x t are valid
-            lengths = batch[LENGTH_KEY] # b of ints < t
-            length_mask = torch.arange(t, device=loss.device)[None, :] < lengths[:, None] # B T
-            loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
-            # import pdb;pdb.set_trace() # TODO needs testing in padding mode
-        else:
-            length_mask = None
-        if channel_key in batch: # only some of b x a x c are valid
-            channels = batch[channel_key] # b x a of ints < c
-            comparison = repeat(torch.arange(c, device=loss.device), 'c -> 1 a c', a=a)
-            channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
-            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
-        else:
-            channel_mask = None
-        return loss_mask, length_mask, channel_mask
-
 
     @torch.no_grad()
     def bps(
@@ -248,7 +249,7 @@ class SelfSupervisedInfill(RatePrediction):
         spikes = batch['spike_target']
         loss: torch.Tensor = self.loss(rates, spikes)
         # Infill update mask
-        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch)
+        loss_mask, length_mask, channel_mask = self.get_masks(batch)
         # import pdb;pdb.set_trace()
         if Metric.all_loss in self.cfg.metrics:
             batch_out[Metric.all_loss] = loss[loss_mask].mean().detach()
@@ -315,7 +316,7 @@ class HeldoutPrediction(RatePrediction):
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
         loss = rearrange(loss, 'b t c -> b t 1 c')
-        loss_mask, length_mask, channel_mask = self.get_masks(loss, batch, channel_key=HELDOUT_CHANNEL_KEY) # channel_key expected to be no-op since we don't provide this mask
+        loss_mask, length_mask, channel_mask = self.get_masks(batch, channel_key=HELDOUT_CHANNEL_KEY) # channel_key expected to be no-op since we don't provide this mask
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.co_bps in self.cfg.metrics:
@@ -338,13 +339,42 @@ class BehaviorRegression(TaskPipeline):
     def __init__(
         self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
     ):
-        pass
+        super().__init__(
+            backbone_out_size=backbone_out_size,
+            channel_count=channel_count,
+            cfg=cfg,
+            data_attrs=data_attrs
+        )
+        self.cfg = cfg.task
+        r"""
+            Because this is not intended to be a joint task, we will not make the decoder deep (expectation is tuning)
+        """
+        # For linear decoder, deal with multiple arrays by concatenating
+        self.decoder = nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)
+        self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
-        raise NotImplementedError
+        batch_out = {}
+        backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')
+        bhvr = self.decoder(backbone_features)
+        if self.bhvr_lag_bins:
+            bhvr = bhvr[:, :-self.bhvr_lag_bins]
+        bhvr = F.pad(bhvr, (0, 0, self.bhvr_lag_bins, 0), value=0)
+        if Output.behavior in self.cfg.outputs:
+            batch_out[Output.behavior] = bhvr
+        if not compute_metrics:
+            return batch_out
+        # Compute loss
+        bhvr_tgt = batch[self.cfg.behavior_target][:, self.bhvr_lag_bins:]
+        loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
 
+        _, length_mask, _ = self.get_masks(batch, channel_key=None)
+        length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
+        batch_out['loss'] = loss[length_mask].mean()
+        if Metric.kinematic_r2 in self.cfg.metrics:
+            batch_out[Metric.kinematic_r2] = self.r2(bhvr, batch[self.cfg.behavior_target])
+        return batch_out
 
-# TODO convert to registry
 task_modules = {
     ModelTask.infill: SelfSupervisedInfill,
     ModelTask.icms_one_step_ahead: ICMSNextStepPrediction, # ! not implemented, above logic is infill specific
