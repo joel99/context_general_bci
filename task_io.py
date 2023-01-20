@@ -6,7 +6,7 @@ from torch import nn, optim
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack # baby steps...
-
+from sklearn.metrics import r2_score
 import logging
 
 from config import (
@@ -36,7 +36,7 @@ class TaskPipeline(nn.Module):
         super().__init__()
 
     def get_masks(self, batch, channel_key=CHANNEL_KEY):
-        ref = batch[DataKey.spikes]
+        ref = batch[DataKey.spikes][..., 0]
         b, t, a, c = ref.size()
         loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
         if LENGTH_KEY in batch: # only some of b x t are valid
@@ -365,14 +365,16 @@ class BehaviorRegression(TaskPipeline):
         if not compute_metrics:
             return batch_out
         # Compute loss
-        bhvr_tgt = batch[self.cfg.behavior_target][:, self.bhvr_lag_bins:]
+        bhvr_tgt = batch[self.cfg.behavior_target]
         loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
-
         _, length_mask, _ = self.get_masks(batch, channel_key=None)
         length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
         batch_out['loss'] = loss[length_mask].mean()
         if Metric.kinematic_r2 in self.cfg.metrics:
-            batch_out[Metric.kinematic_r2] = self.r2(bhvr, batch[self.cfg.behavior_target])
+            import pdb;pdb.set_trace() # need to test
+            valid_bhvr = bhvr[length_mask]
+            valid_tgt = bhvr_tgt[length_mask]
+            batch_out[Metric.kinematic_r2] = r2_score(valid_bhvr, valid_tgt)
         return batch_out
 
 task_modules = {

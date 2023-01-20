@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: indy
 
 defaults:
   - /model: pretrain
@@ -34,4 +34,4 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 train:
-  batch_size: 256
+  batch_size: 1024

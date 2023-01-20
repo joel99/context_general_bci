@@ -57,7 +57,7 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                 finger_vel = np.gradient(bhvr_vars['finger_pos'][..., :3], axis=0) # ignore orientation if present
                 bhvr_vars[DataKey.bhvr_vel] = finger_vel
                 for bhvr in bhvr_vars:
-                    bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
+                    bhvr_vars[bhvr] = resample(bhvr_vars[bhvr]).float()
                     # If we resample and then diff, we get aliasing
 
             int_arrays = [h5file[ref][()][:,0] for ref in h5file['chan_names'][0]]
