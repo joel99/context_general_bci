@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test
+tag: pitt_obs_20
 
 defaults:
   - /model: pretrain
@@ -20,7 +20,6 @@ dataset:
   - CRS02bHome.data.00445
   data_keys:
   - DataKey.spikes
-  - DataKey.bhvr_vel
   pitt_co:
     arrays:
     - CRS02b-lateral_m1
@@ -30,7 +29,6 @@ dataset:
   max_arrays: 3
   bin_size_ms: 20
   max_channels: 96
-  behavior_dim: 2
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
@@ -44,13 +42,11 @@ model:
     n_layers: 6
   task:
     tasks:
-    - ModelTask.kinematic_decoding
-    # - ModelTask.infill
-    metrics: []
-    # - Metric.bps
+    - ModelTask.infill
+    metrics:
+    - Metric.bps
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
 train:
   batch_size: 16
   accumulate_batches: 4
-init_from_id: pitt_20-dn7a112g

@@ -373,6 +373,7 @@ class SpikingDataset(Dataset):
             context=ContextAttrs(**self.context_index),
             rtt_heldout_channel_count=self.cfg.nlb_rtt.heldout_neurons,
             maze_heldout_channel_count=self.cfg.nlb_maze.heldout_neurons,
+            behavior_dim=self.cfg.behavior_dim,
         )
 
     # ==================== Data splitters ====================

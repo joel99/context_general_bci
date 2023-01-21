@@ -59,17 +59,27 @@ def events_to_raster(
     return spikes
 
 
-def load_trial(fn):
-    # payload = scipy.io.loadmat(fn, simplify_cells=True)
+def load_trial(fn, use_ql=True):
+    # if `use_ql`, use the prebinned at 20ms and also pull out the kinematics
+    # else take raw spikes
     # data = payload['data'] # 'data' is pre-binned at 20ms, we'd rather have more raw
-    payload = loadmat(fn, simplify_cells=True, variable_names=['iData'])
-    data = payload['iData']
-    trial_data = extract_ql_data(data['QL']['Data'])
-    payload = {
-        'src_file': data['QL']['FileName'],
-        'spikes': events_to_raster(trial_data),
+    payload = loadmat(fn, simplify_cells=True, variable_names=['data'] if use_ql else ['iData'])
+    out = {
+        'bin_size_ms': 20 if use_ql else 1,
+        'use_ql': use_ql,
     }
-    return payload
+    if use_ql:
+        standard_channels = np.arange(0, 256 * 5,5) # unsorted, I guess
+        spikes = payload['data']['SpikeCount'][..., standard_channels]
+        out['spikes'] = torch.from_numpy(spikes)
+        # cursor x, y
+        out['position'] = torch.from_numpy(payload['data']['Kinematics']['ActualPos'][:,2:4])
+    else:
+        data = payload['iData']
+        trial_data = extract_ql_data(data['QL']['Data'])
+        out['src_file'] = data['QL']['FileName']
+        out['spikes'] = events_to_raster(trial_data)
+    return out
 
 @ExperimentalTaskRegistry.register
 class PittCOLoader(ExperimentalTaskLoader):
@@ -91,7 +101,6 @@ class PittCOLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
-        sampling_rate: int = 1000 # Hz
     ):
         meta_payload = {}
         meta_payload['path'] = []
@@ -100,11 +109,14 @@ class PittCOLoader(ExperimentalTaskLoader):
             if fname.stem.startswith('QL.Task'):
                 payload = load_trial(fname)
                 trial_spikes = payload['spikes']
+                # import pdb;pdb.set_trace()
+                assert cfg.bin_size_ms % payload['bin_size_ms'] == 0
+                bin_factor = cfg.bin_size_ms // payload['bin_size_ms']
                 # crop
-                trial_spikes = trial_spikes[len(trial_spikes) % cfg.bin_size_ms:]
+                trial_spikes = trial_spikes[len(trial_spikes) % bin_factor:]
                 trial_spikes = rearrange(
                     trial_spikes,
-                    '(t bin) c -> t bin c', bin=cfg.bin_size_ms
+                    '(t bin) c -> t bin c', bin=bin_factor
                 )
                 trial_spikes = reduce(trial_spikes, 't bin c -> t c 1', 'sum')
                 trial_spikes = trial_spikes.to(dtype=torch.uint8)
@@ -120,6 +132,12 @@ class PittCOLoader(ExperimentalTaskLoader):
                 single_payload = {
                     DataKey.spikes: spike_payload,
                 }
+                if 'position' in payload:
+                    position = payload['position']
+                    vel = torch.tensor(np.gradient(position, axis=0)).float()
+                    vel[vel.isnan()] = 0
+                    assert cfg.bin_size_ms == 20, 'check out rtt code for resampling'
+                    single_payload[DataKey.bhvr_vel] = vel
                 single_path = cache_root / f'{i}.pth'
                 meta_payload['path'].append(single_path)
                 torch.save(single_payload, single_path)

@@ -432,16 +432,16 @@ class BrainBertInterface(pl.LightningModule):
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T A H
-        if getattr(self.cfg, 'readout_strategy', EmbedStrat.none) == EmbedStrat.mirror_project:
+        if self.cfg.readout_strategy == EmbedStrat.mirror_project:
             unique_space_features = self.readin(features, batch, readin=False)
-        elif getattr(self.cfg, 'readout_strategy', EmbedStrat.none) in [EmbedStrat.unique_project, EmbedStrat.contextual_mlp]:
+        elif self.cfg.readout_strategy in [EmbedStrat.unique_project, EmbedStrat.contextual_mlp]:
             unique_space_features = self.readout(features, batch)
         # Create outputs for configured task
         running_loss = 0
         for task in self.cfg.task.tasks:
             update = self.task_pipelines[task.value](
                 batch,
-                unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none else features,
+                unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features,
                 eval_mode=eval_mode
             )
             if 'loss' in update:

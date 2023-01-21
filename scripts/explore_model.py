@@ -20,18 +20,21 @@ from analyze_utils import prep_plt
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
 query = "maze_small"
 query = "maze_med"
-query = "maze_large"
-query = "maze_nlb"
+# query = "maze_large"
+# query = "maze_nlb"
 # query = "maze_med_ft"
 # query = "maze_small_ft"
 # query = "maze_large_ft"
-query = "maze_all_256"
+# query = "maze_all_256"
+# query = "maze_all"
+
+# query = "maze_jenkins_only"
 # query = "maze_nlb_stitch_out"
 
 # query = "rtt_all"
 # query = "rtt_all_256"
 # query = "rtt_nlb_infill_only"
-query = 'rtt_nlb_07'
+# query = 'rtt_nlb_07'
 # query = 'rtt_nlb_pt'
 
 # query = "rtt_indy_nlb"
@@ -40,7 +43,7 @@ query = 'rtt_nlb_07'
 # query = "rtt_indy2"
 # query = "rtt_indy2_noembed"
 # query = "rtt_all_sans_add"
-# query = "rtt_indy_sans_256_d01"
+query = "rtt_indy_sans_256_d01"
 # query = "rtt_indy_stitch"
 # query = "rtt_all_256"
 # query = "rtt_all_512"
@@ -71,8 +74,10 @@ query = 'rtt_nlb_07'
 # query = 'gallego_chewie_single'
 
 # query = 'pitt_single'
-query = 'pitt'
-query = 'pitt_obs'
+# query = 'pitt'
+# query = 'pitt_obs'
+# query = 'pitt_20'
+# query = 'pitt_obs_20'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -89,7 +94,7 @@ print(cfg.dataset.datasets)
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
-# cfg.dataset.datasets = ['mc_maze_medium']
+cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
@@ -191,7 +196,7 @@ for channel in range(num):
 ax.set_ylabel('FR (Hz)')
 ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
 # relabel xtick unit from 5ms to ms
-ax.set_xlim(200, 600)
+# ax.set_xlim(200, 600)
 ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
 ax.set_xlabel('Time (ms)')
 # plt.plot(test[0,:,0])

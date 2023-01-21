@@ -24,7 +24,7 @@ class TaskPipeline(nn.Module):
         i.e. is responsible for returning loss, decoder outputs, and metrics
     """
     does_update_root = False
-    unique_space = False
+    unique_space = False # accept unique space as input?
 
     def __init__(
         self,

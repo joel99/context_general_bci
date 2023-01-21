@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test
+tag: pitt_decode
 
 defaults:
   - /model: pretrain
@@ -53,4 +53,4 @@ model:
 train:
   batch_size: 16
   accumulate_batches: 4
-init_from_id: pitt_20-dn7a112g
+init_from_id: pitt_20-tou7etu2

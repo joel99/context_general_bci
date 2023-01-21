@@ -12,8 +12,8 @@ src_file = fullfile(root_dir, experiment, file)
 target_dir = fullfile(root_dir, "mat", experiment)
 [dummy, file_stem, ext] = fileparts(src_file)
 target_file = fullfile(target_dir, strcat(file_stem, ".mat"))
-save(target_file, 'iData')
-% save(target_file, 'iData', 'data')
+% save(target_file, 'iData')
+save(target_file, 'iData', 'data')
 
 end
 

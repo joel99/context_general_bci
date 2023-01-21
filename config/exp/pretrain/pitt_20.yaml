@@ -1,26 +1,15 @@
 # @package _global_
 
-tag: test
+tag: pitt_20
 
 defaults:
   - /model: pretrain
   - /train: nlb
 dataset:
   datasets:
-  - CRS02bHome.data.00329
-  - CRS02bHome.data.00336
-  - CRS02bHome.data.00339
-  - CRS02bHome.data.00345
-  - CRS02bHome.data.00360
-  - CRS02bHome.data.00371
-  - CRS02bHome.data.00402
-  - CRS02bHome.data.00422
-  - CRS02bHome.data.00424
-  - CRS02bHome.data.00437
-  - CRS02bHome.data.00445
+  - CRS02bHome.data.*
   data_keys:
   - DataKey.spikes
-  - DataKey.bhvr_vel
   pitt_co:
     arrays:
     - CRS02b-lateral_m1
@@ -30,27 +19,24 @@ dataset:
   max_arrays: 3
   bin_size_ms: 20
   max_channels: 96
-  behavior_dim: 2
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
 model:
-  dropout: 0.3
+  dropout: 0.2
   transformer:
-    dropout: 0.3
+    dropout: 0.2
     n_heads: 2
     n_layers: 6
   task:
     tasks:
-    - ModelTask.kinematic_decoding
-    # - ModelTask.infill
-    metrics: []
-    # - Metric.bps
+    - ModelTask.infill
+    metrics:
+    - Metric.bps
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
 train:
   batch_size: 16
   accumulate_batches: 4
-init_from_id: pitt_20-dn7a112g

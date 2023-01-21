@@ -289,6 +289,7 @@ class DatasetConfig:
 
     # Pad to this number of arrays (for meta and data alike). Must be >= 1
     max_arrays: int = 1
+    behavior_dim: int = 3
 
     # Experimental Task configuration - matching registered names
     # Note - we choose to put task specific things here rather than ModelConfig as model will read the relevant variables

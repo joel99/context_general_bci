@@ -70,25 +70,39 @@ def events_to_raster(
     return spikes
 
 
-def load_trial(fn):
+def load_trial(fn, use_ql=True):
+    # if `use_ql`, use the prebinned at 20ms and also pull out the kinematics
+    # else take raw spikes
     payload = scipy.io.loadmat(fn, simplify_cells=True)
     # data = payload['data'] # 'data' is pre-binned at 20ms, we'd rather have more raw
     # payload = scipy.io.loadmat(fn, simplify_cells=True, variable_names=['iData'])
     # print(payload['data']['TaskStateMasks']['states'])
     # print(payload['data']['TaskStateMasks']['state_num'])
-    # print(payload['data'].keys())
-    data = payload['iData']
-    trial_data = extract_ql_data(data['QL']['Data'])
-    payload = {
-        'src_file': data['QL']['FileName'],
-        'spikes': events_to_raster(trial_data),
+    out = {
+        'bin_size_ms': 20 if use_ql else 1,
+        'use_ql': use_ql,
     }
-    return payload
+    if use_ql:
+        # print(payload['data'].keys())
+        # print(payload['data']['SpikeCount'].shape)
+        # print(payload['data']['ActiveChannelMask'].sum())
+        standard_channels = np.arange(0, 256 * 5,5) # unsorted, I guess
+        spikes = payload['data']['SpikeCount'][..., standard_channels]
+        # print(payload['data']['Kinematics'].keys())
+        out['spikes'] = torch.from_numpy(spikes)
+        # cursor x, y
+        out['position'] = torch.from_numpy(payload['data']['Kinematics']['ActualPos'][:,2:4])
+        print(payload['data'].keys())
+    else:
+        data = payload['iData']
+        trial_data = extract_ql_data(data['QL']['Data'])
+        out['src_file'] = data['QL']['FileName']
+        out['spikes'] = events_to_raster(trial_data)
+    return out
 
 for fname in session_dir.glob("*.mat"):
     if fname.stem.startswith('QL.Task'):
         payload = load_trial(fname)
-        # print(payload)
         break
 
 #%%

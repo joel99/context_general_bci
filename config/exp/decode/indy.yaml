@@ -34,4 +34,5 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 train:
-  batch_size: 1024
+  # batch_size: 1024
+  batch_size: 512
