@@ -52,6 +52,7 @@ class TaskPipeline(nn.Module):
             channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
             loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
         else:
+            loss_mask = loss_mask[..., 0] # don't specify channel dim if not used, saves HELDOUT case
             channel_mask = None
         return loss_mask, length_mask, channel_mask
 

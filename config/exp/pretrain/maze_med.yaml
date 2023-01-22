@@ -9,6 +9,8 @@ defaults:
 dataset:
   datasets:
   - mc_maze_med
+  eval_datasets:
+  - mc_maze_medium
   nlb_maze:
     heldout_neurons: 38
   data_keys:

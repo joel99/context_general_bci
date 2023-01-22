@@ -100,13 +100,14 @@ class SpikingDataset(Dataset):
             for d in self.cfg.datasets:
                 meta_df.extend(self.load_session(d))
             self.meta_df = pd.concat(meta_df).reset_index()
-            if 'split' in self.meta_df.columns and 'test' in self.meta_df['split'].unique():
-                logger.warning("Test split found in meta_df. Subsetting is expected.")
+            if 'split' in self.meta_df.columns and len(self.meta_df['split'].unique()) > 1:
+                logger.warning("Non-train splits found in meta_df. Subsetting is expected.")
         else:
             self.meta_df = None
-        # check if any split is set to "test" and log warning
         self.context_index = None
         self.subsetted = False
+
+        self.mark_eval_split_if_exists()
 
     @property
     def loaded(self):
@@ -150,6 +151,37 @@ class SpikingDataset(Dataset):
             cached_preproc_version = json.load(f)
         return self.preproc_version(task) != cached_preproc_version
 
+    def aliases_to_contexts(self, session_path_or_alias: Path | str) -> List[ContextInfo]:
+        if isinstance(session_path_or_alias, str):
+            # Try alias
+            context_meta = context_registry.query(alias=session_path_or_alias)
+            if context_meta is None:
+                session_path = Path(session_path_or_alias)
+                context_meta = [context_registry.query_by_datapath(session_path)]
+            elif not isinstance(context_meta, list):
+                context_meta = [context_meta]
+            return context_meta
+        else:
+            return [context_registry.query_by_datapath(session_path_or_alias)]
+
+    def mark_eval_split_if_exists(self):
+        if not getattr(self.cfg, 'eval_datasets', []):
+            return
+        assert self.loaded, "Must load meta_df before loading eval datasets"
+        if 'split' not in self.meta_df:
+            self.meta_df['split'] = 'train'
+        else:
+            self.meta_df['split'] = self.meta_df['split'].fillna('train')
+        eval_metas = []
+        for d in self.cfg.eval_datasets:
+            eval_metas.extend(self.aliases_to_contexts(d))
+        eval_ids = [m.id for m in eval_metas]
+        eval_pool = self.meta_df[(self.meta_df[MetaKey.session].isin(eval_ids)) & (self.meta_df['split'] == 'train')]
+        if sorted(eval_ids) != sorted(eval_pool[MetaKey.session].unique()):
+            raise Exception(f"Requested datasets {sorted(eval_ids)} not all found. Found {sorted(eval_pool[MetaKey.session].unique())}")
+        eval_subset = eval_pool.sample(frac=self.cfg.eval_ratio, random_state=self.cfg.eval_seed)
+        self.meta_df['split'] = self.meta_df['split'].mask(self.meta_df.index.isin(eval_subset.index), 'eval')
+
 
     def load_session(self, session_path_or_alias: Path | str) -> List[pd.DataFrame]:
         r"""
@@ -157,20 +189,7 @@ class SpikingDataset(Dataset):
             That is, the data and metadata will not adopt specific task configuration at time of cache, but rather try to store down all info available.
             The exception to this is the crop length.
         """
-        if isinstance(session_path_or_alias, str):
-            # Try alias
-            context_meta = context_registry.query(alias=session_path_or_alias)
-            if context_meta is None:
-                session_path = Path(session_path_or_alias)
-                context_meta = context_registry.query_by_datapath(session_path)
-            else:
-                if isinstance(context_meta, list):
-                    logging.info('Multiple contexts found for alias, re-routing to several load calls.')
-                    return [self.load_single_session(c) for c in context_meta]
-        else:
-            session_path = session_path_or_alias
-            context_meta = context_registry.query_by_datapath(session_path)
-        return [self.load_single_session(context_meta)]
+        return [self.load_single_session(c) for c in self.aliases_to_contexts(session_path_or_alias)]
 
     def load_single_session(self, context_meta: ContextInfo):
         session_path = context_meta.datapath
@@ -222,7 +241,7 @@ class SpikingDataset(Dataset):
                 meta[k] = context_meta.subject.name
             else:
                 meta[k] = getattr(context_meta, k.name)
-        meta[MetaKey.unique] = meta[MetaKey.session] + '-' + meta.index.astype(str)
+        meta[MetaKey.unique] = meta[MetaKey.session] + '-' + meta.index.astype(str) # unique per trial
         self.validate_meta(meta)
 
         return meta
@@ -339,7 +358,8 @@ class SpikingDataset(Dataset):
         return collater
 
     def build_context_index(self):
-        logging.info("Building context index; any previous DataAttrs may be invalidated.")
+        if self.context_index is not None:
+            logging.info("Building context index; any previous DataAttrs may be invalidated.")
         context = {}
         for k in self.cfg.meta_keys:
             if k == MetaKey.unique:
@@ -384,7 +404,10 @@ class SpikingDataset(Dataset):
     def get_key_indices(self, key_values, key: MetaKey=MetaKey.unique):
         return self.meta_df[self.meta_df[key].isin(key_values)].index
 
-    def subset_by_key(self, key_values: List[Any], key: MetaKey | str=MetaKey.unique, allow_second_subset=True, na=None):
+    def subset_by_key(self,
+        key_values: List[Any], key: MetaKey | str=MetaKey.unique, allow_second_subset=True, na=None,
+        keep_index=False
+    ):
         r"""
             # ! In place
         """
@@ -400,7 +423,8 @@ class SpikingDataset(Dataset):
         logging.info(f"Subset dataset by {key} to {subset.sum()} / {len(self.meta_df)}")
         self.meta_df = self.meta_df[self.meta_df[key].isin(key_values)]
         self.meta_df = self.meta_df.reset_index(drop=True)
-        self.build_context_index()
+        if not keep_index:
+            self.build_context_index()
         self.subsetted = True
 
     def tv_split_by_split_key(self, train_ratio=0.8, seed=None):
@@ -419,11 +443,13 @@ class SpikingDataset(Dataset):
             Default by trial, or more specific conditions
             Assumes balanced dataset
         """
+        if self.context_index is None:
+            self.build_context_index()
         train_keys, val_keys = self.tv_split_by_split_key(**kwargs)
         train = copy.deepcopy(self)
-        train.subset_by_key(train_keys, key=self.cfg.split_key)
+        train.subset_by_key(train_keys, key=self.cfg.split_key, keep_index=True)
         val = copy.deepcopy(self)
-        val.subset_by_key(val_keys, key=self.cfg.split_key)
+        val.subset_by_key(val_keys, key=self.cfg.split_key, keep_index=True)
         assert train.context_index == val.context_index, "Context index mismatch between train and val (some condition is unavailable, not supported)"
         return train, val
 
@@ -433,6 +459,8 @@ class SpikingDataset(Dataset):
         self.build_context_index()
         # TODO think about resetting data attrs - this should be called before any data attr call
 
-    def restrict_to_train_set(self):
+    def subset_split(self, splits=['train'], keep_index=False):
         if 'split' in self.meta_df.columns:
-            self.subset_by_key(key_values=['train'], key='split', na='train')
+            self.subset_by_key(key_values=splits, key='split', na='train', keep_index=keep_index)
+        else:
+            logger.warning("No split column found, assuming all data is train.")

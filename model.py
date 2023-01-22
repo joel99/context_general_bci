@@ -32,15 +32,6 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg = cfg
         self.data_attrs = data_attrs
         self.backbone = TemporalTransformer(self.cfg.transformer)
-        # self.backbone = torch.jit.script(self.backbone)
-        # , example_inputs=[
-        #     torch.rand(10, self.cfg.transformer.max_trial_length, self.data_attrs.max_arrays, self.cfg.transformer.n_state),
-        #     [torch.rand(10, self.cfg.transformer.n_state)],
-        #     [torch.rand(10, self.cfg.transformer.max_trial_length, self.cfg.transformer.n_state)],
-        #     torch.rand(10, self.cfg.transformer.max_trial_length),
-        #     torch.rand(10, self.data_attrs.max_arrays),
-        #     False
-        # ])
         self.bind_io()
 
         self.novel_params: List[str] = [] # for fine-tuning
@@ -398,9 +389,7 @@ class BrainBertInterface(pl.LightningModule):
             array_padding_mask=array_padding_mask,
             causal=ModelTask.icms_one_step_ahead in self.cfg.task.tasks,
         ) # B x T x A x H
-        if outputs.isnan().any(): # I have no idea why, but something in s61 or s62 throws a nan
-            # And strangely, I can't repro by invoking forward again.
-            # Leaving for now to see if it happens after padding refactor
+        if outputs.isnan().any():
             import pdb;pdb.set_trace()
         return outputs
 
@@ -561,7 +550,7 @@ class BrainBertInterface(pl.LightningModule):
 
     # ==================== Optimization ====================
     def common_log(self, metrics, prefix='', **kwargs):
-        self.log(f'{prefix}_loss', metrics['loss'])
+        self.log(f'{prefix}_loss', metrics['loss'], **kwargs)
         for m in self.cfg.task.metrics:
             self.log(f'{prefix}_{m}', metrics[m], **kwargs)
 
@@ -570,11 +559,13 @@ class BrainBertInterface(pl.LightningModule):
         self.common_log(metrics, prefix='train')
         return metrics['loss']
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
         # import pdb;pdb.set_trace()
         metrics = self._step(batch)
-        self.common_log(metrics, prefix='val', sync_dist=True)
-        return metrics['loss']
+        self.common_log(metrics, prefix='val' if dataloader_idx == 0 else 'eval', sync_dist=True, add_dataloader_idx=False)
+        # return None metrics['loss']
+        # if dataloader_idx == 0:
+            # return metrics['loss']
 
     @torch.inference_mode()
     def test_step(self, batch, batch_idx):

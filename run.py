@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import copy
 
 from pprint import pformat
 import logging # we use top level logging since most actual diagnostic info is in libs
@@ -47,7 +48,11 @@ def run_exp(cfg : RootConfig) -> None:
     pl.seed_everything(seed=cfg.seed)
 
     dataset = SpikingDataset(cfg.dataset)
-    dataset.restrict_to_train_set()
+    dataset.build_context_index()
+    if cfg.dataset.eval_datasets:
+        eval_dataset = copy.deepcopy(dataset)
+        eval_dataset.subset_split(splits=['eval'], keep_index=True)
+    dataset.subset_split(keep_index=True)
     train, val = dataset.create_tv_datasets()
     logger.info(f"Training on {len(train)} examples")
 
@@ -151,6 +156,23 @@ def run_exp(cfg : RootConfig) -> None:
         logger.warning("Num workers is 0, DEBUGGING.")
     logger.info("Preparing to fit...")
 
+    val_dataloaders = [
+        DataLoader(val,
+            batch_size=cfg.train.batch_size,
+            num_workers=num_workers,
+            persistent_workers=num_workers > 0,
+            collate_fn=val.collater_factory()
+        )
+    ]
+    if cfg.dataset.eval_datasets:
+        val_dataloaders.append(
+            DataLoader(eval_dataset,
+                batch_size=cfg.train.batch_size,
+                num_workers=num_workers,
+                persistent_workers=num_workers > 0,
+                collate_fn=val.collater_factory()
+            )
+        )
     trainer.fit(
         model,
         DataLoader(
@@ -160,12 +182,7 @@ def run_exp(cfg : RootConfig) -> None:
             persistent_workers=num_workers > 0,
             collate_fn=train.collater_factory()
         ),
-        DataLoader(val,
-            batch_size=cfg.train.batch_size,
-            num_workers=num_workers,
-            persistent_workers=num_workers > 0,
-            collate_fn=val.collater_factory()
-        ),
+        val_dataloaders=val_dataloaders,
         ckpt_path=get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )
     logger.info('Run complete')

@@ -11,6 +11,8 @@ dataset:
   - mc_maze.*
   # nlb_maze:
     # heldout_neurons: 40
+  eval_datasets:
+  - mc_maze_medium
   data_keys:
   - DataKey.spikes
   # - DataKey.heldout_spikes

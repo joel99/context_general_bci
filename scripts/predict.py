@@ -76,7 +76,7 @@ def create_submission_dict(wandb_run):
 
     dataset = SpikingDataset(cfg.dataset)
     test_dataset = deepcopy(dataset)
-    dataset.restrict_to_train_set()
+    dataset.subset_split()
     dataset.build_context_index()
     test_dataset.subset_by_key(['test'], key='split')
     test_dataset.build_context_index()

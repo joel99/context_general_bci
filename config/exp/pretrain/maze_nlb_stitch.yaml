@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: maze_nlb_stitch_out
+tag: maze_nlb_stitch
 
 defaults:
   - /model: pretrain_small
@@ -9,6 +9,8 @@ defaults:
 dataset:
   datasets:
   - mc_maze.*
+  eval_datasets:
+  - mc_maze_medium
   # nlb_maze:
     # heldout_neurons: 40
   data_keys:

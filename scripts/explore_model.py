@@ -30,6 +30,7 @@ query = "maze_med"
 
 # query = "maze_jenkins_only"
 # query = "maze_nlb_stitch_out"
+# query = "maze_nlb"
 
 # query = "rtt_all"
 # query = "rtt_all_256"
@@ -43,7 +44,7 @@ query = "maze_med"
 # query = "rtt_indy2"
 # query = "rtt_indy2_noembed"
 # query = "rtt_all_sans_add"
-query = "rtt_indy_sans_256_d01"
+# query = "rtt_indy_sans_256_d01"
 # query = "rtt_indy_stitch"
 # query = "rtt_all_256"
 # query = "rtt_all_512"
@@ -94,7 +95,7 @@ print(cfg.dataset.datasets)
 cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
-cfg.dataset.datasets = ['mc_maze_medium']
+# cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
 # cfg.dataset.datasets = ['churchland_maze_jenkins-1']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
@@ -102,7 +103,7 @@ cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
 
 # cfg.dataset.datasets = ['mc_rtt']
-cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
 if 'gallego' in query:
     cfg.dataset.datasets = ['Chewie_CO_20150313']
@@ -114,7 +115,10 @@ if 'pitt' in query:
 
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
-dataset.restrict_to_train_set()
+if cfg.dataset.eval_datasets:
+    dataset.subset_split(splits=['eval'])
+else:
+    dataset.subset_split()
 dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
 model = transfer_model(src_model, cfg.model, data_attrs)

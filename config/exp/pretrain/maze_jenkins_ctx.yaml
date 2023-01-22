@@ -20,6 +20,8 @@ dataset:
   datasets:
   - churchland_maze_jenkins.*
   - mc_maze.*
+  eval_datasets:
+  - mc_maze_medium
   meta_keys:
   - MetaKey.unique
   - MetaKey.array
