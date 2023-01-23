@@ -15,6 +15,9 @@ model:
   readin_compress: False
   readin_dim: 128
   readout_dim: 128
+dataset:
+  eval_datasets:
+  - mc_maze_medium
   # task:
   #   unique_no_head: True
 # train:

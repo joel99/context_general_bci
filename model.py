@@ -469,7 +469,7 @@ class BrainBertInterface(pl.LightningModule):
         features = self(batch)
         if self.cfg.readout_strategy == EmbedStrat.mirror_project:
             unique_space_features = self.readin(features, batch, readin=False)
-        elif self.cfg.readout_strategy == EmbedStrat.unique_project:
+        elif self.cfg.readout_strategy in [EmbedStrat.unique_project, EmbedStrat.contextual_mlp]:
             unique_space_features = self.readout(features, batch)
         for task in self.cfg.task.tasks:
             batch_out.update(

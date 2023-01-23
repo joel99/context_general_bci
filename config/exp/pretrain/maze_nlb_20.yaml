@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: maze_nlb_stitch_in
+tag: maze_nlb_20
 
 defaults:
   - /model: pretrain_small
@@ -11,17 +11,13 @@ dataset:
   - mc_maze.*
   eval_datasets:
   - mc_maze_medium
+  eval_ratio: 0.2
   # nlb_maze:
     # heldout_neurons: 40
   data_keys:
   - DataKey.spikes
   # - DataKey.heldout_spikes
 model:
-  readin_strategy: EmbedStrat.unique_project
-  # readout_strategy: EmbedStrat.unique_project
-  readin_compress: False
-  readin_dim: 128
-  # readout_dim: 128
   dropout: 0.4
   transformer:
     dropout: 0.4

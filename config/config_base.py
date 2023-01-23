@@ -290,6 +290,8 @@ class DatasetConfig:
     max_trial_length: int = 1500 # in bins. for preproc
     max_length_ms: int = 0 # in ms, in dataloader
 
+    z_score: bool = False # TODO implement
+
     # Pad to this number of channels per array group
     # If set to 0, will skip padding checks.
     max_channels: int = 0 # ! TODO add smart inference (take max over array reports)

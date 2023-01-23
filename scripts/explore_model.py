@@ -21,16 +21,18 @@ from analyze_utils import prep_plt
 query = "maze_small"
 query = "maze_med"
 # query = "maze_large"
-# query = "maze_nlb"
+query = "maze_nlb"
 # query = "maze_med_ft"
 # query = "maze_small_ft"
 # query = "maze_large_ft"
 # query = "maze_all_256"
 # query = "maze_all"
 
-# query = "maze_jenkins_only"
+query = "maze_jenkins_stitch"
 # query = "maze_nlb_stitch_out"
 # query = "maze_nlb"
+
+# query = 'maze_med_20'
 
 # query = "rtt_all"
 # query = "rtt_all_256"
@@ -45,7 +47,7 @@ query = "maze_med"
 # query = "rtt_indy2_noembed"
 # query = "rtt_all_sans_add"
 # query = "rtt_indy_sans_256_d01"
-# query = "rtt_indy_stitch"
+query = "rtt_indy_stitch"
 # query = "rtt_all_256"
 # query = "rtt_all_512"
 # query = "rtt_indy_loco"
@@ -80,6 +82,9 @@ query = "maze_med"
 # query = 'pitt_20'
 # query = 'pitt_obs_20'
 
+# query = 'ks'
+# query = 'ks_ctx'
+
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
@@ -92,7 +97,7 @@ cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.logrates, Output.spikes]
 print(cfg.dataset.datasets)
-cfg.dataset.datasets = cfg.dataset.datasets[-1:]
+# cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
@@ -103,8 +108,9 @@ cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
 
 # cfg.dataset.datasets = ['mc_rtt']
-# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
-# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
+if 'rtt' in query:
+    cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+    # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
 if 'gallego' in query:
     cfg.dataset.datasets = ['Chewie_CO_20150313']
     cfg.dataset.datasets = ['Mihili_CO_20140304']
@@ -113,6 +119,7 @@ if 'nitschke' in query:
 if 'pitt' in query:
     cfg.dataset.datasets = ['CRS02bHome.data.00329']
 
+# cfg.dataset.eval_datasets = []
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets:

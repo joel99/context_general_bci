@@ -22,6 +22,8 @@ dataset:
   datasets:
   - odoherty_rtt-Indy-20161005_06
   # - odoherty_rtt-Indy-20161014_04
+  eval_datasets:
+  - odoherty_rtt-Indy-20161005_06
   data_keys:
   - DataKey.spikes
   meta_keys:

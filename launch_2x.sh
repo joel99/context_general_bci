@@ -6,7 +6,6 @@
 #SBATCH --cpus-per-task=6
 #SBATCH -p gpu
 #SBATCH -t 12:00:00
-#SBATCH -x mind-1-13
 #SBATCH --mem 50G
 #SBATCH --output=slurm_logs/%j.out
 
@@ -14,6 +13,8 @@ echo 'tasks'
 echo $SLURM_NTASKS
 echo 'per node'
 echo $SLURM_NTASKS_PER_NODE
+# set slurm tasks to 2
+export SLURM_NTASKS_PER_NODE=2
 hostname
 source ~/.bashrc # Note bashrc has been modified to allow slurm jobs
 module add cuda-11.6
