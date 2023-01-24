@@ -336,6 +336,9 @@ class RootConfig:
     seed: int = 0
     tag: str = "" # i.e. experiment variant, now an optional tag (since hydra consumes file, we can't use the filename for experiment name. Specify if you want.)
     experiment_set: str = ""
+
+    sweep_cfg: str = "exp/hps/base.yaml" # point to hp json
+
     default_root_dir: Path = Path("./data/runs").resolve()
     wandb_project: str = "context_general_bci"
     wandb_api_key_path: Path = Path("/home/joelye/.wandb_api").resolve()

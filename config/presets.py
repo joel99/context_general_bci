@@ -24,6 +24,7 @@ class SmallTransformerConfigLessDrop(TransformerConfig):
     n_state: int = 128
     dropout: float = 0.3
 
+
 @dataclass
 class PretrainingModelConfig(ModelConfig):
     r"""
@@ -42,6 +43,19 @@ class PretrainingModelConfig(ModelConfig):
     transformer: TransformerConfig = field(default_factory=SmallTransformerConfigLessDrop)
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 
+@dataclass
+class PretrainingNewModelConfig(ModelConfig):
+    # A little more informed after initial experimentation
+    task: TaskConfig = field(default_factory=InfillTaskConfig)
+    lr_ramp_steps: int = 80
+    lr_decay_steps: int = 1000
+    dropout: float = 0.1
+    hidden_size: int = 256
+    session_embed_size: int = 256
+    subject_embed_size: int = 256
+    array_embed_size: int = 256
+    # base config: 6 layers, 256 hidden, 4 heads
+cs.store(group="model", name="pretrain_2x", node=PretrainingNewModelConfig)
 
 @dataclass
 class PretrainingSmallModelConfig(ModelConfig):
@@ -80,16 +94,18 @@ cs.store(group="model", name="nlb", node=NLBModelConfig)
 
 @dataclass
 class PretrainConfig(TrainConfig):
-    epochs: int = 10000
+    epochs: int = 4000
     batch_size: int = 128
-    patience: int = 100
+    patience: int = 50
+# As we hit >10K datapts, we typically see convergence in ~800 epochs at most.
 cs.store(group="train", name="pretrain", node=PretrainConfig)
 
 @dataclass
 class NLBTrainConfig(TrainConfig):
     epochs: int = 50000 # epochs tend to be small
     batch_size: int = 64
-    patience: int = 4000
+    patience: int = 2000
+    # patience: int = 4000
 
 cs.store(group="train", name="nlb", node=NLBTrainConfig)
 cs.store(group="train", name="small", node=NLBTrainConfig) # alias

@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: rtt_all_256_linear_warmup
 
 defaults:
   - /model: pretrain
@@ -22,6 +22,7 @@ model:
   readin_dim: 256
   readout_dim: 256
 
+  lr_schedule: 'linear_warmup'
 dataset:
   eval_datasets:
   - 'odoherty_rtt-Indy-20161005_06'
@@ -38,4 +39,3 @@ dataset:
   - MetaKey.subject
 train:
   batch_size: 256
-seed: 0

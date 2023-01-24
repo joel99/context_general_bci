@@ -1,5 +1,5 @@
 # @package _global_
-tag: ks_512
+tag: ks_512_step
 
 defaults:
   - /model: pretrain
@@ -17,6 +17,7 @@ model:
   array_embed_size: 512
   dropout: 0.2
   lr_init: 3e-3
+  lr_ramp_steps: 5
 dataset:
   bin_size_ms: 5
   max_channels: 137

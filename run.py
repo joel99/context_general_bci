@@ -55,7 +55,6 @@ def run_exp(cfg : RootConfig) -> None:
     dataset.subset_split(keep_index=True)
     train, val = dataset.create_tv_datasets()
     logger.info(f"Training on {len(train)} examples")
-
     data_attrs = dataset.get_data_attrs()
     logger.info(pformat(f"Data attributes: {data_attrs}"))
     if cfg.init_from_id:
@@ -146,6 +145,8 @@ def run_exp(cfg : RootConfig) -> None:
         # Note, wandb.run can also be accessed as logger.experiment but there's no benefit
         if cfg.tag:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
+        if os.environ.get('SLURM_JOB_ID'):
+            wandb.run.notes = f"SLURM_JOB_ID={os.environ['SLURM_JOB_ID']}"
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
         wandb.config.update({'data_attrs': dataclasses.asdict(data_attrs)})
 
