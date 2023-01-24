@@ -17,5 +17,15 @@ model:
   array_embed_size: 256
   dropout: 0.2
 train:
-  patience: 300
-  batch_size: 256
+  batch_size: 192
+dataset:
+  datasets:
+  - churchland_maze_jenkins.*
+  - mc_maze.*
+  eval_datasets:
+  - mc_maze_medium
+  meta_keys:
+  - MetaKey.unique
+  - MetaKey.array
+  - MetaKey.session
+  - MetaKey.subject

@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: maze_jenkins_layer
 
 defaults:
   - /model: pretrain
@@ -14,7 +14,7 @@ dataset:
   - churchland_maze_jenkins.*
   - mc_maze.*
   eval_datasets:
-  - churchland_maze_jenkins-1
+  - mc_maze_medium
   meta_keys:
   - MetaKey.unique
   - MetaKey.array

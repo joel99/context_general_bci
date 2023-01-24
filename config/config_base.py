@@ -191,6 +191,8 @@ class ModelConfig:
     heldout_neuron_embed_strategy: EmbedStrat = EmbedStrat.token # Not even sure if there's a different way here.
     # There should maybe be a section for augmentation/ablation, but that is low pri.
 
+    layer_norm_input: bool = False # layer norm on population input
+
 @dataclass
 class ExperimentalConfig:
     r"""
@@ -290,7 +292,8 @@ class DatasetConfig:
     max_trial_length: int = 1500 # in bins. for preproc
     max_length_ms: int = 0 # in ms, in dataloader
 
-    z_score: bool = False # TODO implement
+    z_score: str = ""
+    # options: "" no z-scoring, session, global. See also model layer norm on input
 
     # Pad to this number of channels per array group
     # If set to 0, will skip padding checks.

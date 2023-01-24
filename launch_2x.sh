@@ -12,9 +12,9 @@
 echo 'tasks'
 echo $SLURM_NTASKS
 echo 'per node'
+export SLURM_NTASKS_PER_NODE=2
 echo $SLURM_NTASKS_PER_NODE
 # set slurm tasks to 2
-export SLURM_NTASKS_PER_NODE=2
 hostname
 source ~/.bashrc # Note bashrc has been modified to allow slurm jobs
 module add cuda-11.6

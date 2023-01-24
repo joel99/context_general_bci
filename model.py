@@ -38,6 +38,9 @@ class BrainBertInterface(pl.LightningModule):
         num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
         assert num_updates <= 1, "Only one task pipeline should update the root"
 
+        if getattr(self.cfg, 'layer_norm_input', False):
+            self.layer_norm_input = nn.LayerNorm(data_attrs.max_channel_count)
+
     def diff_cfg(self, cfg: ModelConfig):
         r"""
             Check if new cfg is different from current cfg (used when initing)
@@ -298,6 +301,8 @@ class BrainBertInterface(pl.LightningModule):
             rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)'),
             dtype=torch.float
         )
+        if getattr(self.cfg, 'layer_norm_input', False):
+            state_in = self.layer_norm_input(state_in)
         temporal_context = []
         for task in self.cfg.task.tasks:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))

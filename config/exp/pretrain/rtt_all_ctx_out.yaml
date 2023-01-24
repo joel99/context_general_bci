@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_all_256
+tag: rtt_all_ctx_out
 
 defaults:
   - /model: pretrain
@@ -17,7 +17,7 @@ model:
   array_embed_size: 256
   dropout: 0.1
   # readin_strategy: EmbedStrat.contextual_mlp
-  # readout_strategy: EmbedStrat.contextual_mlp
+  readout_strategy: EmbedStrat.contextual_mlp
   readin_compress: False
   readin_dim: 256
   readout_dim: 256
