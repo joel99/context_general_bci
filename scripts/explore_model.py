@@ -48,7 +48,8 @@ query = "maze_jenkins_stitch"
 # query = "rtt_all_sans_add"
 # query = "rtt_indy_sans_256_d01"
 query = "rtt_indy_stitch"
-# query = "rtt_all_256"
+query = "rtt_all_256"
+query = "rtt_indy_ablate"
 # query = "rtt_all_512"
 # query = "rtt_indy_loco"
 
@@ -128,6 +129,8 @@ else:
     dataset.subset_split()
 dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
+print(data_attrs)
+# data_attrs.context.session = ['ExperimentalTask.odoherty_rtt-Indy-20161014_04'] # definitely using..
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')

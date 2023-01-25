@@ -30,6 +30,15 @@ class BrainBertInterface(pl.LightningModule):
         super().__init__() # store cfg
         self.save_hyperparameters(logger=False)
         self.cfg = cfg
+
+        # Manual patch for hidden sizes - we use a single value for all embeddings. Increase embedding bandwidth by adding more tokens
+        self.cfg.transformer.n_state = cfg.hidden_size
+        self.cfg.session_embed_size = cfg.hidden_size
+        self.cfg.subject_embed_size = cfg.hidden_size
+        self.cfg.array_embed_size = cfg.hidden_size
+        self.cfg.readin_dim = cfg.hidden_size
+        self.cfg.readout_dim = cfg.hidden_size
+
         self.data_attrs = data_attrs
         self.backbone = TemporalTransformer(self.cfg.transformer)
         self.bind_io()
@@ -99,6 +108,9 @@ class BrainBertInterface(pl.LightningModule):
         project_size = self.cfg.hidden_size
 
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
+            if self.cfg.session_embed_strategy == EmbedStrat.token and getattr(self.cfg, 'session_embed_token_count', 1) > 1:
+                pass
+
             self.session_embed = nn.Embedding(len(self.data_attrs.context.session), self.cfg.session_embed_size)
             if self.cfg.session_embed_strategy == EmbedStrat.concat:
                 project_size += self.cfg.session_embed_size

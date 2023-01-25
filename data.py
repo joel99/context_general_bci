@@ -13,7 +13,7 @@ import logging
 import pandas as pd
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
 
@@ -464,3 +464,53 @@ class SpikingDataset(Dataset):
             self.subset_by_key(key_values=splits, key='split', na='train', keep_index=keep_index)
         else:
             logger.warning("No split column found, assuming all data is train.")
+
+
+class SpikingDataModule(pl.LightningDataModule):
+    r"""
+        A PL module mainly for autoscaling batch size, for sweeping.
+    """
+    def __init__(self, batch_size, num_workers, train: SpikingDataset, val, test=[]) -> None:
+        super().__init__()
+        self.batch_size = batch_size
+        self.train = train
+        if not isinstance(val, list):
+            val = [val]
+        self.val = val
+        self.test = test
+        self.num_workers = num_workers
+
+    def setup(self, stage: str=""):
+        pass
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train, shuffle=True,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            persistent_workers=self.num_workers > 0,
+            collate_fn=self.train.collater_factory(),
+        )
+
+    def val_dataloader(self):
+        return [
+            DataLoader(
+                dataset, shuffle=False,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                persistent_workers=self.num_workers > 0,
+                collate_fn=dataset.collater_factory(),
+            ) for dataset in self.val]
+
+    def test_dataloader(self):
+        if len(self.test) == 0:
+            return None
+        for dataset in self.test:
+            return [DataLoader(
+                dataset, shuffle=False,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                persistent_workers=self.num_workers > 0,
+                collate_fn=dataset.collater_factory(),
+            ) for dataset in self.test]
+

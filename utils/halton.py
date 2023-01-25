@@ -357,8 +357,9 @@ def generate_search(search_space: Union[_DictSearchSpace, _ListSearchSpace],
   else:
     raise AttributeError('tuning_search_space should either be a dict or list.')
 
-  named_tuple_class = collections.namedtuple('Hyperparameters',
-                                             all_hyperparameter_names)
+  # named_tuple_class = collections.namedtuple('Hyperparameters',
+                                            #  all_hyperparameter_names)
+
   # hyper.zipit([
   #     hyper.loguniform('base_learning_rate', hyper.interval(1e-3, 0.1)),
   #     hyper.loguniform('one_minus_momentum', hyper.interval(1e-2, 0.1)),
@@ -378,7 +379,8 @@ def generate_search(search_space: Union[_DictSearchSpace, _ListSearchSpace],
           generator_fn = uniform(name, interval(space['min'], space['max']))
       hyperparameter_generators.append(generator_fn)
     return [
-        named_tuple_class(**p)
+        p # just return the dictionary, we have periods in the hyperparameter names which breaks named tuples
+        # named_tuple_class(**p)
         for p in zipit(hyperparameter_generators, num_trials)
     ]
   else:
@@ -389,5 +391,6 @@ def generate_search(search_space: Union[_DictSearchSpace, _ListSearchSpace],
                    f'{len(search_space)} trial(s) found in the JSON file. '
                    f'Updating --num_tuning_trials to {updated_num_trials}.')
     for trial in search_space:
-      hyperparameters.append(named_tuple_class(**trial))
+      hyperparameters.append(trial)
+      # hyperparameters.append(named_tuple_class(**trial))
     return hyperparameters[:updated_num_trials]

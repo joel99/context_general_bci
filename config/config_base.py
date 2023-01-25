@@ -167,6 +167,8 @@ class ModelConfig:
     # Trial level
     session_embed_strategy: EmbedStrat = EmbedStrat.token
     session_embed_size: int = 256 # TODO can we bind this?
+    session_embed_token_count: int = 1 # we'd like to increase custom capacity
+
     subject_embed_strategy: EmbedStrat = EmbedStrat.none # TODO update this once we consider mixed batches
     subject_embed_size: int = 256 # TODO can we bind this?
     task_embed_strategy: EmbedStrat = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
@@ -337,7 +339,9 @@ class RootConfig:
     tag: str = "" # i.e. experiment variant, now an optional tag (since hydra consumes file, we can't use the filename for experiment name. Specify if you want.)
     experiment_set: str = ""
 
-    sweep_cfg: str = "exp/hps/base.yaml" # point to hp json
+    sweep_cfg: str = "" # See `hp_sweep_space.py`
+    sweep_trials: int = 16
+    sweep_tag: str = "" # * don't specify this, we use this to track in wandb
 
     default_root_dir: Path = Path("./data/runs").resolve()
     wandb_project: str = "context_general_bci"

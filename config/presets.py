@@ -47,7 +47,7 @@ cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 class PretrainingNewModelConfig(ModelConfig):
     # A little more informed after initial experimentation
     task: TaskConfig = field(default_factory=InfillTaskConfig)
-    lr_ramp_steps: int = 80
+    lr_ramp_steps: int = 100
     lr_decay_steps: int = 1000
     dropout: float = 0.1
     hidden_size: int = 256

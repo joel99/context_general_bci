@@ -2,7 +2,7 @@
 tag: maze_jenkins
 
 defaults:
-  - /model: pretrain
+  - /model: pretrain_2x
   - /dataset: maze
   - /train: pretrain
 
@@ -18,3 +18,5 @@ dataset:
   - MetaKey.unique
   - MetaKey.array
   - MetaKey.session
+
+sweep_cfg: 'base'

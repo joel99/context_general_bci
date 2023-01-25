@@ -1,6 +1,8 @@
 import os
+import sys
 from pathlib import Path
 import copy
+import subprocess
 
 from pprint import pformat
 import logging # we use top level logging since most actual diagnostic info is in libs
@@ -21,14 +23,22 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.strategies import DDPStrategy
 import wandb
 
-from config import RootConfig, Metric
-from data import SpikingDataset
+from config import RootConfig, Metric, hp_sweep_space
+from data import SpikingDataset, SpikingDataModule
 from model import BrainBertInterface, load_from_checkpoint
 from analyze_utils import get_best_ckpt_from_wandb_id
+from utils import generate_search
 
 r"""
+    For this script
+    - if you're in a slurm interactive job, or want to launch a script, directly invoke
+    ```
+    python run.py args
+    ```
+
     A note on usage:
     hydra will require config_path='config' and config_name='config' to load default.
+
     They point to using overrides to merge in experimental config.
     `python run.py +exp=test`
     where +exp directs hydra to look for "test.yaml" in ./config/exp/
@@ -42,6 +52,23 @@ reset_early_stop = True # todo move into config
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
+    # Check for sweeping. Note we process data above because I never intend to sweep over data config.
+    if cfg.sweep_cfg and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
+        sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
+        for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
+            init_call = sys.argv
+            init_args = init_call[init_call.index('run.py')+1:]
+            additional_cli_flags = [f'{k}={v}' for k, v in cfg_trial.items()]
+            meta_flags = [
+                'sweep_cfg=""',
+                f'sweep_tag={cfg.sweep_cfg}',
+                f'tag={cfg.tag}-sweep-{cfg.sweep_cfg}'
+            ]
+            # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
+            subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+        exit(0)
+
+
     logger = logging.getLogger(__name__)
     logger.info(f"Running NDT2, dumping config:")
     logger.info(OmegaConf.to_yaml(cfg))
@@ -57,6 +84,7 @@ def run_exp(cfg : RootConfig) -> None:
     logger.info(f"Training on {len(train)} examples")
     data_attrs = dataset.get_data_attrs()
     logger.info(pformat(f"Data attributes: {data_attrs}"))
+
     if cfg.init_from_id:
         init_ckpt = get_best_ckpt_from_wandb_id(
             cfg.wandb_project, cfg.init_from_id,
@@ -157,33 +185,21 @@ def run_exp(cfg : RootConfig) -> None:
         logger.warning("Num workers is 0, DEBUGGING.")
     logger.info("Preparing to fit...")
 
-    val_dataloaders = [
-        DataLoader(val,
-            batch_size=cfg.train.batch_size,
-            num_workers=num_workers,
-            persistent_workers=num_workers > 0,
-            collate_fn=val.collater_factory()
-        )
-    ]
-    if cfg.dataset.eval_datasets:
-        val_dataloaders.append(
-            DataLoader(eval_dataset,
-                batch_size=cfg.train.batch_size,
-                num_workers=num_workers,
-                persistent_workers=num_workers > 0,
-                collate_fn=val.collater_factory()
-            )
-        )
+    val_datasets = [val]
+    if cfg.dataset.datasets:
+        val_datasets.append(eval_dataset)
+    data_module = SpikingDataModule(
+        cfg.train.batch_size,
+        num_workers,
+        train, val_datasets
+    )
+    # import pdb;pdb.set_trace()
+    if torch.cuda.device_count() <= 1 and len(train) > 2000:
+        new_bsz = trainer.tuner.scale_batch_size(model, datamodule=data_module, mode="power", steps_per_trial=5, max_trials=20)
+        data_module.batch_size = new_bsz
+
     trainer.fit(
-        model,
-        DataLoader(
-            train, shuffle=True,
-            batch_size=cfg.train.batch_size,
-            num_workers=num_workers,
-            persistent_workers=num_workers > 0,
-            collate_fn=train.collater_factory()
-        ),
-        val_dataloaders=val_dataloaders,
+        model, datamodule=data_module,
         ckpt_path=get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )
     logger.info('Run complete')
