@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: maze_jenkins_ctx_out
 
 defaults:
   - /model: pretrain_2x
@@ -7,8 +7,9 @@ defaults:
   - /train: pretrain
 
 model:
-  session_embed_token_count: 128
   array_embed_strategy: EmbedStrat.token_add
+  readout_strategy: EmbedStrat.contextual_mlp
+  readin_compress: False
 dataset:
   datasets:
   - churchland_maze_jenkins.*

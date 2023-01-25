@@ -194,7 +194,7 @@ def run_exp(cfg : RootConfig) -> None:
         train, val_datasets
     )
     # import pdb;pdb.set_trace()
-    if torch.cuda.device_count() <= 1 and len(train) > 2000:
+    if torch.cuda.device_count() <= 1 and len(train) > 2000 and 'test' not in cfg.tag: # don't scale test debug runs
         new_bsz = trainer.tuner.scale_batch_size(model, datamodule=data_module, mode="power", steps_per_trial=5, max_trials=20)
         data_module.batch_size = new_bsz
 

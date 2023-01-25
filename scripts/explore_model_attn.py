@@ -151,17 +151,17 @@ dataloader = get_dataloader(dataset)
 from analyze_utils import SaveOutput, patch_attention
 save_output = SaveOutput()
 layer_tgt = model.backbone.encoder.layers[0]
+layer_tgt = model.backbone.encoder.layers[1]
+layer_tgt = model.backbone.encoder.layers[2]
+# layer_tgt = model.backbone.encoder.layers[1]
 patch_attention(layer_tgt.self_attn)
 # 100 trials, 4 heads, 200 tokens, 200 tokens
 hook_handle = layer_tgt.self_attn.register_forward_hook(save_output)
 
-
-#%%
 print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
 # heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
-#%%
 print(save_output.outputs[0].shape)
 print(save_output.outputs[1].shape)
 # print(save_output.outputs[2].shape)
@@ -173,13 +173,36 @@ print(data_attrs.max_arrays)
 #%%
 # Plot the attention heatmap
 import seaborn as sns
-
+from matplotlib.colors import LogNorm
+import pandas as pd
 attn_trial = save_output.outputs[0][0].cpu()
-attn_head = attn_trial[0]
+# print(attn_head.sum(0)) # how much weight did each token get
+# print(attn_head.sum(1)) # how much weight did each token give (should be 1)
 
-# plot
-ax = prep_plt()
-sns.heatmap(attn_head, ax=ax)
+# attn_head = attn_trial[3] # attending x attended
+# attn_head = attn_trial[1] # attending x attended
+# attn_head = attn_trial[2] # attending x attended
+# make 4 subplots
+f, axs = plt.subplots(2, 2, figsize=(10,10), sharex=True, sharey=True)
+def plot_attn(ax, attn_head):
+    ax = prep_plt(ax)
+    # turn 2d matrix into a long dataframe with columns 'target' and 'src'
+    df = pd.DataFrame(attn_head)
+    df = df.melt()
+    print(df)
+
+
+    sns.heatmap(attn_head, ax=ax)
+    # sns.heatmap(attn_head, ax=ax, vmax=0.1)
+    # ax.set_xlabel('Target')
+    # ax.set_ylabel('Src')
+
+for head in range(attn_trial.shape[0]):
+    plot_attn(axs[head//2, head%2], attn_trial[head])
+    # add marginals
+plt.xlabel('Target')
+plt.ylabel('Src')
+
 
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())

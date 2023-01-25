@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: maze_jenkins_t2
 
 defaults:
   - /model: pretrain_2x
@@ -7,7 +7,7 @@ defaults:
   - /train: pretrain
 
 model:
-  session_embed_token_count: 128
+  session_embed_token_count: 2
   array_embed_strategy: EmbedStrat.token_add
 dataset:
   datasets:

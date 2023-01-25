@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: maze_jenkins_init
 
 defaults:
   - /model: pretrain_2x
@@ -7,8 +7,8 @@ defaults:
   - /train: pretrain
 
 model:
-  session_embed_token_count: 128
   array_embed_strategy: EmbedStrat.token_add
+  init_flags: True
 dataset:
   datasets:
   - churchland_maze_jenkins.*
@@ -20,4 +20,4 @@ dataset:
   - MetaKey.array
   - MetaKey.session
 
-# sweep_cfg: 'base'
+sweep_cfg: 'base'

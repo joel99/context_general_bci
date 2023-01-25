@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: maze_jenkins_t128
 
 defaults:
   - /model: pretrain_2x

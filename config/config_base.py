@@ -164,6 +164,8 @@ class ModelConfig:
     # "project" (have a context-specific read-in layer)
     # "" - ignore context
 
+    init_flags: bool = True
+    # init_flags: bool = False # TODO legacy make true
     # Trial level
     session_embed_strategy: EmbedStrat = EmbedStrat.token
     session_embed_size: int = 256 # TODO can we bind this?

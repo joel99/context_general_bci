@@ -1,5 +1,5 @@
 # @package _global_
-tag: ks
+tag: ks_stitch
 
 defaults:
   - /model: pretrain

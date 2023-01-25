@@ -2,20 +2,15 @@
 tag: maze_jenkins_ctx
 
 defaults:
-  - /model: pretrain
+  - /model: pretrain_2x
   - /dataset: maze
   - /train: pretrain
 
 model:
   array_embed_strategy: EmbedStrat.token_add
-
   readin_strategy: EmbedStrat.contextual_mlp
   readout_strategy: EmbedStrat.contextual_mlp
   readin_compress: False
-  readin_dim: 128
-  readout_dim: 128
-  # task:
-  #   unique_no_head: True
 dataset:
   datasets:
   - churchland_maze_jenkins.*
@@ -26,3 +21,5 @@ dataset:
   - MetaKey.unique
   - MetaKey.array
   - MetaKey.session
+
+# sweep_cfg: 'base'
