@@ -189,12 +189,13 @@ def plot_attn(ax, attn_head, crop_ctx=True):
     # turn 2d matrix into a long dataframe with columns 'target' and 'src'
     if crop_ctx:
         attn_head = attn_head[:-2, :-2]
-    # attn_head = attn_head[::2, 1::2]
-    attn_head = attn_head[1::2, ::2]
-    df = pd.DataFrame(attn_head)
-    df = df.melt()
-    print(df)
+    attn_head = attn_head[:, 1::2]
 
+    # Turn into DF so we can get marginals
+    # attn_head = attn_head[1::2, ::2]
+    # df = pd.DataFrame(attn_head)
+    # df = df.melt()
+    # print(df)
 
     sns.heatmap(attn_head, ax=ax)
     # sns.heatmap(attn_head, ax=ax, vmax=0.1)
@@ -206,115 +207,3 @@ for head in range(attn_trial.shape[0]):
     # add marginals
 plt.xlabel('Target')
 plt.ylabel('Src')
-
-
-#%%
-# print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
-# test = heldin_outputs[Output.heldout_rates]
-rates = heldin_outputs[Output.rates] # b t c
-
-
-spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
-ax = prep_plt()
-
-num = 20
-# channel = 5
-# channel = 10
-# channel = 18
-# channel = 19
-# channel = 20
-# channel = 80
-
-colors = sns.color_palette("husl", num)
-
-# for trial in range(num):
-#     ax.plot(rates[trial][:,channel], color=colors[trial])
-
-y_lim = ax.get_ylim()[1]
-# plot spike raster
-# for trial in range(num):
-#     spike_times = spikes[trial,:,channel].nonzero()
-#     y_height = y_lim * (trial+1) / num
-#     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
-
-trial = 10
-trial = 20
-trial = 15
-trial = 17
-trial = 18
-# trial = 80
-# trial = 85
-from scipy.ndimage import gaussian_filter1d
-for channel in range(num):
-    # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
-    ax.plot(rates[trial][:,channel * 2], color=colors[channel])
-    # ax.plot(rates[trial][:,channel * 3], color=colors[channel])
-#     ax.plot(gaussian_filter1d(test[trial,:,channel], sigma=3), color=colors[channel])
-
-    # smooth the signal with a gaussian kernel
-
-# from scipy import signal
-# peaks, _ = signal.find_peaks(test[trial,:,2], distance=4)
-# print(peaks)
-# print(len(peaks))
-# for p in peaks:
-#     ax.axvline(p, color='k', linestyle='--')
-
-
-
-ax.set_ylabel('FR (Hz)')
-ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
-# relabel xtick unit from 5ms to ms
-# ax.set_xlim(200, 600)
-ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
-ax.set_xlabel('Time (ms)')
-# plt.plot(test[0,:,0])
-ax.set_title(f'FR Inference: {query}')
-
-#%%
-# Debugging (for mc_maze dataset)
-pl.seed_everything(0)
-example_batch = next(iter(dataloader))
-print(example_batch[DataKey.spikes].size())
-print(example_batch[DataKey.spikes].sum())
-# print(example_batch[DataKey.spikes][0,:,0,:,0].nonzero())
-# First 10 timesteps, channel 8 fires 3x
-print(example_batch[DataKey.spikes][0,:,0,:,0][:10, 8])
-# Now, do masking manually
-
-# No masking
-backbone_feats = model(example_batch)
-example_out = model.task_pipelines[ModelTask.infill.value](example_batch, backbone_feats, compute_metrics=False)
-print(example_out[Output.logrates].size())
-print(example_out[Output.logrates][0, :, 0, :][:10, 8]) # extremely spiky prediction
-
-# # With masking
-# example_batch[DataKey.spikes][0, :, 0, :, 0][:10] = 0
-# backbone_feats = model(example_batch)
-# example_out = model.task_pipelines[ModelTask.infill.value](example_batch, backbone_feats, compute_metrics=False)
-# print(example_out[Output.logrates].size())
-# print(example_out[Output.logrates][0, :, 0, :][:10, 8]) # unspiked prediction.
-# OK - well if true mask occurs, model appropriately doesn't predict high spike.
-
-# Key symptom - whether or not a spike occurs at a timestep is affecting its own prediction
-# example_batch[DataKey.spikes][0, :, 0, :, 0][1] = 0
-# backbone_feats = model(example_batch)
-# example_out = model.task_pipelines[ModelTask.infill.value](example_batch, backbone_feats, compute_metrics=False)
-# print(example_out[Output.logrates].size())
-# print(example_out[Output.logrates][0, :, 0, :][:10, 8]) # unspiked prediction.
-
-
-# Masking through model update_batch also seems to work
-model.task_pipelines[ModelTask.infill.value].update_batch(example_batch)
-print(example_batch['is_masked'][0].nonzero())
-backbone_feats = model(example_batch)
-example_out = model.task_pipelines[ModelTask.infill.value](example_batch, backbone_feats, compute_metrics=True)
-# example_out = model.task_pipelines[ModelTask.infill.value](example_batch, backbone_feats, compute_metrics=False)
-print(example_out[Metric.bps])
-print(example_out[Output.logrates].size())
-print(example_out[Output.logrates][0, :, 0, :][:10, 8]) # unspiked prediction.
-
-
-# Ok - so the model is correctly predicting unspiked for masked timesteps.
-# Then why is test time evaluation so spiky? Even when we mask?
-# Let's check again...

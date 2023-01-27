@@ -265,6 +265,14 @@ class TemporalTransformer(nn.Module):
         src = self.dropout_in(src)
         src = src + self.pos_encoder(src) # TODO make relative
 
+        # ! DEBUG
+        # manually crop out the padding tokens to see effect on training
+
+        # src = src[:,:,:1]
+        # a = 1
+        # array_padding_mask = None
+        # ! END DEBUG
+
         contextualized_src, ps = pack([
             src,
             *temporal_context,
@@ -341,18 +349,16 @@ class TemporalTransformer(nn.Module):
             if len(trial_context) > 0:
                 padding_mask = F.pad(padding_mask, (0, trial_context.size(1)), value=False)
                 # src_key_pad_mask - prevents attending _to_, but not _from_. That should be fine.
-                # It does affect
-            # # ! I suspect in the default implementation padding_mask can still be attended _to_; we want to block this as well
-            # if src_mask is not None:
-            #     src_mask = repeat(src_mask, 'src tgt -> batch_head src tgt', batch_head=b * self.cfg.n_heads)
-            #     padding_mask = rearrange(
-            #         repeat(padding_mask, 'batch src -> batch head src', head=self.cfg.n_heads),
-            #         'batch head src -> (batch head) src'
-            #     ) # 96 202 202
         else:
             padding_mask = None
 
         output = self.encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
         output = rearrange(output[: t * a], '(t a) b h -> b t a h', t=t, a=a)
         output = self.dropout_out(output)
+
+        # # ! DEBUG
+        # output = torch.cat([output, torch.zeros_like(output)], dim=2)
+        # # ! END DEBUG
+
+
         return output

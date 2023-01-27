@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, List, Optional, Any
+from typing import Tuple, Dict, List, Optional, Any, Mapping
 import dataclasses
 import math
 import numpy as np
@@ -50,6 +50,12 @@ class BrainBertInterface(pl.LightningModule):
 
         if getattr(self.cfg, 'layer_norm_input', False):
             self.layer_norm_input = nn.LayerNorm(data_attrs.max_channel_count)
+
+        # Some logging desiderata
+        self.register_buffer('_running_metrics_val_loss', torch.tensor(math.inf))
+        self.register_buffer(f'_running_metrics_val_{Metric.bps.name}', torch.tensor(-math.inf))
+        self.register_buffer('_running_metrics_eval_loss', torch.tensor(math.inf))
+        self.register_buffer(f'_running_metrics_eval_{Metric.bps.name}', torch.tensor(-math.inf))
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
@@ -594,8 +600,22 @@ class BrainBertInterface(pl.LightningModule):
         return out
 
     # ==================== Optimization ====================
+    def update_best_metric(self, prefix: str, key: str, value: torch.Tensor, **kwargs):
+        # log the best until metric; this is so we can identify good runs in wandb; which just otherwise takes the last logged value.
+        # we sneak in store running metrics as buffers to avoid needing to alter state dict
+        # if not hasattr(self, f'_running_metrics_{prefix}_{key}'):
+            # self.register_buffer(f'_running_metrics_{prefix}_{key}', value)
+        if ('loss' in key and value < getattr(self, f'_running_metrics_{prefix}_{key}')) or \
+            ('loss' not in key and value > getattr(self, f'_running_metrics_{prefix}_{key}')):
+            setattr(self, f'_running_metrics_{prefix}_{key}', value) # Note this is going to get kinda funky for distributed eval, but cope, we just want to be roughly correct
+        self.log(f'{prefix}_best_{key}', getattr(self, f'_running_metrics_{prefix}_{key}'), **kwargs)
+
     def common_log(self, metrics, prefix='', **kwargs):
         self.log(f'{prefix}_loss', metrics['loss'], **kwargs)
+        if prefix in ['val', 'eval']:
+            self.update_best_metric(prefix, 'loss', metrics['loss'], **kwargs)
+            if Metric.bps in metrics:
+                self.update_best_metric(prefix, Metric.bps.name, metrics[Metric.bps], **kwargs)
         for m in self.cfg.task.metrics:
             self.log(f'{prefix}_{m}', metrics[m], **kwargs)
 
