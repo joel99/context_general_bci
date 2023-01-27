@@ -53,6 +53,8 @@ dataset_name = 'odoherty_rtt-Indy-20160627_01'
 # dataset_name = 'dyer_co_chewie_2'
 # dataset_name = 'Chewie_CO_20161021'
 # dataset_name = 'churchland_misc_nitschke-.*'
+dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
+dataset_name = 'churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG'
 
 
 context = context_registry.query(alias=dataset_name)
@@ -63,11 +65,11 @@ print(context)
 
 default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 default_cfg.data_keys = [DataKey.spikes]
-default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 5
 # default_cfg.bin_size_ms = 30
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
-default_cfg.max_channels = 250
+# default_cfg.max_channels = 250
 default_cfg.datasets = [context.alias]
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
@@ -99,21 +101,21 @@ trial = 26
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]
 # print diagnostics
-print(pop_spikes[::2].sum(0))
-print(pop_spikes[1::2].sum(0))
+# print(pop_spikes[::2].sum(0))
+# print(pop_spikes[1::2].sum(0))
 # sns.histplot(pop_spikes[::2].sum(0))
 # sns.histplot(pop_spikes[1::2].sum(0) - pop_spikes[0::2].sum(0))
 print(
-    f"Mean: {pop_spikes.float().mean():.2f}, "
-    f"Std: {pop_spikes.float().std():.2f}, "
-    f"Max: {pop_spikes.max():.2f}, "
-    f"Min: {pop_spikes.min():.2f}"
+    f"Mean: {pop_spikes.float().mean():.2f}, \n"
+    f"Std: {pop_spikes.float().std():.2f}, \n"
+    f"Max: {pop_spikes.max():.2f}, \n"
+    f"Min: {pop_spikes.min():.2f}, \n"
     f"Shape: {pop_spikes.shape}"
 )
 
 pop_spikes = pop_spikes.flatten(1, 2)
-pop_spikes = pop_spikes[:, :96]
-
+# pop_spikes = pop_spikes[:, :96]
+# wait... 250?
 # path_to_old = './data/old_nlb/mc_maze.h5'
 # with h5py.File(path_to_old, 'r') as f:
 #     print(f.keys())

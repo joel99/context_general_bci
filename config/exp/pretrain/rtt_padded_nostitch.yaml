@@ -1,14 +1,13 @@
 # @package _global_
 # Don't actually intro more data, just train on RTT with extra arrays, length, and channels.
-tag: test
+tag: rtt_padded_nostitch
 
 defaults:
   - /model: pretrain
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
-  array_embed_strategy: EmbedStrat.none
-  # array_embed_strategy: EmbedStrat.token_add
+  array_embed_strategy: EmbedStrat.token_add
   # TODO no task embed strategy yet
   transformer:
     n_state: 256
@@ -20,13 +19,10 @@ model:
   dropout: 0.1
   # readin_strategy: EmbedStrat.unique_project
   # readout_strategy: EmbedStrat.unique_project
-
-  init_flags: False
 dataset:
   bin_size_ms: 5
-  max_channels: 98
-  max_arrays: 1
-  # max_arrays: 2
+  max_channels: 137
+  max_arrays: 2
   max_length_ms: 1500
   datasets:
   # Jenkins, Nitschke

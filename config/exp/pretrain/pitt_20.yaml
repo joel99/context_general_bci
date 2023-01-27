@@ -8,6 +8,8 @@ defaults:
 dataset:
   datasets:
   - CRS02bHome.data.*
+  eval_datasets:
+  - CRS02bHome.data.00445
   data_keys:
   - DataKey.spikes
   pitt_co:
@@ -25,11 +27,6 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 model:
-  dropout: 0.2
-  transformer:
-    dropout: 0.2
-    n_heads: 2
-    n_layers: 6
   task:
     tasks:
     - ModelTask.infill
@@ -40,3 +37,4 @@ model:
 train:
   batch_size: 16
   accumulate_batches: 4
+sweep_cfg: base

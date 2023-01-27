@@ -135,7 +135,11 @@ class BrainBertInterface(pl.LightningModule):
                     self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
 
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            self.array_embed = nn.Embedding(len(self.data_attrs.context.array) + 1, self.cfg.array_embed_size, padding_idx=0)
+            self.array_embed = nn.Embedding(
+                len(self.data_attrs.context.array),
+                self.cfg.array_embed_size,
+                padding_idx=self.data_attrs.context.array.index('') if '' in self.data_attrs.context.array else None
+            )
             if self.cfg.array_embed_strategy == EmbedStrat.concat:
                 project_size += self.cfg.array_embed_size
             elif self.cfg.array_embed_strategy == EmbedStrat.token:
@@ -348,7 +352,7 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.readin_strategy == EmbedStrat.contextual_mlp or self.cfg.readout_strategy == EmbedStrat.contextual_mlp:
             batch['session'] = session # hacky
-
+        # import pdb;pdb.set_trace()
         if self.cfg.readin_strategy in [EmbedStrat.contextual_mlp, EmbedStrat.unique_project]:
             state_in = self.readin(state_in, batch) # b t a h
         elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
@@ -358,6 +362,13 @@ class BrainBertInterface(pl.LightningModule):
 
         static_context = []
         project_context = [] # only for static info
+        def mask_padding(x: torch.Tensor):
+            # x: b t a h
+            if CHANNEL_KEY not in batch:
+                return x
+            array_padding_mask = batch[CHANNEL_KEY] == 0
+            array_padding_mask = rearrange(array_padding_mask, 'b a -> b () a ()')
+            return x.masked_fill(array_padding_mask, 0)
 
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             if self.cfg.session_embed_strategy == EmbedStrat.token:
@@ -367,7 +378,7 @@ class BrainBertInterface(pl.LightningModule):
                 else:
                     static_context.append(session)
             elif self.cfg.session_embed_strategy == EmbedStrat.token_add:
-                state_in = state_in + rearrange(session, 'b h -> b 1 1 h')
+                state_in = state_in + mask_padding(rearrange(session, 'b h -> b 1 1 h'))
             elif self.cfg.session_embed_strategy == EmbedStrat.concat: # concat deprecated for readin strategy etc
                 session = repeat(session, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(session)
@@ -377,7 +388,7 @@ class BrainBertInterface(pl.LightningModule):
                 subject = subject + self.subject_flag
                 static_context.append(subject)
             elif self.cfg.subject_embed_strategy == EmbedStrat.token_add:
-                state_in = state_in + rearrange(subject, 'b h -> b 1 1 h')
+                state_in = state_in + mask_padding(rearrange(subject, 'b h -> b 1 1 h'))
             elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
                 subject = repeat(subject, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(subject)
@@ -387,7 +398,7 @@ class BrainBertInterface(pl.LightningModule):
                 array = array + self.array_flag
                 static_context.extend(array.unbind(1)) # path not yet tested
             elif self.cfg.array_embed_strategy == EmbedStrat.token_add:
-                state_in = state_in + rearrange(array, 'b a h -> b 1 a h')
+                state_in = state_in + mask_padding(rearrange(array, 'b a h -> b 1 a h')) # redundant op since array uses 0s for padding
             elif self.cfg.array_embed_strategy == EmbedStrat.concat:
                 array = repeat(array, 'b a h -> b t a h', t=state_in.shape[1])
                 project_context.append(array)
@@ -404,6 +415,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T A H
+        # import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
             temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T

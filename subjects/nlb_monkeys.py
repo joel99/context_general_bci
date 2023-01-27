@@ -77,5 +77,6 @@ class Lando(SubjectInfo):
 class Reggie(SubjectInfo):
     name = SubjectName.reggie
     _arrays = {
-        'main': GeometricArrayInfo(array=np.arange(94)), # 94 determined by observation
+        'M1': GeometricArrayInfo(array=np.arange(96)), # P sure this guy only has 94 channels but 96 rounds it even and we pad in `churchland_misc`
+        'PMd': GeometricArrayInfo(array=np.arange(96) + 94),
     }

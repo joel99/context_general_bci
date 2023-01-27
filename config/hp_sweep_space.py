@@ -12,7 +12,8 @@ sweep_space = {
         },
         "model.lr_init": {
             'min': 1e-4,
-            'max': 5e-2,
+            'max': 2e-2, # models reliably crash past 1e-2
+            # 'max': 5e-2,
             'scaling': 'log',
         },
         "model.weight_decay": {
@@ -29,7 +30,7 @@ sweep_space = {
     },
     "large": {
         "model.hidden_size": {
-            'feasible_points': [384, 512, 768]
+            'feasible_points': [256, 384, 512, 768]
         },
         "model.lr_init": {
             'min': 1e-4,

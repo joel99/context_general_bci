@@ -51,7 +51,7 @@ query = "maze_jenkins_stitch"
 query = "rtt_all_256"
 # query = "rtt_indy_ablate"
 # query = "rtt_all_512"
-# query = "rtt_indy_loco"
+query = "rtt_token_padded_nostitch"
 
 # query = "rtt_loco"
 # query = "rtt_loco1"
@@ -151,8 +151,8 @@ dataloader = get_dataloader(dataset)
 from analyze_utils import SaveOutput, patch_attention
 save_output = SaveOutput()
 layer_tgt = model.backbone.encoder.layers[0]
-layer_tgt = model.backbone.encoder.layers[1]
-layer_tgt = model.backbone.encoder.layers[2]
+# layer_tgt = model.backbone.encoder.layers[1]
+# layer_tgt = model.backbone.encoder.layers[2]
 # layer_tgt = model.backbone.encoder.layers[1]
 patch_attention(layer_tgt.self_attn)
 # 100 trials, 4 heads, 200 tokens, 200 tokens
@@ -184,9 +184,13 @@ attn_trial = save_output.outputs[0][0].cpu()
 # attn_head = attn_trial[2] # attending x attended
 # make 4 subplots
 f, axs = plt.subplots(2, 2, figsize=(10,10), sharex=True, sharey=True)
-def plot_attn(ax, attn_head):
+def plot_attn(ax, attn_head, crop_ctx=True):
     ax = prep_plt(ax)
     # turn 2d matrix into a long dataframe with columns 'target' and 'src'
+    if crop_ctx:
+        attn_head = attn_head[:-2, :-2]
+    # attn_head = attn_head[::2, 1::2]
+    attn_head = attn_head[1::2, ::2]
     df = pd.DataFrame(attn_head)
     df = df.melt()
     print(df)

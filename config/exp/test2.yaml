@@ -1,13 +1,15 @@
 # @package _global_
+# Don't actually intro more data, just train on RTT with extra arrays, length, and channels.
 tag: test2
 
 defaults:
   - /model: pretrain
-  - /dataset: rtt
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
+  # array_embed_strategy: EmbedStrat.none
+  # TODO no task embed strategy yet
   transformer:
     n_state: 256
     dropout: 0.1
@@ -16,13 +18,25 @@ model:
   subject_embed_size: 256
   array_embed_size: 256
   dropout: 0.1
-  # readin_strategy: EmbedStrat.contextual_mlp
-  # readout_strategy: EmbedStrat.contextual_mlp
-  readin_compress: False
-  readin_dim: 256
-  readout_dim: 256
+  # readin_strategy: EmbedStrat.unique_project
+  # readout_strategy: EmbedStrat.unique_project
 
+  init_flags: False
 dataset:
+  bin_size_ms: 5
+  max_channels: 98
+  # max_arrays: 1
+  max_arrays: 2
+  max_length_ms: 1500
+  datasets:
+  # Jenkins, Nitschke
+  # - churchland_maze.*
+  # - churchland_misc_nitschke.*
+  - odoherty_rtt.*
+  # - churchland_misc.*
+  # Indy, Loco
+  - mc_rtt
+  # - mc_maze.*
   eval_datasets:
   - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
@@ -37,5 +51,4 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 train:
-  batch_size: 256
-seed: 1
+  batch_size: 96

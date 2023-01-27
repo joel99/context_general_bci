@@ -140,7 +140,7 @@ class ContextualMLP(nn.Module):
         super().__init__()
         # self.channel_position_embeds = nn.Parameter(init.kaiming_uniform_(torch.empty(out_count, cfg.readin_dim), a=math.sqrt(5)))
         self.readout_project = nn.Sequential(
-            nn.Linear(in_count + cfg.session_embed_size, cfg.readin_dim),
+            nn.Linear(in_count + cfg.session_embed_size * getattr(cfg, 'session_embed_token_count', 1), cfg.readin_dim),
             nn.GELU(),
             nn.Linear(cfg.readin_dim, out_count)
             # nn.Linear(cfg.readin_dim, cfg.readin_dim)
@@ -155,11 +155,13 @@ class ContextualMLP(nn.Module):
 
             out: B T A H (or C)
         """
-
+        session_embed = rearrange(
+            batch['session'], 'b h -> b 1 1 h' if batch['session'].ndim == 2 else 'b k h -> b 1 1 (k h)'
+        )
         return self.readout_project(torch.cat([
         # queries = self.readout_project(torch.cat([
             state_in,
-            rearrange(batch['session'], 'b h -> b 1 1 h').expand(*state_in.size()[:-1], -1),
+            session_embed.expand(*state_in.size()[:-1], -1),
         ], -1))
         # To show up in a given index, a query must have a high score against that index embed
         # return torch.einsum('btah, ch -> btac', queries, self.channel_position_embeds)
@@ -338,8 +340,18 @@ class TemporalTransformer(nn.Module):
             # Trial context is never padded
             if len(trial_context) > 0:
                 padding_mask = F.pad(padding_mask, (0, trial_context.size(1)), value=False)
+                # src_key_pad_mask - prevents attending _to_, but not _from_. That should be fine.
+                # It does affect
+            # # ! I suspect in the default implementation padding_mask can still be attended _to_; we want to block this as well
+            # if src_mask is not None:
+            #     src_mask = repeat(src_mask, 'src tgt -> batch_head src tgt', batch_head=b * self.cfg.n_heads)
+            #     padding_mask = rearrange(
+            #         repeat(padding_mask, 'batch src -> batch head src', head=self.cfg.n_heads),
+            #         'batch head src -> (batch head) src'
+            #     ) # 96 202 202
         else:
             padding_mask = None
+
         output = self.encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
         output = rearrange(output[: t * a], '(t a) b h -> b t a h', t=t, a=a)
         output = self.dropout_out(output)

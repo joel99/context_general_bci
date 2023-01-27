@@ -25,6 +25,7 @@ dataset_name = 'churchland_maze_nitschke-3'
 # Gdrive
 dataset_name = 'churchland_misc_nitschke-'
 dataset_name = 'churchland_misc_jenkins-'
+dataset_name = 'churchland_misc_reggie-'
 # dataset_name = 'churchland_misc_reggie-' # this seems hdf5
 context = context_registry.query(alias=dataset_name)
 print(len(context))
@@ -57,20 +58,72 @@ num_spikes = data[data['numTotalSpikes'][10, 0]][:]
 cue_on = data[data['timeCueOn'][10, 0]][:] # this is in trial time...
 
 # print(data['isSuccessful'][0, 0])
-ref = data['spikeRaster'][10, 0]
+ref = data['spikeRaster'][100, 0]
+print(ref)
+# print(data['spikeRaster'].shape)
+# print(data['spikeRaster2'].shape)
+# print(data['trialLength'])
+# print(data['timeCueOn'])
+# print(data[data['timeCueOn'][320, 0]])
 spike_data = data[ref]['data'][:]
 spike_ir = data[ref]['ir'][:]
 spike_jc = data[ref]['jc'][:]
 # print(data['spikeRaster'][0])
 # test = data[data['spikeRaster'][0, 0]]
 # print(test)
+print(spike_ir.shape)
+print(cue_on.shape)
 #%%
-print(start)
-print(np.unique(spike_ir, return_counts=True))
+test = data[data['timeCueOn'][1, 0]][()]
+test = data[data['timeCueOn'][320, 0]][0, 0]
+print(test)
+#%%
+print(spike_ir.shape)
+print(spike_jc.shape)
+print(spike_data.shape)
+import scipy
+sps_mtx = scipy.sparse.csc_matrix((spike_data, spike_ir, spike_jc))
+sps_mtx = sps_mtx.toarray()
+print(sps_mtx.shape)
+# print(start)
+# print(np.unique(spike_ir, return_counts=True))
 # there are 1750 time points at which point spikes have been on
 # for each of these timepoints... there are 192 units
 # how do we know which ir corresponds to which time point? we can use total spikes...
 # print(num_spikes)
+
+# Raster plot for `sps_mtx`
+from analyze_utils import prep_plt
+import matplotlib.pyplot as plt
+import seaborn as sns
+def plot_spikes(spikes, ax=None, vert_space=1):
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax = prep_plt(ax)
+    sns.despine(ax=ax, left=True, bottom=False)
+    spike_t, spike_c = np.where(spikes)
+    # prep_plt(axes[_c], big=True)
+    time = np.arange(spikes.shape[0])
+    ax.scatter(
+        time[spike_t], spike_c * vert_space,
+        # c=colors,
+        marker='|',
+        s=10,
+        alpha=0.9
+        # alpha=0.3
+    )
+    # time_lim = spikes.shape[0] * 0.001
+    # ax.set_xticks(np.linspace(0, spikes.shape[0], 5))
+    # ax.set_xticklabels(np.linspace(0, time_lim, 5))
+    # ax.set_title("Benchmark Maze (Sorted)")
+    # ax.set_title(context.alias)
+    ax.set_xlabel('Time (ms)')
+    ax.set_yticks([])
+    return ax
+plot_spikes(sps_mtx.T)
+print(sps_mtx.T.mean(0))
+
 #%%
 print(start.shape)
 print(start2.shape)

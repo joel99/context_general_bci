@@ -8,7 +8,7 @@ import pandas as pd
 from pynwb import NWBHDF5IO
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
-
+from scipy.sparse import csc_matrix
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, SubjectArrayRegistry
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
@@ -93,6 +93,8 @@ class ChurchlandMiscLoader(ExperimentalTaskLoader):
         arrays_to_use = context_arrays
         def save_raster(trial_spikes: torch.Tensor, trial_id: int):
                 # trim to valid length and then reshape
+                if trial_spikes.size(0) % cfg.bin_size_ms != 0:
+                    trial_spikes = trial_spikes[:-(trial_spikes.size(0) % cfg.bin_size_ms)]
                 trial_spikes = rearrange(
                     trial_spikes,
                     '(t bin) c -> t bin c', bin=cfg.bin_size_ms
@@ -118,9 +120,32 @@ class ChurchlandMiscLoader(ExperimentalTaskLoader):
         try:
             with h5py.File(datapath, 'r') as f:
                 data = f['R']
-                raise Exception(f'HDF5 for {dataset_alias} not supported yet because we dunno how to extract spikes')
-                # https://github.com/catalystneuro/shenoy-lab-to-nwb/issues/8
+                num_trials = data['spikeRaster'].shape[0]
+                assert data['spikeRaster2'].shape[0] == num_trials, 'mismatched array recordings'
+                for i in range(num_trials):
+                    def make_arr(ref):
+                        return csc_matrix((
+                            data[ref]['data'][:], data[ref]['ir'][:], data[ref]['jc'][:]
+                        )).toarray()
+                    array_0 = make_arr(data['spikeRaster'][i, 0]).T # (time, c)
+                    array_1 = make_arr(data['spikeRaster2'][i, 0]).T
+                    # pad each array to size 96 if necessary (apparently some are smaller, but reason isn't recorded)
+                    if array_0.shape[1] < 96:
+                        array_0 = np.pad(array_0, ((0, 0), (0, 96 - array_0.shape[1])), mode='constant', constant_values=0)
+                    if array_1.shape[1] < 96:
+                        array_1 = np.pad(array_1, ((0, 0), (0, 96 - array_1.shape[1])), mode='constant', constant_values=0)
+                    # print(data[data['timeCueOn'][i, 0]].shape, data[data['timeCueOn'][i, 0]][()])
+                    time_start = data[data['timeCueOn'][i, 0]]
+                    time_start = 0 if time_start.shape[0] != 1 or np.isnan(time_start[0, 0]) else int(time_start[0, 0])
+                    spike_raster = np.concatenate([array_0, array_1], axis=1)
+                    spike_raster = torch.from_numpy(spike_raster)[time_start:]
+                    if spike_raster.size(1) > 192:
+                        print(spike_raster.size(), 'something wrong with raw data')
+                        import pdb;pdb.set_trace()
+                    save_raster(spike_raster, i)
+                return pd.DataFrame(meta_payload)
         except:
+            import pdb;pdb.set_trace()
             data = loadmat(datapath, simplify_cells=True)
             # data = loadmat(datapath, simplify_cells=True)
             data = pd.DataFrame(data['R'])

@@ -51,7 +51,7 @@ query = "maze_jenkins_stitch"
 query = "rtt_all_256"
 # query = "rtt_indy_ablate"
 # query = "rtt_all_512"
-# query = "rtt_indy_loco"
+query = "rtt_token_padded_nostitch"
 
 # query = "rtt_loco"
 # query = "rtt_loco1"
@@ -86,6 +86,9 @@ query = "rtt_all_256"
 # query = 'ks'
 # query = 'ks_ctx'
 
+# query = 'jenkins_misc'
+# query = 'reggie_misc'
+
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
@@ -98,12 +101,13 @@ cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.logrates, Output.spikes]
 print(cfg.dataset.datasets)
-# cfg.dataset.datasets = cfg.dataset.datasets[-1:]
+cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
-# cfg.dataset.datasets = ['churchland_maze_jenkins-1']
+cfg.dataset.datasets = ['churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI']
+cfg.dataset.datasets = ['churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170214_02']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
@@ -147,39 +151,11 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
     )
 
 dataloader = get_dataloader(dataset)
-#%%
-from analyze_utils import SaveOutput, patch_attention
-save_output = SaveOutput()
-layer_tgt = model.backbone.encoder.layers[0]
-patch_attention(layer_tgt.self_attn)
-# 100 trials, 4 heads, 200 tokens, 200 tokens
-hook_handle = layer_tgt.self_attn.register_forward_hook(save_output)
-
 
 #%%
 print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
-# heldin_outputs = stack_batch(trainer.predict(model, dataloader))
-
-#%%
-print(save_output.outputs[0].shape)
-print(save_output.outputs[1].shape)
-# print(save_output.outputs[2].shape)
-# print(save_output.outputs[3].shape)
-
-print(dataset[0][DataKey.spikes].shape)
-print(data_attrs.max_channel_count)
-print(data_attrs.max_arrays)
-#%%
-# Plot the attention heatmap
-import seaborn as sns
-
-attn_trial = save_output.outputs[0][0].cpu()
-attn_head = attn_trial[0]
-
-# plot
-ax = prep_plt()
-sns.heatmap(attn_head, ax=ax)
+heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
@@ -212,11 +188,11 @@ y_lim = ax.get_ylim()[1]
 
 trial = 10
 trial = 20
-trial = 15
-trial = 17
-trial = 18
+# trial = 15
+# trial = 17
+# trial = 18
 # trial = 80
-# trial = 85
+trial = 85
 from scipy.ndimage import gaussian_filter1d
 for channel in range(num):
     # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)

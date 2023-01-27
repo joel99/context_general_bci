@@ -285,9 +285,9 @@ class GDrivePathContextInfo(ContextInfo):
             if subject == 'nitschke':
                 arrays = ['PMd', 'M1']
             elif subject == 'jenkins':
-                arrays = ['PMd'] # TODO
+                arrays = ['PMd', 'M1']
             elif subject == 'reggie':
-                arrays = ['main'] # TODO
+                arrays = ['PMd', 'M1']
             # find pre-registered path
             all_info.append(GDrivePathContextInfo(
                 subject=SubjectArrayRegistry.query_by_subject(subject),

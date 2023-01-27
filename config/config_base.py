@@ -128,7 +128,7 @@ class EmbedStrat(Enum):
     mirror_project = 'mirror_project'
 
     readin_cross_attn = 'cross_attn'
-    contextual_mlp = 'contextual_mlp'
+    contextual_mlp = 'contextual_mlp' # feed raw context.
 
 @dataclass
 class ModelConfig:
@@ -332,6 +332,7 @@ class TrainConfig:
     log_grad: bool = False
     gradient_clip_val: float = 1.0
     accumulate_batches: int = 1
+    autoscale_batch_size: bool = True
     profiler: str = ""
     val_check_interval: int = 100 # these are in steps, but mostly isn't used # TODO deprecate
 
