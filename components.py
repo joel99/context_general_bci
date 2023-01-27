@@ -288,7 +288,8 @@ class TemporalTransformer(nn.Module):
             # Add array dimension
             src_mask = rearrange(
                 repeat(src_mask, 't1 t2 -> t1 t2 a1 a2', a1=a, a2=a),
-                't1 t2 a1 a2 -> a1 t1 a2 t2'
+                # 't1 t2 a1 a2 -> a1 t1 a2 t2' # This was here b4 but you'd think the order should be flipped?
+                't1 t2 a1 a2 -> (t1 a1) (t2 a2)'
             )
         else:
             src_mask = None
@@ -351,7 +352,6 @@ class TemporalTransformer(nn.Module):
                 # src_key_pad_mask - prevents attending _to_, but not _from_. That should be fine.
         else:
             padding_mask = None
-
         output = self.encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
         output = rearrange(output[: t * a], '(t a) b h -> b t a h', t=t, a=a)
         output = self.dropout_out(output)

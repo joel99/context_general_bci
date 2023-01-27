@@ -178,6 +178,12 @@ def run_exp(cfg : RootConfig) -> None:
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
         wandb.config.update({'data_attrs': dataclasses.asdict(data_attrs)})
 
+    # Of course now I find these
+    wandb.define_metric("val_loss", summary="min")
+    wandb.define_metric("eval_loss", summary="min")
+    wandb.define_metric("val_Metric.bps", summary="max")
+    wandb.define_metric("eval_Metric.bps", summary="max")
+
     # === Train ===
     num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
     # num_workers = 0 # for testing

@@ -22,6 +22,8 @@ model:
   # readout_strategy: EmbedStrat.unique_project
 
   init_flags: False
+  task:
+    tasks: [ModelTask.next_step_prediction]
 dataset:
   bin_size_ms: 5
   max_channels: 98

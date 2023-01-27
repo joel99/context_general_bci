@@ -36,6 +36,7 @@ class TaskPipeline(nn.Module):
         super().__init__()
 
     def get_masks(self, batch, channel_key=CHANNEL_KEY):
+        # loss_mask: b t *
         ref = batch[DataKey.spikes][..., 0]
         b, t, a, c = ref.size()
         loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
@@ -237,10 +238,6 @@ class SelfSupervisedInfill(RatePrediction):
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         rates: torch.Tensor = self.out(backbone_features)
 
-        # ! Debug!
-        # from scipy.ndimage import gaussian_filter1d
-        # rates = torch.tensor(gaussian_filter1d(rates.cpu(), sigma=3, axis=1), device=backbone_features.device)
-
         batch_out = {}
         if Output.logrates in self.cfg.outputs:
             batch_out[Output.logrates] = rates
@@ -267,14 +264,47 @@ class SelfSupervisedInfill(RatePrediction):
         return batch_out
 
 
-class NextStepPrediction(TaskPipeline):
+class NextStepPrediction(RatePrediction):
+    r"""
+        One-step-ahead modeling prediction.
+        Note while pretraining necesarily should be causal (no way of preventing ctx bleed across layers)
+        We can still use a semi-causal decoder (however much context we can afford).
+    """
+    def forward(
+        self,
+        batch: Dict[str, torch.Tensor],
+        backbone_features: torch.Tensor,
+        compute_metrics=True,
+        eval_mode=False,
+    ) -> torch.Tensor:
+        rates: torch.Tensor = self.out(backbone_features)
+        # Match API of infill; just roll, don't use first timestep
+        rates = torch.roll(rates, 1, dims=1)
 
-    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        batch_out = {}
+        if Output.logrates in self.cfg.outputs:
+            batch_out[Output.logrates] = rates
+
+        if not compute_metrics:
+            return batch_out
+        loss: torch.Tensor = self.loss(rates, batch[DataKey.spikes][...,0])
+        loss_mask, length_mask, channel_mask = self.get_masks(batch)
+        loss_mask[:, 0] = False # don't compute loss on first timestep
+        loss = loss[loss_mask]
+        batch_out['loss'] = loss.mean()
+        if Metric.bps in self.cfg.metrics:
+            batch_out[Metric.bps] = self.bps(
+                rates[:,1:], batch[DataKey.spikes][:,1:],
+                length_mask=length_mask[:,1:],
+                channel_mask=channel_mask
+            )
+
+        return batch_out
 
 class ICMSNextStepPrediction(NextStepPrediction):
     does_update_root = True
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
+        raise NotImplementedError # ! really unclear whether we want to update spikes like this...
         # Remove final timestep, prepend "initial" quiet recording (for causal)
         spikes = batch[DataKey.spikes]
         spikes = torch.cat([torch.zeros_like(spikes[:,:1]), spikes[:,:-1]], 1)
@@ -380,7 +410,7 @@ class BehaviorRegression(TaskPipeline):
 
 task_modules = {
     ModelTask.infill: SelfSupervisedInfill,
-    ModelTask.icms_one_step_ahead: ICMSNextStepPrediction, # ! not implemented, above logic is infill specific
+    ModelTask.next_step_prediction: NextStepPrediction, # ! not implemented, above logic is infill specific
     ModelTask.heldout_decoding: HeldoutPrediction,
     ModelTask.kinematic_decoding: BehaviorRegression,
 }

@@ -12,7 +12,7 @@ class Architecture(Enum):
     ndt = 'ndt'
 
 class ModelTask(Enum):
-    icms_one_step_ahead = 'icms_one_step_ahead'
+    next_step_prediction = 'next_step'
     infill = 'infill'
 
     # Time-varying - these tasks are currently implemented by matching time-varying input shape

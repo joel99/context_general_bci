@@ -51,11 +51,10 @@ class BrainBertInterface(pl.LightningModule):
         if getattr(self.cfg, 'layer_norm_input', False):
             self.layer_norm_input = nn.LayerNorm(data_attrs.max_channel_count)
 
-        # Some logging desiderata
-        self.register_buffer('_running_metrics_val_loss', torch.tensor(math.inf))
-        self.register_buffer(f'_running_metrics_val_{Metric.bps.name}', torch.tensor(-math.inf))
-        self.register_buffer('_running_metrics_eval_loss', torch.tensor(math.inf))
-        self.register_buffer(f'_running_metrics_eval_{Metric.bps.name}', torch.tensor(-math.inf))
+        if ModelTask.infill in self.cfg.task.tasks:
+            assert ModelTask.next_step_prediction not in self.cfg.task.tasks, "Infill and next step prediction are mutually exclusive"
+        elif ModelTask.next_step_prediction in self.cfg.task.tasks:
+            assert ModelTask.infill not in self.cfg.task.tasks, "Infill and next step prediction are mutually exclusive"
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
@@ -203,10 +202,9 @@ class BrainBertInterface(pl.LightningModule):
             self.readout = ContextualMLP(self.cfg.hidden_size, self.cfg.hidden_size, self.cfg)
             # for simplicity, project out to hidden size - task IO will take care of the other items
 
-        for k in self.cfg.task.tasks:
-            if k == ModelTask.icms_one_step_ahead:
-                # TODO add readin for the stim array (similar attr)
-                raise NotImplementedError
+        # TODO add readin for the stim array (similar attr)
+        # if DataKey.stim in self.data_attrs.<ICMS_ATTR>:
+        #   raise NotImplementedError
 
         def get_target_size(k: ModelTask):
             if k == ModelTask.heldout_decoding:
@@ -438,7 +436,7 @@ class BrainBertInterface(pl.LightningModule):
             temporal_context=temporal_context,
             temporal_padding_mask=temporal_padding_mask,
             array_padding_mask=array_padding_mask,
-            causal=ModelTask.icms_one_step_ahead in self.cfg.task.tasks,
+            causal=ModelTask.next_step_prediction in self.cfg.task.tasks,
         ) # B x T x A x H
         if outputs.isnan().any():
             import pdb;pdb.set_trace()
@@ -600,22 +598,8 @@ class BrainBertInterface(pl.LightningModule):
         return out
 
     # ==================== Optimization ====================
-    def update_best_metric(self, prefix: str, key: str, value: torch.Tensor, **kwargs):
-        # log the best until metric; this is so we can identify good runs in wandb; which just otherwise takes the last logged value.
-        # we sneak in store running metrics as buffers to avoid needing to alter state dict
-        # if not hasattr(self, f'_running_metrics_{prefix}_{key}'):
-            # self.register_buffer(f'_running_metrics_{prefix}_{key}', value)
-        if ('loss' in key and value < getattr(self, f'_running_metrics_{prefix}_{key}')) or \
-            ('loss' not in key and value > getattr(self, f'_running_metrics_{prefix}_{key}')):
-            setattr(self, f'_running_metrics_{prefix}_{key}', value) # Note this is going to get kinda funky for distributed eval, but cope, we just want to be roughly correct
-        self.log(f'{prefix}_best_{key}', getattr(self, f'_running_metrics_{prefix}_{key}'), **kwargs)
-
     def common_log(self, metrics, prefix='', **kwargs):
         self.log(f'{prefix}_loss', metrics['loss'], **kwargs)
-        if prefix in ['val', 'eval']:
-            self.update_best_metric(prefix, 'loss', metrics['loss'], **kwargs)
-            if Metric.bps in metrics:
-                self.update_best_metric(prefix, Metric.bps.name, metrics[Metric.bps], **kwargs)
         for m in self.cfg.task.metrics:
             self.log(f'{prefix}_{m}', metrics[m], **kwargs)
 
