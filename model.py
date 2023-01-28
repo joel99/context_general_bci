@@ -601,7 +601,7 @@ class BrainBertInterface(pl.LightningModule):
     def common_log(self, metrics, prefix='', **kwargs):
         self.log(f'{prefix}_loss', metrics['loss'], **kwargs)
         for m in self.cfg.task.metrics:
-            self.log(f'{prefix}_{m}', metrics[m], **kwargs)
+            self.log(f'{prefix}_{m.value}', metrics[m], **kwargs)
 
     def training_step(self, batch, batch_idx):
         metrics = self._step(batch)

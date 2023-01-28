@@ -131,7 +131,7 @@ def run_exp(cfg : RootConfig) -> None:
         if m in cfg.model.task.metrics:
             callbacks.append(
                 ModelCheckpoint(
-                    monitor=f'val_{m}',
+                    monitor=f'val_{m.value}',
                     filename='val_' + m.value + '-{epoch:02d}-{val_' + str(m) + ':.4f}',
                     save_top_k=2,
                     mode='max',
@@ -177,12 +177,11 @@ def run_exp(cfg : RootConfig) -> None:
             wandb.run.notes = f"SLURM_JOB_ID={os.environ['SLURM_JOB_ID']}"
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
         wandb.config.update({'data_attrs': dataclasses.asdict(data_attrs)})
-
-    # Of course now I find these
-    wandb.define_metric("val_loss", summary="min")
-    wandb.define_metric("eval_loss", summary="min")
-    wandb.define_metric("val_Metric.bps", summary="max")
-    wandb.define_metric("eval_Metric.bps", summary="max")
+        # Of course now I find these
+        wandb.define_metric("val_loss", summary="min")
+        wandb.define_metric("eval_loss", summary="min")
+        wandb.define_metric(f"val_{Metric.bps.value}", summary="max")
+        wandb.define_metric(f"eval_{Metric.bps.value}", summary="max")
 
     # === Train ===
     num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.

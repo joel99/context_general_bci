@@ -67,9 +67,34 @@ class ReadinMatrix(nn.Module):
         state_dict['unique_readin'] = current_state # unnecessary?
         return super().load_state_dict(state_dict)
 
+class ReadinCrossAttentionV2(nn.Module):
+    r"""
+        Motivation: Sorted datasets and DANDI high firing rate is not well integrated. Stitching sort of fixes, but this is expensive (many parameters)
+        - We kind of just want to find an alternative to stitching that is not as expensive _per ctx_ because neural data inherently has many ctxs
+        - e.g. if 1 session produces ~50 trials, this totally doesn't warrant 16K parameters (e.g. 40 sessions @ 128 channels to 128 hidden size = ~0.6M parameters which is larger than base NDT for ~2K trials),
+        - And if 1 session produces 2K trials (as in Monkeys/native), well, we're much better in that case, but this is implausible for human tuning. (still potentially workable with multi-subject transfer but totally empirical)
+
+        Issue with below; projecting each channel to a full value is expensive; using a full key is also unnecessary. (we can have a smaller key to negotiate this initial projection).
+
+        Idea:
+        - Still use cross attention with R learned queries ("R" for rank)
+        - Use ctx embeddings to update queries.
+        - Learn fixed position embeddings of size H (no need to make huge, at most R)
+        - Make the value projection just a scalar refactor (for normalization).
+        - Max memory consumption will be the B T A C H in Q @ K.
+        - In the end we will assemble B T A R, and project into B T A H.
+        TODO unclear why we should try this over e.g. just a bottlenecked (compressed) projection; but that's still ~128 x 128 = 16K params per ctx.
+        - We can surely learn to identify the "high firing" channels vs the "low firing" channels in more efficient manners.
+    """
+    def __init__(self, in_count: int, out_count: int, data_attrs: DataAttrs, cfg: ModelConfig):
+        raise NotImplementedError
+
+    def forward(self, state_in: torch.Tensor, batch: Dict[str, torch.Tensor], readin=True):
+        raise NotImplementedError
+
 class ReadinCrossAttention(nn.Module):
     r"""
-        A linear projection is disadvantaged in two ways:
+        A linear projection (`ReadinMatrix`) is disadvantaged in two ways:
         - couples value with relevance
         - requires a separate projection (~Channel x Hidden) for each context
             - extra parameters may be statistically inefficient (though computational footprint is negligible)
