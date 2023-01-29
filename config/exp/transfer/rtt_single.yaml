@@ -37,6 +37,7 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+  bin_size_ms: 20
 train:
   batch_size: 256
 sweep_cfg: base

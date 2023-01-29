@@ -49,6 +49,7 @@ query = "maze_jenkins_stitch"
 # query = "rtt_indy_sans_256_d01"
 # query = "rtt_indy_stitch"
 query = "rtt_all_256"
+query = "rtt_all_parity2"
 # query = "rtt_indy_ablate"
 # query = "rtt_all_512"
 # query = "rtt_token_padded_nostitch"
@@ -151,7 +152,6 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
     )
 
 dataloader = get_dataloader(dataset)
-
 #%%
 print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))

@@ -1,27 +1,15 @@
 # @package _global_
-tag: rtt_misc_m1
-
+tag: rtt_misc
 defaults:
-  - /model: pretrain
+  - /model: pretrain_2x
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
-  # TODO no task embed strategy yet
-  transformer:
-    n_state: 256
-    dropout: 0.1
-  hidden_size: 256
-  session_embed_size: 256
-  subject_embed_size: 256
-  array_embed_size: 256
-  dropout: 0.1
-  # readin_strategy: EmbedStrat.unique_project
-  # readout_strategy: EmbedStrat.unique_project
 dataset:
-  bin_size_ms: 5
+  bin_size_ms: 20
   max_channels: 98
-  max_arrays: 1
+  max_arrays: 2
   max_length_ms: 1500
   datasets:
   # Jenkins, Nitschke
@@ -41,8 +29,11 @@ dataset:
   churchland_misc:
     arrays:
     - Nitschke-M1
+    - Nitschke-PMd
     - Jenkins-M1
+    - Jenkins-PMd
     - Reggie-M1
+    - Reggie-PMd
   data_keys:
   - DataKey.spikes
   meta_keys:

@@ -145,6 +145,7 @@ class BrainBertInterface(pl.LightningModule):
                 self.cfg.array_embed_size,
                 padding_idx=self.data_attrs.context.array.index('') if '' in self.data_attrs.context.array else None
             )
+            self.array_embed.weight.data.fill_(0) # Don't change by default
             if self.cfg.array_embed_strategy == EmbedStrat.concat:
                 project_size += self.cfg.array_embed_size
             elif self.cfg.array_embed_strategy == EmbedStrat.token:
