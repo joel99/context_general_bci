@@ -96,13 +96,15 @@ def run_exp(cfg : RootConfig) -> None:
         model = BrainBertInterface(cfg.model, data_attrs)
     if cfg.model.task.freeze_backbone:
         model.freeze_backbone()
+    if cfg.model.task.freeze_all:
+        model.freeze_non_embed()
 
     epochs = cfg.train.epochs
     callbacks=[
         ModelCheckpoint(
             monitor='val_loss',
             filename='val-{epoch:02d}-{val_loss:.4f}',
-            save_top_k=2,
+            save_top_k=1,
             mode='min',
             every_n_epochs=1,
             # every_n_train_steps=cfg.train.val_check_interval,
@@ -132,8 +134,8 @@ def run_exp(cfg : RootConfig) -> None:
             callbacks.append(
                 ModelCheckpoint(
                     monitor=f'val_{m.value}',
-                    filename='val_' + m.value + '-{epoch:02d}-{val_' + str(m) + ':.4f}',
-                    save_top_k=2,
+                    filename='val_' + m.value + '-{epoch:02d}-{val_' + m.value + ':.4f}',
+                    save_top_k=1,
                     mode='max',
                     every_n_epochs=1,
                     # every_n_train_steps=cfg.train.val_check_interval,
@@ -141,7 +143,10 @@ def run_exp(cfg : RootConfig) -> None:
                 )
             )
 
-    wandb_logger = WandbLogger(project=cfg.wandb_project)
+    wandb_logger = WandbLogger(
+        project=cfg.wandb_project,
+        save_dir=cfg.default_root_dir,
+    )
 
     pl.seed_everything(seed=cfg.seed)
 

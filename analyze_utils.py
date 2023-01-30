@@ -95,7 +95,7 @@ def get_best_ckpt_from_wandb_id(
         tag = "val_loss"
     ):
     wandb_id = wandb_id.split('-')[-1]
-    ckpt_dir = Path(wandb_project) / wandb_id / "checkpoints" # curious, something about checkpoint dumping isn't right
+    ckpt_dir = Path('./data/runs/') / wandb_project / wandb_id / "checkpoints" # curious, something about checkpoint dumping isn't right
     return get_best_ckpt_in_dir(ckpt_dir, tag=tag)
 
 def get_wandb_run(wandb_id, wandb_project='context_general_bci', wandb_user="joelye9"):

@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_dandi_m1
+tag: rtt_dandi_m1_stitch
 
 defaults:
   - /model: pretrain_2x
@@ -8,8 +8,8 @@ model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
   # TODO no task embed strategy yet
-  # readin_strategy: EmbedStrat.unique_project
-  # readout_strategy: EmbedStrat.unique_project
+  readin_strategy: EmbedStrat.unique_project
+  readout_strategy: EmbedStrat.unique_project
 dataset:
   bin_size_ms: 20
   max_channels: 98

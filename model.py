@@ -39,6 +39,7 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg.array_embed_size = cfg.hidden_size
         self.cfg.readin_dim = cfg.hidden_size
         self.cfg.readout_dim = cfg.hidden_size
+        self.cfg.transformer.dropout = cfg.dropout
 
         self.data_attrs = data_attrs
         self.backbone = TemporalTransformer(self.cfg.transformer)
@@ -73,7 +74,6 @@ class BrainBertInterface(pl.LightningModule):
             'lr_decay_steps',
             'lr_min',
             'accelerate_new_params',
-            "readout_dim" # TODO it's here due to legacy model, move to transfer_cfg
         ]:
             setattr(self_copy, safe_attr, getattr(cfg, safe_attr))
 
@@ -318,6 +318,12 @@ class BrainBertInterface(pl.LightningModule):
         for p in self.backbone.parameters():
             p.requires_grad = False
         # self.backbone.eval() # No, we still want dropout
+
+    def freeze_non_embed(self):
+        logger.info("Freezing non-embed.")
+        for m in [self.backbone, self.task_pipelines, self.readin]:
+            for p in m.parameters():
+                p.requires_grad = False
 
     def _prepare_inputs(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         r"""
@@ -702,11 +708,18 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
         "readin_strategy",
         "transformer",
         "readout_strategy",
+        "readout_dim",
+        "readin_dim",
     ]:
         setattr(target_cfg, attr, getattr(src_cfg, attr))
 
 # Note - I tried coding this as an override, but PTL `save_hyperparams()` acts up (trying to the save the `self` parameter, apparently) - even when passing explicitly that I just want to save `cfg` and `data_attrs`.
-def load_from_checkpoint(checkpoint_path: str, cfg: ModelConfig | None = None, data_attrs: DataAttrs | None = None):
+def load_from_checkpoint(
+    checkpoint_path: str,
+    cfg: ModelConfig | None = None,
+    data_attrs: DataAttrs | None = None,
+    use_ckpt_model_cfg: bool = False,
+):
     r"""
         Specifically, model topology is determined by data_attrs.
         data_attrs thus must be saved and loaded with a model to make sense of it.
@@ -723,6 +736,7 @@ def load_from_checkpoint(checkpoint_path: str, cfg: ModelConfig | None = None, d
         return old_model
     if cfg is not None:
         transfer_cfg(src_cfg=old_model.cfg, target_cfg=cfg)
+        # import pdb;pdb.set_trace()
         if old_model.diff_cfg(cfg):
             raise Exception("Unsupported config diff")
     else:

@@ -1,5 +1,16 @@
 # @package _global_
-tag: rtt_joint_indy_out
+
+# 4x2 transferring strategies
+# first axis is weight update rules
+# 1. freeze backbone
+# 2. freeze everything but embedding
+# 3. fine-tune with acceleration of novel params
+# 4. fine-tune
+# ? How should we
+
+# second axis is whether we do it over full dataset or just target dataset
+
+tag: rtt_indy_transfer_tune_joint
 
 defaults:
   - /model: pretrain_2x
@@ -8,8 +19,13 @@ defaults:
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
+  # task:
+    # freeze_backbone: true
+    # freeze_all: true
+  # accelerate_new_params: 10.0
 dataset:
   datasets:
+  - 'odoherty_rtt-Indy-20161005_06'
   - 'odoherty_rtt-Indy-20160.*'
   - 'odoherty_rtt-Indy-20161006.*'
   - 'odoherty_rtt-Indy-20161007.*'
@@ -18,8 +34,8 @@ dataset:
   - 'odoherty_rtt-Indy-201612.*'
   - 'odoherty_rtt-Indy-2017.*'
   - 'mc_rtt'
-  # eval_datasets:
-  # - 'odoherty_rtt-Indy-20161005_06'
+  eval_datasets:
+  - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
       arrays:
       - Indy-M1
@@ -35,3 +51,5 @@ dataset:
 train:
   batch_size: 256
 sweep_cfg: base
+
+init_from_id: rtt_joint_indy_out-sweep-base-t5wtvgrm

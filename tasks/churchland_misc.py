@@ -145,7 +145,7 @@ class ChurchlandMiscLoader(ExperimentalTaskLoader):
                     save_raster(spike_raster, i)
                 return pd.DataFrame(meta_payload)
         except:
-            import pdb;pdb.set_trace()
+            # import pdb;pdb.set_trace()
             data = loadmat(datapath, simplify_cells=True)
             # data = loadmat(datapath, simplify_cells=True)
             data = pd.DataFrame(data['R'])

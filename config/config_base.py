@@ -87,6 +87,7 @@ class TaskConfig:
     outputs: List[Output] = field(default_factory=lambda: [])
 
     freeze_backbone: bool = False
+    freeze_all: bool = False # stricter than above, only allows embedding
 
     linear_head: bool = False
     unique_no_head: bool = False # overrides above
@@ -343,7 +344,7 @@ class RootConfig:
     experiment_set: str = ""
 
     sweep_cfg: str = "" # See `hp_sweep_space.py`
-    sweep_trials: int = 16
+    sweep_trials: int = 8
     sweep_tag: str = "" # * don't specify this, we use this to track in wandb
 
     default_root_dir: Path = Path("./data/runs").resolve()
@@ -355,6 +356,7 @@ class RootConfig:
 
     # wandb ids
     init_from_id: str = "" # for initializing weights
+    # use_ckpt_model_cfg: bool = False
     init_tag: str = "bps"
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
 

@@ -34,7 +34,7 @@ sweep_space = {
         },
         "model.lr_init": {
             'min': 1e-4,
-            'max': 5e-2,
+            'max': 2e-2,
             'scaling': 'log',
         },
         "model.weight_decay": {
