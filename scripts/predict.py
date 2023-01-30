@@ -93,7 +93,7 @@ def create_submission_dict(wandb_run):
     dataloader = get_dataloader(dataset)
     test_dataloader = get_dataloader(test_dataset)
 
-    trainer = pl.Trainer(gpus=1, default_root_dir='tmp')
+    trainer = pl.Trainer(gpus=1, default_root_dir='./data/tmp')
     heldin_outputs = stack_batch(trainer.predict(heldin_model, dataloader))
     test_heldin_outputs = stack_batch(trainer.predict(heldin_model, test_dataloader))
     if cfg.init_from_id:

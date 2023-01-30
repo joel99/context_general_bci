@@ -138,7 +138,7 @@ print(data_attrs)
 # data_attrs.context.session = ['ExperimentalTask.odoherty_rtt-Indy-20161014_04'] # definitely using..
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
-trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='tmp')
+trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # print(context_registry.query(alias='Mihi'))
 # model.cfg.task.outputs = [Output.heldout_logrates]
 # model.cfg.task.metrics = [Metric.bps]
