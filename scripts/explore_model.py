@@ -50,18 +50,11 @@ query = "maze_jenkins_stitch"
 # query = "rtt_indy_stitch"
 query = "rtt_all_256"
 query = "rtt_all_parity2"
-# query = "rtt_indy_ablate"
+query = "st_rtt_16"
+# query = "factor_rtt_16"
 # query = "rtt_all_512"
 # query = "rtt_token_padded_nostitch"
 
-# query = "rtt_loco"
-# query = "rtt_loco1"
-# query = "rtt_loco2"
-# query = "rtt_loco_test1"
-# query = "rtt_loco_test2"
-# query = "rtt_loco_test3"
-# query = "rtt_loco_test4"
-# query = 'rtt_indy_256_linear'
 # query = 'test'
 
 # query = 'rtt_loco_d2'
