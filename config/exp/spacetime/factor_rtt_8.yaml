@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: factor_rtt_8
 
 defaults:
   - /model: pretrain_2x
@@ -49,4 +49,4 @@ train:
   # accumulate_batches: 1
   accumulate_batches: 4
   autoscale_batch_size: false
-sweep_cfg: base
+# sweep_cfg: base

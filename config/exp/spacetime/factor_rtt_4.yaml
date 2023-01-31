@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: factor_rtt_4
 
 defaults:
   - /model: pretrain_2x
@@ -11,7 +11,7 @@ model:
   # token add not implemented for spacetime
 
   spike_embed_style: EmbedStrat.token
-  neurons_per_token: 8
+  neurons_per_token: 4
   hidden_size: 256
   transform_space: true
   transformer:
@@ -49,4 +49,4 @@ train:
   # accumulate_batches: 1
   accumulate_batches: 4
   autoscale_batch_size: false
-sweep_cfg: base
+# sweep_cfg: base

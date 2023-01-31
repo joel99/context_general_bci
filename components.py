@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.nn import init
 import torch.nn.functional as F
 import math
-from einops import rearrange, pack, unpack, repeat
+from einops import rearrange, pack, unpack, repeat, reduce
 import logging
 
 from config import TransformerConfig, ModelConfig
@@ -232,20 +232,20 @@ class SpaceTimeTransformer(nn.Module):
         super().__init__()
         self.cfg = config
         # self.encoder = torch.jit.script( # In a basic timing test, this didn't appear faster. Built-in transformer likely already very fast.
-        self.transformer_encoder = (
-                nn.TransformerEncoder(
-                nn.TransformerEncoderLayer(
-                    self.cfg.n_state,
-                    self.cfg.n_heads,
-                    dim_feedforward=int(self.cfg.n_state * self.cfg.feedforward_factor),
-                    dropout=self.cfg.dropout,
-                    batch_first=False, # we use this to stick to pytorch defaults. Who knows if it's more efficient internally? But closer to docs.
-                    activation=self.cfg.activation,
-                    norm_first=getattr(self.cfg, 'pre_norm', False),
-                ),
-                self.cfg.n_layers,
-            )
+        enc_layer = nn.TransformerEncoderLayer(
+            self.cfg.n_state,
+            self.cfg.n_heads,
+            dim_feedforward=int(self.cfg.n_state * self.cfg.feedforward_factor),
+            dropout=self.cfg.dropout,
+            batch_first=True,
+            activation=self.cfg.activation,
+            norm_first=getattr(self.cfg, 'pre_norm', False),
         )
+        if getattr(self.cfg, 'factorized_space_time', False):
+            self.space_transformer_encoder = nn.TransformerEncoder(enc_layer, round(self.cfg.n_layers / 2))
+            self.time_transformer_encoder = nn.TransformerEncoder(enc_layer, self.cfg.n_layers - round(self.cfg.n_layers / 2))
+        else:
+            self.transformer_encoder = nn.TransformerEncoder(enc_layer, self.cfg.n_layers)
         self.time_encoder = PositionalEncoding(self.cfg)
         self.dropout_in = nn.Dropout(self.cfg.dropout)
         self.dropout_out = nn.Dropout(self.cfg.dropout)
@@ -294,6 +294,9 @@ class SpaceTimeTransformer(nn.Module):
             We assume that the provided trial and temporal context is consistently shaped. i.e. any context provided is provided for all samples.
             (So attention masks do not vary across batch)
         """
+        # import pdb;pdb.set_trace()
+
+        # === Embeddings ===
         src = self.dropout_in(src)
         # Note that space can essentially use array dim, only logic that needs to account is array_padding_mask
         if self.cfg.transform_space:
@@ -314,91 +317,162 @@ class SpaceTimeTransformer(nn.Module):
             s = a * s_a
         src = src + time_embed
 
-        contextualized_src, ps = pack([
-            src,
-            *temporal_context,
-            *trial_context
-        ], 'b * h') # b [(t a) + (t n) + t'] h
+        # === Masks ===
+        def make_src_mask(t: int, s: int, src: torch.Tensor, temporal_context: torch.Tensor | None, trial_context: torch.Tensor | None):
+            r"""
+                args:
+                    temporal_context: b t temp_c h
+                    trial_context: b trial_c h
 
-        contextualized_src = rearrange(contextualized_src, 'b x h -> x b h')
+                Produces time major (T*S + TempCtx + TrialCtx, T*S + TempCtx + TrialCtx)
+                Use t=1 to produce a space only mask, s=1 to produce a time only mask
+            """
+            if causal:
+                src_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
+                # Add array dimension
+                # this tiles such that the flat (t x a) tokens should be t1a1, t1a2, t2a1, t2a2, etc.
+                src_mask = rearrange(
+                    repeat(src_mask, 't1 t2 -> t1 t2 a1 a2', a1=s, a2=s),
+                    't1 t2 a1 a2 -> (t1 a1) (t2 a2)'
+                )
+            else:
+                src_mask = None
+            # Update src mask for context. Note that row is attender, col is attended.
+            # (For simplicity in construction)
+            # Temporal Context is allowed to attend Trial acausally and self causally, but not to src
+            # Trial Context is allowed to attend to self acausally, but that's it.
+            # Somewhat redundant code structure is to play nice with typing
+            if temporal_context is not None: # introduce t * context_num tokens
+                if src_mask is None:
+                    src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
+                # Since temporal context is expected to be used in a causal cases (ICMS)
+                # We provide causal masks; technically there may be a case where spikes should attend all temporal context but can only be achieved indirectly in this setup.
+                temporal_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
+                context_num = temporal_context.size(-2)
+                temporal_mask = rearrange(
+                    repeat(temporal_mask, 't1 t2 -> t1 t2 c1 c2', c1=s + context_num, c2=context_num),
+                    't1 t2 c1 c2 -> (t1 c1) (t2 c2)'
+                )
+                src_mask = F.pad(src_mask, (0, 0, 0, t * context_num), value=float('-inf'))
+                src_mask = torch.cat([src_mask, temporal_mask], dim=1)
+            if trial_context is not None:
+                if src_mask is None:
+                    src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
+                src_mask = F.pad(src_mask, (0, 0, 0, trial_context.size(1)), value=float('-inf'))
+                src_mask = F.pad(src_mask, (0, trial_context.size(1)), value=0)
+            return src_mask
 
-        # src mask
-        if causal:
-            # import pdb;pdb.set_trace() # untested codepath
-            src_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
-            # Add array dimension
-            src_mask = rearrange(
-                repeat(src_mask, 't1 t2 -> t1 t2 a1 a2', a1=s, a2=s),
-                # 't1 t2 a1 a2 -> a1 t1 a2 t2' # This was here b4 but you'd think the order should be flipped?
-                't1 t2 a1 a2 -> (t1 a1) (t2 a2)'
-            )
-        else:
-            src_mask = None
+        def make_padding_mask(
+            b, t, s, src: torch.Tensor, temporal_context: torch.Tensor | None, array_padding_mask: torch.Tensor | None
+        ):
+            r"""
+                return (b t s) src_key_pad_mask - prevents attending _to_, but not _from_. That should be fine.
+                This doesn't include trial context pad (we keep unsquashed so spacetime code can reuse)
+            """
+            if temporal_padding_mask is not None or array_padding_mask is not None:
+                padding_mask = torch.zeros((b, t, s), dtype=torch.bool, device=src.device)
 
-        # Update src mask for context. Note that row is attender, col is attended.
-        # (For simplicity in construction)
-        # Temporal Context is allowed to attend Trial acausally and self causally, but not to src
-        # Trial Context is allowed to attend to self acausally, but that's it.
-        # Somewhat redundant code structure is to play nice with typing
+                # Deal with known src padding tokens
+                if array_padding_mask is not None:
+                    if self.cfg.transform_space:
+                        array_padding_mask = repeat(array_padding_mask, 'b a -> b (a s_a)', s_a=s_a)
+                    padding_mask |= rearrange(array_padding_mask, 'b a -> b () a')
+
+                # Concat padding mask with temporal context (which augments spatial)
+                if temporal_context is not None:
+                    padding_mask = F.pad(padding_mask, (0, temporal_context.size(-2)), value=False)
+                # Temporal context can be padding, according to temporal padding mask
+                if temporal_padding_mask is not None:
+                    padding_mask |= rearrange(temporal_padding_mask, 'b t -> b t ()')
+                return padding_mask
+                # padding_mask = rearrange(padding_mask, 'b t s -> b (t s)')
+                # # Trial context is never padded
+                # if len(trial_context) > 0:
+                #     padding_mask = F.pad(padding_mask, (0, trial_context.size(1)), value=False)
+                # return padding_mask
+            else:
+                return None
+
         if len(temporal_context) > 0:
-            if src_mask is None:
-                src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
-            # Since temporal context is expected to be used in a causal cases (ICMS)
-            # We provide causal masks; technically there may be a case where spikes should attend all temporal context but can only be achieved indirectly in this setup.
-            temporal_context: torch.Tensor = rearrange(temporal_context, 'c b t h -> b t c h')
-            temporal_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
-            context_num = temporal_context.size(2)
-            temporal_mask = rearrange(
-                repeat(temporal_mask, 't1 t2 -> t1 t2 c1 c2', c1=context_num+a, c2=context_num),
-                't1 t2 c1 c2 -> c1 t1 c2 t2'
-            )
-            src_mask = F.pad(src_mask, (0, 0, 0, t * context_num), value=float('-inf'))
-            # src_mask = torch.cat([
-            #     src_mask,
-            #     torch.full((t * context_num, t * a), float('-inf'), dtype=torch.float, device=src.device),
-            # ], dim=0)
-            src_mask = torch.cat([
-                src_mask,
-                temporal_mask,
-            ], dim=1)
+            temporal_context = rearrange(temporal_context, 'tc b t h -> b t tc h')
+        else:
+            temporal_context = None
         if len(trial_context) > 0:
-            if src_mask is None:
-                src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
-            trial_context: torch.Tensor = rearrange(trial_context, 't0 b h -> b t0 h')
-            src_mask = F.pad(src_mask, (0, 0, 0, trial_context.size(1)), value=float('-inf'))
-            src_mask = F.pad(src_mask, (0, trial_context.size(1)), value=0)
+            trial_context = rearrange(trial_context, 'tc b h -> b tc h') # trial context doesn't really belong in either space or time, but can expand along each
+        else:
+            trial_context = None
+        # === Transform ===
+        if getattr(self.cfg, 'factorized_space_time', False):
+            padding_mask = make_padding_mask(b, t, s, src, temporal_context, array_padding_mask)
+            # space first
+            space_src = [src]
+            if temporal_context is not None:
+                space_src.append(temporal_context)
+                temporal_context_size = temporal_context.size(-2)
+            else:
+                temporal_context_size = 0
+            if trial_context is not None:
+                trial_context_size = trial_context.size(-2)
+                space_trial_context = repeat(trial_context, 'b tc h -> b t tc h', t=t)
+                space_src.append(space_trial_context)
+            else:
+                trial_context_size = 0
+            space_src, ps = pack(space_src, 'b t * h')
+            space_src = rearrange(space_src, 'b t k h -> (b t) k h') # k = s + temp_ctx + trial_ctx
 
-        # TODO validate - this mask flattening better match the token flattening
+            space_padding_mask = rearrange(padding_mask, 'b t s -> (b t) s')
+            space_padding_mask = F.pad(space_padding_mask, (0, trial_context_size), value=False)
 
-        # padding mask
-        if temporal_padding_mask is not None or array_padding_mask is not None:
-            padding_mask = torch.zeros((b, t, s), dtype=torch.bool, device=src.device)
+            # src mask restricted attn will only be in time, doesn't matter for space, but we do need to mask trial context
+            space_src = self.space_transformer_encoder(
+                space_src,
+                make_src_mask(1, s, src, temporal_context, trial_context),
+                src_key_padding_mask=space_padding_mask
+            )
+            space_src, space_trial_context = torch.split(space_src, [s + temporal_context_size, trial_context_size], 1)
+            # we can either use this updated context
+            # trial context may have updated from spatial transformations (e.g. subject-session interxns)
+            # we still want to provide this context to temporal transformer;
+            # we can either use this updated context or take trial_context from before
+            # we'll prefer to use updated context
+            time_src = rearrange(space_src, '(b t) s h -> (b s) t h', b=b)
+            if trial_context is not None:
+                space_trial_context = reduce(space_trial_context, '(b t) tc h -> b tc h', t=t, reduction='mean')
+                time_trial_context = repeat(space_trial_context, 'b tc h -> (b s) tc h', s=s)
+                time_src, ps = pack([time_src, time_trial_context], 'b * h')
 
-            # Update padding mask for context
-            # Temporal context can be padded, according to temporal padding mask
-            if len(temporal_context) > 0:
-                padding_mask = F.pad(padding_mask, (0, context_num), value=False)
+            time_padding_mask = rearrange(padding_mask, 'b t s -> (b s) t')
+            time_padding_mask = F.pad(time_padding_mask, (0, trial_context_size), value=False)
 
-            if temporal_padding_mask is not None:
-                padding_mask |= rearrange(temporal_padding_mask, 'b t -> b t ()')
+            time_src = self.time_transformer_encoder(
+                time_src,
+                make_src_mask(t, 1, src, temporal_context, trial_context),
+                src_key_padding_mask=time_padding_mask
+            )
+            if trial_context_size:
+                time_src = time_src[:, :-trial_context_size]
+            output = rearrange(time_src, '(b s) t h -> b t s h', b=b)
+        else:
+            contextualized_src = [src]
+            if temporal_context is not None:
+                contextualized_src.append(temporal_context)
+            if trial_context is not None:
+                contextualized_src.append(trial_context)
+            contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
-            if array_padding_mask is not None:
-                if self.cfg.transform_space:
-                    array_padding_mask = repeat(array_padding_mask, 'b a -> b (a s_a)', s_a=s_a)
-                padding_mask |= rearrange(array_padding_mask, 'b a -> b () a')
-
-            padding_mask = rearrange(padding_mask, 'b t a -> b (t a)')
-
+            src_mask = make_src_mask(t, s, src, temporal_context, trial_context)
+            # TODO validate - this mask flattening better match the token flattening
+            padding_mask = make_padding_mask(b, t, s, src, temporal_context, array_padding_mask)
+            padding_mask = rearrange(padding_mask, 'b t s -> b (t s)')
             # Trial context is never padded
             if len(trial_context) > 0:
-                padding_mask = F.pad(padding_mask, (0, trial_context.size(1)), value=False)
-                # src_key_pad_mask - prevents attending _to_, but not _from_. That should be fine.
-        else:
-            padding_mask = None
-        output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
-        output = rearrange(output[: t * s], '(t a) b h -> b t a h', t=t, a=s)
-        output = self.dropout_out(output)
+                padding_mask = F.pad(padding_mask, (0, trial_context.size(-2)), value=False)
+            # import pdb;pdb.set_trace()
+            # print(t, s, contextualized_src.size(), src_mask.size(), padding_mask.size())
+            output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
+            output = rearrange(output[:, : t * s], 'b (t s) h -> b t s h', t=t, s=s)
 
+        output = self.dropout_out(output)
         if self.cfg.transform_space:
             output = rearrange(output, 'b t (a s_a) h -> b t a s_a h', s_a=s_a)
         return output

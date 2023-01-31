@@ -120,6 +120,8 @@ class TransformerConfig:
     embed_space: bool = True
     max_spatial_tokens: bool = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
 
+    factorized_space_time: bool = False # will split layers evenly in space and time
+
 class EmbedStrat(Enum):
     # Embedding strategies, used in several contexts (overloaded)
     none = "" # Just ignore context
