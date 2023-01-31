@@ -423,28 +423,25 @@ class SpaceTimeTransformer(nn.Module):
             space_padding_mask = rearrange(padding_mask, 'b t s -> (b t) s')
             space_padding_mask = F.pad(space_padding_mask, (0, trial_context_size), value=False)
 
-            # src mask restricted attn will only be in time, doesn't matter for space, but we do need to mask trial context
+            # if there are no context tokens, some spatial sequences may be all padding (e.g. if we pad a trial to a fixed length)
+            # in this case, attention will by default produce nans
+            # filtering after the fact didn't work (nans still propagated for some unknown reason)
+            # so here we filter before hand, which seems to work...
+            # note that this empty seq issue only occurs in space; there is always at least one time token to transform
+            if not trial_context_size:
+                is_empty_seq = torch.all(space_padding_mask, dim=-1)
+                # we'll just allow attention in this case, but mask out after the fact to avoid nans
+                space_padding_mask[is_empty_seq] = False
             space_src = self.space_transformer_encoder(
                 space_src,
                 make_src_mask(1, s, src, temporal_context, trial_context),
                 src_key_padding_mask=space_padding_mask
             )
-            # space_src = space_src.masked_fill(space_padding_mask.unsqueeze(-1), 0)
-            space_src, space_trial_context = torch.split(space_src, [s + temporal_context_size, trial_context_size], 1)
             if not trial_context_size:
-                # If we don't have any context, then there will be sequences comprising entirely padding tokens in the spatial transform
-                # This produces nan's. Though we still correctly (most likely) mask the padding tokens below,
-                # JY thinks that the nan's still bleed since nan * -inf weight is still nan, and this corrupts non-padding tokens.
-                # Thus, be sure to zero out padding tokens
-                # Note that the same is not true for temporal - we always will have at least one token in time for any given sequence.
-                # import pdb;pdb.set_trace()
-                # space_src = space_src * (~space_padding_mask.unsqueeze(-1)) # insufficient, this doesn't kill nan's
-                # * Hmm... post-hoc fixing of this doesn't seem to prevent nan's from creeping into weights, unknown rzn
-                # We'll try to staunch pre-hoc, instead.
-                space_src = space_src.masked_fill(space_padding_mask.unsqueeze(-1), 0)
-                if space_src.isnan().any():
-                    import pdb;pdb.set_trace()
-                # space_src = space_src.masked_fill(space_src.isnan(), 0)
+                space_src = torch.where(rearrange(is_empty_seq, 'bt -> bt 1 1'), 0, space_src)
+
+            space_src, space_trial_context = torch.split(space_src, [s + temporal_context_size, trial_context_size], 1)
+
             # we can either use this updated context
             # trial context may have updated from spatial transformations (e.g. subject-session interxns)
             # we still want to provide this context to temporal transformer;
