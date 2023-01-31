@@ -1,5 +1,5 @@
 # @package _global_
-tag: st_rtt_8
+tag: st_rtt_misc_m1_8
 
 defaults:
   - /model: pretrain_2x
@@ -16,14 +16,8 @@ model:
   transform_space: true
 dataset:
   datasets:
-  - 'odoherty_rtt-Indy-20161005_06'
-  - 'odoherty_rtt-Indy-20160.*'
-  - 'odoherty_rtt-Indy-20161006.*'
-  - 'odoherty_rtt-Indy-20161007.*'
-  - 'odoherty_rtt-Indy-2016101.*'
-  - 'odoherty_rtt-Indy-2016102.*'
-  - 'odoherty_rtt-Indy-201612.*'
-  - 'odoherty_rtt-Indy-2017.*'
+  - odoherty_rtt.*
+  - churchland_misc.*
   - 'mc_rtt'
   eval_datasets:
   - 'odoherty_rtt-Indy-20161005_06'
@@ -31,6 +25,11 @@ dataset:
       arrays:
       - Indy-M1
       - Loco-M1
+  churchland_misc:
+    arrays:
+    - Nitschke-M1
+    - Jenkins-M1
+    - Reggie-M1
   data_keys:
   - DataKey.spikes
   meta_keys:
@@ -40,8 +39,7 @@ dataset:
   - MetaKey.subject
   bin_size_ms: 20
 
-  max_channels: 112
+  max_channels: 104
 
 train:
   batch_size: 256
-sweep_cfg: base

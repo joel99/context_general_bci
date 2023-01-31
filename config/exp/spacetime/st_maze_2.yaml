@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test3
+tag: st_maze_2
 
 defaults:
   - /model: pretrain_small
@@ -32,5 +32,3 @@ model:
   neurons_per_token: 2
   hidden_size: 256
   transform_space: true
-train:
-  batch_size: 8
