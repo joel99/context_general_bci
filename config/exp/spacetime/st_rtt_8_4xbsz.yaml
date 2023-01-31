@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: st_rtt_8_4xbsz
 
 defaults:
   - /model: pretrain_2x
@@ -43,8 +43,6 @@ dataset:
   max_channels: 112
 
 train:
-  batch_size: 64
-  # accumulate_batches: 1
+  batch_size: 256 # 64 for 10G I think
   accumulate_batches: 4
-  autoscale_batch_size: false
 sweep_cfg: base

@@ -310,8 +310,8 @@ class SpaceTimeTransformer(nn.Module):
                 space_embed = rearrange(
                     self.space_encoder(torch.arange(src.size(2), device=src.device)
                 ), 's h -> 1 1 s h')
-                s = a * s_a
                 src = src + space_embed
+            s = a * s_a
         src = src + time_embed
 
         contextualized_src, ps = pack([

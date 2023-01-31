@@ -1,17 +1,18 @@
 # @package _global_
-tag: test
+tag: st_rtt_16_ablate_ctx
 
 defaults:
   - /model: pretrain_2x
   - /dataset: rtt
   - /train: pretrain
 model:
-  subject_embed_strategy: EmbedStrat.token
+  session_embed_strategy: EmbedStrat.none
+  subject_embed_strategy: EmbedStrat.none
   array_embed_strategy: EmbedStrat.none
   # token add not implemented for spacetime
 
   spike_embed_style: EmbedStrat.token
-  neurons_per_token: 8
+  neurons_per_token: 16
   hidden_size: 256
   transform_space: true
 dataset:
@@ -43,8 +44,4 @@ dataset:
   max_channels: 112
 
 train:
-  batch_size: 64
-  # accumulate_batches: 1
-  accumulate_batches: 4
-  autoscale_batch_size: false
-sweep_cfg: base
+  batch_size: 256
