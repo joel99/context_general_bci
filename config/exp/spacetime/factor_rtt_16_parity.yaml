@@ -1,15 +1,13 @@
 # @package _global_
-tag: test
+tag: factor_rtt_16_parity
 
+# Parity checking serve_tokenized
 defaults:
   - /model: pretrain_2x
   - /dataset: rtt
   - /train: pretrain
 model:
-  session_embed_strategy: EmbedStrat.none
-  # session_embed_strategy: EmbedStrat.token
-  # subject_embed_strategy: EmbedStrat.none
-  subject_embed_strategy: EmbedStrat.none
+  subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
   # token add not implemented for spacetime
 
@@ -20,6 +18,7 @@ model:
   transformer:
     factorized_space_time: true
 dataset:
+  serve_tokenized: true
   datasets:
   - 'odoherty_rtt-Indy-20161005_06'
   - 'odoherty_rtt-Indy-20160.*'
@@ -49,9 +48,7 @@ dataset:
 
 train:
   batch_size: 64
-  # batch_size: 256
   # accumulate_batches: 1
-  # gradient_clip_val: 1.0
+  accumulate_batches: 4
   autoscale_batch_size: false
-  log_grad: True
 # sweep_cfg: base

@@ -429,7 +429,22 @@ class SpaceTimeTransformer(nn.Module):
                 make_src_mask(1, s, src, temporal_context, trial_context),
                 src_key_padding_mask=space_padding_mask
             )
+            # space_src = space_src.masked_fill(space_padding_mask.unsqueeze(-1), 0)
             space_src, space_trial_context = torch.split(space_src, [s + temporal_context_size, trial_context_size], 1)
+            if not trial_context_size:
+                # If we don't have any context, then there will be sequences comprising entirely padding tokens in the spatial transform
+                # This produces nan's. Though we still correctly (most likely) mask the padding tokens below,
+                # JY thinks that the nan's still bleed since nan * -inf weight is still nan, and this corrupts non-padding tokens.
+                # Thus, be sure to zero out padding tokens
+                # Note that the same is not true for temporal - we always will have at least one token in time for any given sequence.
+                # import pdb;pdb.set_trace()
+                # space_src = space_src * (~space_padding_mask.unsqueeze(-1)) # insufficient, this doesn't kill nan's
+                # * Hmm... post-hoc fixing of this doesn't seem to prevent nan's from creeping into weights, unknown rzn
+                # We'll try to staunch pre-hoc, instead.
+                space_src = space_src.masked_fill(space_padding_mask.unsqueeze(-1), 0)
+                if space_src.isnan().any():
+                    import pdb;pdb.set_trace()
+                # space_src = space_src.masked_fill(space_src.isnan(), 0)
             # we can either use this updated context
             # trial context may have updated from spatial transformations (e.g. subject-session interxns)
             # we still want to provide this context to temporal transformer;

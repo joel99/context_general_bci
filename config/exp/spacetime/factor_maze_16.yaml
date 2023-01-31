@@ -16,13 +16,12 @@ dataset:
   bin_size_ms: 20
 
   max_channels: 144
-  transformer:
-    factorized_space_time: true
 model:
   dropout: 0.4
   transformer:
     dropout: 0.4
     n_heads: 2
+    factorized_space_time: true
   task:
     tasks:
     - ModelTask.infill
