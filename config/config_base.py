@@ -116,8 +116,12 @@ class TransformerConfig:
 
     max_trial_length: int = 1500 # Ideally we can bind this to DatasetConfig.max_trial_length
 
+    transform_space: bool = False # match ModelConfig.transform_space
+    embed_space: bool = True
+    max_spatial_tokens: bool = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
+
 class EmbedStrat(Enum):
-    # Embedding strategies
+    # Embedding strategies, used in several contexts (overloaded)
     none = "" # Just ignore context
     token = 'token' # Embed context as a token
     token_add = 'token_add' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
@@ -134,7 +138,7 @@ class EmbedStrat(Enum):
 @dataclass
 class ModelConfig:
     hidden_size: int = 256 # For parts outside of backbones
-    arch: str = Architecture.ndt
+    arch: Architecture = Architecture.ndt
     transformer: TransformerConfig = TransformerConfig()
 
     half_precision: bool = True
@@ -197,6 +201,13 @@ class ModelConfig:
     # There should maybe be a section for augmentation/ablation, but that is low pri.
 
     layer_norm_input: bool = False # layer norm on population input
+
+    # Config for space-time. Control flows are not explicitly separated from base temporal transformer.
+    transform_space: bool = False # master flag for space-time
+    spike_embed_style: EmbedStrat = EmbedStrat.none # else - token (small), project (linear)
+    spike_embed_dim: int = 0 # embedding dimension for spike counts (0 == infer as hidden size / neurons_per_token)
+    neurons_per_token: int = 1 # how many neurons to embed per token (only makes sense for token/project)
+    max_neuron_count: int = 21 # pretty safe upper bound on number of neurons that can be embedded. Must be > data.pad_value
 
 @dataclass
 class ExperimentalConfig:
@@ -307,6 +318,9 @@ class DatasetConfig:
     # Pad to this number of arrays (for meta and data alike). Must be >= 1
     max_arrays: int = 1
     behavior_dim: int = 3
+
+    serve_tokenized: bool = False # master flag for space time operator (in anticipation that space time will move to tokenized)
+    pad_value: int = 20
 
     # Experimental Task configuration - matching registered names
     # Note - we choose to put task specific things here rather than ModelConfig as model will read the relevant variables

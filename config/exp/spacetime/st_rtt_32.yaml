@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: st_rtt_32
 
 defaults:
   - /model: pretrain_2x
@@ -11,7 +11,7 @@ model:
   # token add not implemented for spacetime
 
   spike_embed_style: EmbedStrat.token
-  neurons_per_token: 4
+  neurons_per_token: 32
   hidden_size: 256
   transform_space: true
 dataset:
@@ -43,4 +43,4 @@ dataset:
   max_channels: 112
 
 train:
-  batch_size: 16
+  batch_size: 256

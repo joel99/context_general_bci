@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: st_rtt_4
 
 defaults:
   - /model: pretrain_2x
@@ -43,4 +43,4 @@ dataset:
   max_channels: 112
 
 train:
-  batch_size: 16
+  batch_size: 256

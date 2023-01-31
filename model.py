@@ -11,14 +11,27 @@ import logging
 from pprint import pformat
 
 from config import (
-    ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey, TaskConfig
+    ModelConfig,
+    ModelTask,
+    Metric,
+    Output,
+    EmbedStrat,
+    DataKey,
+    MetaKey,
+    Architecture,
 )
 
 from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
-from components import TemporalTransformer, ReadinMatrix, ReadinCrossAttention, ContextualMLP
+from components import (
+    SpaceTimeTransformer,
+    ReadinMatrix,
+    SpaceTimeTransformer,
+    ReadinCrossAttention,
+    ContextualMLP,
+)
 from task_io import task_modules
 
 logger = logging.getLogger(__name__)
@@ -40,9 +53,18 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg.readin_dim = cfg.hidden_size
         self.cfg.readout_dim = cfg.hidden_size
         self.cfg.transformer.dropout = cfg.dropout
+        self.cfg.transformer.transform_space = cfg.transform_space
 
         self.data_attrs = data_attrs
-        self.backbone = TemporalTransformer(self.cfg.transformer)
+        assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"
+
+        assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
+        self.backbone = SpaceTimeTransformer(
+            self.cfg.transformer,
+            max_spatial_tokens=round(
+                data_attrs.max_channel_count * data_attrs.max_arrays / self.cfg.neurons_per_token
+            )
+        )
         self.bind_io()
 
         self.novel_params: List[str] = [] # for fine-tuning
@@ -179,16 +201,29 @@ class BrainBertInterface(pl.LightningModule):
                 subject_array_registry.query_by_array(a).get_channel_count() for a in self.data_attrs.context.array
             ) * self.data_attrs.spike_dim
 
-        if self.cfg.readin_strategy == EmbedStrat.project or self.cfg.readin_strategy == EmbedStrat.token:
-            # Token is the legacy default
-            self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
-        elif self.cfg.readin_strategy == EmbedStrat.unique_project:
-            self.readin = ReadinMatrix(channel_count, self.cfg.
-            hidden_size, self.data_attrs, self.cfg)
-        elif self.cfg.readin_strategy == EmbedStrat.contextual_mlp:
-            self.readin = ContextualMLP(channel_count, self.cfg.hidden_size, self.cfg)
-        elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
-            self.readin = ReadinCrossAttention(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
+        if self.cfg.transform_space:
+            assert self.cfg.spike_embed_style in [EmbedStrat.project, EmbedStrat.token]
+            if self.cfg.spike_embed_dim:
+                spike_embed_dim = self.cfg.spike_embed_dim
+            else:
+                assert self.cfg.hidden_size % self.cfg.neurons_per_token == 0, "hidden size must be divisible by neurons per token"
+                spike_embed_dim = round(self.cfg.hidden_size / self.cfg.neurons_per_token)
+            if self.cfg.spike_embed_style == EmbedStrat.project:
+                self.readin = nn.Linear(1, spike_embed_dim)
+            elif self.cfg.spike_embed_style == EmbedStrat.token:
+                assert self.cfg.max_neuron_count > self.data_attrs.pad_token, "max neuron count must be greater than pad token"
+                self.readin = nn.Embedding(self.cfg.max_neuron_count, spike_embed_dim, padding_idx=self.data_attrs.pad_token) # I'm pretty confident we won't see more than 20 spikes in 20ms but we can always bump up
+        else:
+            if self.cfg.readin_strategy == EmbedStrat.project or self.cfg.readin_strategy == EmbedStrat.token:
+                # Token is the legacy default
+                self.readin = nn.Linear(channel_count, self.cfg.hidden_size)
+            elif self.cfg.readin_strategy == EmbedStrat.unique_project:
+                self.readin = ReadinMatrix(channel_count, self.cfg.
+                hidden_size, self.data_attrs, self.cfg)
+            elif self.cfg.readin_strategy == EmbedStrat.contextual_mlp:
+                self.readin = ContextualMLP(channel_count, self.cfg.hidden_size, self.cfg)
+            elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
+                self.readin = ReadinCrossAttention(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
 
         if getattr(self.cfg, 'readout_strategy', EmbedStrat.none) == EmbedStrat.unique_project:
             self.readout = ReadinMatrix(
@@ -335,10 +370,6 @@ class BrainBertInterface(pl.LightningModule):
                 static_context: List(T') [B x H]
                 temporal_context: List(?) [B x T x H]
         """
-        state_in = torch.as_tensor(
-            rearrange(batch[DataKey.spikes], 'b t a c h -> b t a (c h)'),
-            dtype=torch.float
-        )
         if getattr(self.cfg, 'layer_norm_input', False):
             state_in = self.layer_norm_input(state_in)
         temporal_context = []
@@ -361,15 +392,35 @@ class BrainBertInterface(pl.LightningModule):
         else:
             array = None
 
-        if self.cfg.readin_strategy == EmbedStrat.contextual_mlp or self.cfg.readout_strategy == EmbedStrat.contextual_mlp:
-            batch['session'] = session # hacky
-        # import pdb;pdb.set_trace()
-        if self.cfg.readin_strategy in [EmbedStrat.contextual_mlp, EmbedStrat.unique_project]:
-            state_in = self.readin(state_in, batch) # b t a h
-        elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
-            state_in = self.readin(state_in, session, subject, array)
-        else: # standard project
-            state_in = self.readin(state_in)
+        if self.cfg.transform_space:
+            state_in = torch.as_tensor(
+                rearrange(
+                    batch[DataKey.spikes],
+                    'b t a (chunk chunk_item) h -> b t a chunk (chunk_item h)',
+                    chunk_item=self.cfg.neurons_per_token
+                ), dtype=torch.int
+            ) # no cast, these are IDs
+            if self.cfg.spike_embed_style == EmbedStrat.token:
+                state_in = self.readin(state_in)
+            elif self.cfg.spike_embed_style == EmbedStrat.project:
+                state_in = self.readin(state_in.float().unsqueeze(-1))
+            else:
+                raise NotImplementedError
+            state_in = rearrange(state_in, 'b t a chunk chunk_item h -> b t a chunk (chunk_item h)')
+            # Out in this case is b t a group H
+        else:
+            state_in = torch.as_tensor(rearrange(
+                batch[DataKey.spikes], 'b t a c h -> b t a (c h)'
+            ), dtype=torch.float)
+            if self.cfg.readin_strategy == EmbedStrat.contextual_mlp or self.cfg.readout_strategy == EmbedStrat.contextual_mlp:
+                batch['session'] = session # hacky
+            # import pdb;pdb.set_trace()
+            if self.cfg.readin_strategy in [EmbedStrat.contextual_mlp, EmbedStrat.unique_project]:
+                state_in = self.readin(state_in, batch) # b t a h
+            elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
+                state_in = self.readin(state_in, session, subject, array)
+            else: # standard project
+                state_in = self.readin(state_in)
 
         static_context = []
         project_context = [] # only for static info
@@ -477,16 +528,20 @@ class BrainBertInterface(pl.LightningModule):
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T A H
-        if self.cfg.readout_strategy == EmbedStrat.mirror_project:
-            unique_space_features = self.readin(features, batch, readin=False)
-        elif self.cfg.readout_strategy in [EmbedStrat.unique_project, EmbedStrat.contextual_mlp]:
-            unique_space_features = self.readout(features, batch)
+        if not self.cfg.transform_space:
+            # no unique strategies will be tried for spatial transformer (its whole point is ctx-robustness)
+            if self.cfg.readout_strategy == EmbedStrat.mirror_project:
+                unique_space_features = self.readin(features, batch, readin=False)
+            elif self.cfg.readout_strategy in [EmbedStrat.unique_project, EmbedStrat.contextual_mlp]:
+                unique_space_features = self.readout(features, batch)
+
         # Create outputs for configured task
         running_loss = 0
         for task in self.cfg.task.tasks:
+            pipeline_features = unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features
             update = self.task_pipelines[task.value](
                 batch,
-                unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features,
+                pipeline_features,
                 eval_mode=eval_mode
             )
             if 'loss' in update:

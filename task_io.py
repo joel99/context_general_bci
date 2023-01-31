@@ -6,6 +6,7 @@ from torch import nn, optim
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack # baby steps...
+from einops.layers.torch import Rearrange
 from sklearn.metrics import r2_score
 import logging
 
@@ -108,19 +109,24 @@ class RatePrediction(TaskPipeline):
             data_attrs=data_attrs
         )
         self.cfg = cfg.task
+        readout_size = cfg.neurons_per_token if cfg.transform_space else channel_count
         if getattr(self.cfg, 'unique_no_head', False):
             decoder_layers = []
         elif getattr(self.cfg, 'linear_head', False):
-            decoder_layers = [nn.Linear(backbone_out_size, channel_count)]
+            decoder_layers = [nn.Linear(backbone_out_size, readout_size)]
         else:
             decoder_layers = [
                 nn.Linear(backbone_out_size, backbone_out_size),
                 nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
-                nn.Linear(backbone_out_size, channel_count)
+                nn.Linear(backbone_out_size, readout_size)
             ]
 
         if not cfg.lograte:
             decoder_layers.append(nn.ReLU())
+
+        if cfg.transform_space:
+            # after projecting, concatenate along the group dimension to get back into channel space
+            decoder_layers.append(Rearrange('b t a s_a c -> b t a (s_a c)'))
         self.out = nn.Sequential(*decoder_layers)
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
 
@@ -227,7 +233,7 @@ class SelfSupervisedInfill(RatePrediction):
         else:
             # Old implementation
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
-        spikes[mask_token] = 0 # use zero mask per NDT (Ye 21)
+        spikes[mask_token] = 0 # use zero mask per NDT (Ye 21) # TODO revisit for spatial mode; not important in causal mode
         batch.update({
             DataKey.spikes: spikes,
             'is_masked': is_masked,

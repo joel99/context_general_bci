@@ -65,6 +65,7 @@ class DataAttrs:
     maze_heldout_channel_count: int = 0
 
     behavior_dim: int = 3
+    pad_token: int = 20 # this needs to be a value that definitely won't appear as a natural spike count for your used bin size.
 
 class SpikingDataset(Dataset):
     r"""
@@ -246,6 +247,10 @@ class SpikingDataset(Dataset):
 
         return meta
 
+    @property
+    def pad_value(self):
+        return self.cfg.pad_value if self.cfg.serve_tokenized else 0
+
     def __getitem__(self, index):
         r"""
             dict of arrays
@@ -288,7 +293,10 @@ class SpikingDataset(Dataset):
                     alias = trial[f'array_{i}']
                     if alias == '': # empty
                         # should only occur for i >= 1
-                        array_group = torch.zeros_like(array_spikes[0][:,0])
+                        array_group = torch.full_like(
+                            array_spikes[0][:,0],
+                            fill_value=self.pad_value,
+                        )
                         channel_counts.append(torch.tensor(0))
                     else:
                         alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
@@ -297,20 +305,12 @@ class SpikingDataset(Dataset):
                         if self.cfg.max_channels:
                             channel_counts.append(array_group.shape[-2])
                             array_group = torch.cat([
-                                array_group, torch.zeros((
+                                array_group, torch.full((
                                     array_group.shape[0], self.cfg.max_channels - array_group.shape[-2], array_group.shape[2]
-                                ), dtype=array_group.dtype)
+                                ), fill_value=self.pad_value, dtype=array_group.dtype)
                             ], -2) # T C H
                     array_spikes.append(array_group.unsqueeze(1))
-                data_items[k] = torch.cat([
-                    *array_spikes,
-                    torch.zeros(
-                        array_spikes[0].shape[0],
-                        self.cfg.max_arrays - len(array_spikes),
-                        *array_spikes[0].shape[2:],
-                        dtype=array_spikes[0].dtype
-                    )
-                ], 1) # T A C H
+                data_items[k] = torch.cat(array_spikes, 1) # T A C H
                 channel_counts.extend([0] * (self.cfg.max_arrays - len(array_spikes)))
             # elif k == DataKey.heldout_spikes:
             #     # no array padding OR channel pad - heldout channel count should be preconfigured, and this only happens in finetuning (no heterogeneity)
@@ -394,6 +394,7 @@ class SpikingDataset(Dataset):
             rtt_heldout_channel_count=self.cfg.nlb_rtt.heldout_neurons,
             maze_heldout_channel_count=self.cfg.nlb_maze.heldout_neurons,
             behavior_dim=self.cfg.behavior_dim,
+            pad_token=self.pad_value
         )
 
     # ==================== Data splitters ====================

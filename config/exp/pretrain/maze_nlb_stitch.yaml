@@ -11,11 +11,9 @@ dataset:
   - mc_maze.*
   eval_datasets:
   - mc_maze_medium
-  # nlb_maze:
-    # heldout_neurons: 40
   data_keys:
   - DataKey.spikes
-  # - DataKey.heldout_spikes
+  bin_size_ms: 20
 model:
   readin_strategy: EmbedStrat.unique_project
   readout_strategy: EmbedStrat.unique_project
@@ -29,8 +27,5 @@ model:
   task:
     tasks:
     - ModelTask.infill
-    # - ModelTask.heldout_decoding
     metrics:
     - Metric.bps
-    # - Metric.co_bps
-    # - Metric.block_co_bps

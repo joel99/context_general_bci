@@ -1,37 +1,30 @@
 # @package _global_
-
-# 3x2 transferring strategies
-# first axis is weight update rules
-# 1. freeze everything but embedding
-# 2. fine-tune, accelerate
-# 3. fine-tune
-
-# second axis is whether we do it over full dataset or just target dataset
-
 tag: test
 
 defaults:
-# Still figuring out the right presets
-  # - /model: finetune
+  - /model: pretrain_2x
   - /dataset: rtt
-  # - /train: pretrain
+  - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
-  array_embed_strategy: EmbedStrat.token_add
-  task:
-    freeze_backbone: true
-    freeze_all: true
+  array_embed_strategy: EmbedStrat.none
+  # token add not implemented for spacetime
+
+  spike_embed_style: EmbedStrat.token
+  neurons_per_token: 16
+  hidden_size: 256
+  transform_space: true
 dataset:
   datasets:
   - 'odoherty_rtt-Indy-20161005_06'
-  # - 'odoherty_rtt-Indy-20160.*'
-  # - 'odoherty_rtt-Indy-20161006.*'
-  # - 'odoherty_rtt-Indy-20161007.*'
-  # - 'odoherty_rtt-Indy-2016101.*'
-  # - 'odoherty_rtt-Indy-2016102.*'
-  # - 'odoherty_rtt-Indy-201612.*'
-  # - 'odoherty_rtt-Indy-2017.*'
-  # - 'mc_rtt'
+  - 'odoherty_rtt-Indy-20160.*'
+  - 'odoherty_rtt-Indy-20161006.*'
+  - 'odoherty_rtt-Indy-20161007.*'
+  - 'odoherty_rtt-Indy-2016101.*'
+  - 'odoherty_rtt-Indy-2016102.*'
+  - 'odoherty_rtt-Indy-201612.*'
+  - 'odoherty_rtt-Indy-2017.*'
+  - 'mc_rtt'
   eval_datasets:
   - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
@@ -46,11 +39,10 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
   bin_size_ms: 20
+
+  max_channels: 112
+
 train:
   batch_size: 256
   epochs: 1000
   patience: 50
-sweep_cfg: base
-
-init_from_id: rtt_joint_indy_out-sweep-base-t5wtvgrm
-# use_ckpt_model_cfg: true
