@@ -213,7 +213,7 @@ class ModelConfig:
     spike_embed_style: EmbedStrat = EmbedStrat.none # else - token (small), project (linear)
     spike_embed_dim: int = 0 # embedding dimension for spike counts (0 == infer as hidden size / neurons_per_token)
     neurons_per_token: int = 1 # how many neurons to embed per token (only makes sense for token/project)
-    # This needs to match neurons_per_token in data config if data is in serve_tokenized omde
+    # This needs to match neurons_per_token in data config if data is in serve_tokenized mode
     max_neuron_count: int = 21 # pretty safe upper bound on number of neurons that can be embedded. Must be > data.pad_value
 
 @dataclass
@@ -327,8 +327,10 @@ class DatasetConfig:
     behavior_dim: int = 3
 
     serve_tokenized: bool = False # master flag for space time operator (in anticipation that space time will move to tokenized)
-    neurons_per_token: bool = 8 # for tokenized
-    max_tokens: int = 1024 # for tokenized
+    # Tokenized == serve B T S H instead of B T A C H
+    serve_tokenized_flat: bool = False # flatten space (serve spikes as B Token H instead of B T S H)
+    neurons_per_token: int = 8 # for tokenized
+    max_tokens: int = 1024 # for tokenized - note we will still respect max_length_ms (limit fills in space and then either this inferred time limit or the explicit one)
     pad_value: int = 20
 
     # Experimental Task configuration - matching registered names

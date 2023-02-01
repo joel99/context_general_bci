@@ -58,14 +58,23 @@ class BrainBertInterface(pl.LightningModule):
         self.data_attrs = data_attrs
         assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"
         if self.data_attrs.serve_tokens:
-            assert self.data_attrs.neurons_per_token == self.cfg.neurons_per_token, "Neurons per token served by data must match model token size"
+            assert self.cfg.array_embed_strategy == EmbedStrat.none, 'array IDs serving not implemented for spatially tokenized data'
+            assert self.cfg.transform_space, 'Transform space must be true if serving (spacetime) tokens'
+            assert self.data_attrs.neurons_per_token == self.cfg.neurons_per_token, \
+                f"Neurons per token served by data ({self.data_attrs.neurons_per_token}) must match model token size {self.cfg.neurons_per_token}"
 
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
-        self.backbone = SpaceTimeTransformer(
-            self.cfg.transformer,
-            max_spatial_tokens=round(
+        if data_attrs.serve_tokens: # no spatial dim
+            max_spatial_tokens = round(
+                data_attrs.max_channel_count / self.cfg.neurons_per_token
+            )
+        else:
+            max_spatial_tokens = round(
                 data_attrs.max_channel_count * data_attrs.max_arrays / self.cfg.neurons_per_token
             )
+        self.backbone = SpaceTimeTransformer(
+            self.cfg.transformer,
+            max_spatial_tokens=max_spatial_tokens
         )
         self.bind_io()
 
@@ -395,6 +404,8 @@ class BrainBertInterface(pl.LightningModule):
             array = None
 
         if self.cfg.transform_space:
+            state_in = batch[DataKey.spikes]
+            import pdb;pdb.set_trace()
             state_in = torch.as_tensor(
                 rearrange(
                     batch[DataKey.spikes],
@@ -479,7 +490,8 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T A H
-        # import pdb;pdb.set_trace()
+        # TODO need to udpate
+        import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
             temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
@@ -488,14 +500,14 @@ class BrainBertInterface(pl.LightningModule):
 
         # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
         # But we do want to exclude fully-padded arrays from computation
-        array_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
+        space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
 
         outputs: torch.Tensor = self.backbone(
             state_in,
             trial_context=trial_context,
             temporal_context=temporal_context,
             temporal_padding_mask=temporal_padding_mask,
-            array_padding_mask=array_padding_mask,
+            space_padding_mask=space_padding_mask,
             causal=ModelTask.next_step_prediction in self.cfg.task.tasks,
         ) # B x T x A x H
         if outputs.isnan().any():
@@ -517,19 +529,22 @@ class BrainBertInterface(pl.LightningModule):
             And moreover, any task-specific _input_ steps (such as masking/shifting) is not well interfaced right now
             (currently overloading `batch` variable, think more clearly either by studying HF repo or considering other use cases)
 
-            Example shapes:
-                spikes: B T A C H=1 (C is electrode channel)
+            Shapes:
+                spikes: B T A/S C H=1 (C is electrode channel) (H=1 legacy decision, hypothetically could contain other spike features)
+                - if serve_tokens: third dim is space, else it's array
+                - if serve tokens flat: Time x A/S is flattened TODO
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
 
-        # import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
             batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
-        for task in self.cfg.task.tasks:
+        # TODO are we ok with those unstacked outputs above? We need a padding mask.. currently we just have a channel count per array...?
+        for task in self.cfg.task.tasks: # TODO
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
-        features = self(batch) # B T A H
+        features = self(batch) # B T S H
         if not self.cfg.transform_space:
             # no unique strategies will be tried for spatial transformer (its whole point is ctx-robustness)
             if self.cfg.readout_strategy == EmbedStrat.mirror_project:
@@ -559,6 +574,8 @@ class BrainBertInterface(pl.LightningModule):
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
         """
+        if self.data_attrs.serve_tokens:
+            raise NotImplementedError
         # there are data keys and meta keys, that might be coming in unbatched
         batch_shapes = {
             DataKey.spikes: '* t a c h',
