@@ -57,6 +57,8 @@ class BrainBertInterface(pl.LightningModule):
 
         self.data_attrs = data_attrs
         assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"
+        if self.data_attrs.serve_tokens:
+            assert self.data_attrs.neurons_per_token == self.cfg.neurons_per_token, "Neurons per token served by data must match model token size"
 
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
         self.backbone = SpaceTimeTransformer(

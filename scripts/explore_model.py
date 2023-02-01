@@ -51,6 +51,8 @@ query = "maze_jenkins_stitch"
 query = "rtt_all_256"
 query = "rtt_all_parity2"
 query = "st_rtt_16"
+
+query = 'factor_maze_8'
 # query = "factor_rtt_16"
 # query = "rtt_all_512"
 # query = "rtt_token_padded_nostitch"
@@ -100,8 +102,8 @@ cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
-cfg.dataset.datasets = ['churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI']
-cfg.dataset.datasets = ['churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG']
+# cfg.dataset.datasets = ['churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI']
+# cfg.dataset.datasets = ['churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170214_02']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
@@ -180,18 +182,15 @@ y_lim = ax.get_ylim()[1]
 #     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
 trial = 10
-trial = 20
-# trial = 15
+trial = 15
 # trial = 17
 # trial = 18
 # trial = 80
-trial = 85
-from scipy.ndimage import gaussian_filter1d
+# trial = 85
 for channel in range(num):
     # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
     ax.plot(rates[trial][:,channel * 2], color=colors[channel])
     # ax.plot(rates[trial][:,channel * 3], color=colors[channel])
-#     ax.plot(gaussian_filter1d(test[trial,:,channel], sigma=3), color=colors[channel])
 
     # smooth the signal with a gaussian kernel
 
