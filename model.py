@@ -50,6 +50,8 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg.session_embed_size = cfg.hidden_size
         self.cfg.subject_embed_size = cfg.hidden_size
         self.cfg.array_embed_size = cfg.hidden_size
+        if getattr(self.cfg, 'task_embed_size', None):
+            self.cfg.task_embed_size = cfg.hidden_size
         self.cfg.readin_dim = cfg.hidden_size
         self.cfg.readout_dim = cfg.hidden_size
         self.cfg.transformer.dropout = cfg.dropout
@@ -139,9 +141,10 @@ class BrainBertInterface(pl.LightningModule):
             assert self.data_attrs.context.array, "Array embedding strategy requires array in data"
             if len(self.data_attrs.context.array) == 1:
                 logger.warning('Using array embedding strategy with only one array. Expected only if tuning.')
-
-        # Guardrails (to remove)
-        assert len(self.data_attrs.context.task) <= 1, "Only tested for single task"
+        if self.cfg.task_embed_strategy is not EmbedStrat.none:
+            assert self.data_attrs.context.task, "Task embedding strategy requires task in data"
+            if len(self.data_attrs.context.task) == 1:
+                logger.warning('Using task embedding strategy with only one task. Expected only if tuning.')
 
         # We write the following repetitive logic explicitly to maintain typing
         project_size = self.cfg.hidden_size
@@ -187,6 +190,17 @@ class BrainBertInterface(pl.LightningModule):
                     self.array_flag = nn.Parameter(torch.randn(self.data_attrs.max_arrays, self.cfg.array_embed_size) / math.sqrt(self.cfg.array_embed_size))
                 else:
                     self.array_flag = nn.Parameter(torch.zeros(self.data_attrs.max_arrays, self.cfg.array_embed_size))
+
+        if self.cfg.task_embed_strategy is not EmbedStrat.none:
+            self.task_embed = nn.Embedding(len(self.data_attrs.context.task), self.cfg.task_embed_size)
+            if self.cfg.task_embed_strategy == EmbedStrat.concat:
+                project_size += self.cfg.task_embed_size
+            elif self.cfg.task_embed_strategy == EmbedStrat.token:
+                assert self.cfg.task_embed_size == self.cfg.hidden_size
+                if getattr(self.cfg, 'init_flags', False):
+                    self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
+                else:
+                    self.task_flag = nn.Parameter(torch.zeros(self.cfg.task_embed_size))
 
         if project_size is not self.cfg.hidden_size:
             self.context_project = nn.Sequential(
@@ -341,10 +355,12 @@ class BrainBertInterface(pl.LightningModule):
 
         try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
         try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
+        try_transfer_embed('task_embed', self.data_attrs.context.task, transfer_data_attrs.context.task)
         try_transfer_embed('array_embed', self.data_attrs.context.array, transfer_data_attrs.context.array)
 
         try_transfer('session_flag')
         try_transfer('subject_flag')
+        try_transfer('task_flag')
         try_transfer('array_flag')
 
         try_transfer('context_project')
@@ -398,6 +414,10 @@ class BrainBertInterface(pl.LightningModule):
             subject: torch.Tensor = self.subject_embed(batch[MetaKey.subject]) # B x H
         else:
             subject = None
+        if self.cfg.task_embed_strategy is not EmbedStrat.none:
+            task: torch.Tensor = self.task_embed(batch[MetaKey.task])
+        else:
+            task = None
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
             array: torch.Tensor = self.array_embed(batch[MetaKey.array])
         else:
@@ -429,7 +449,7 @@ class BrainBertInterface(pl.LightningModule):
                 batch['session'] = session # hacky
             if self.cfg.readin_strategy in [EmbedStrat.contextual_mlp, EmbedStrat.unique_project]:
                 state_in = self.readin(state_in, batch) # b t a h
-            elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
+            elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn: # deprecated
                 state_in = self.readin(state_in, session, subject, array)
             else: # standard project
                 state_in = self.readin(state_in)
@@ -460,6 +480,16 @@ class BrainBertInterface(pl.LightningModule):
             elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
                 subject = repeat(subject, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(subject)
+
+        if self.cfg.task_embed_strategy is not EmbedStrat.none:
+            if self.cfg.task_embed_strategy == EmbedStrat.token:
+                task = task + self.task_flag
+                static_context.append(task)
+            elif self.cfg.task_embed_strategy == EmbedStrat.token_add:
+                state_in = state_in + rearrange(task, 'b h -> b 1 1 h')
+            elif self.cfg.task_embed_strategy == EmbedStrat.concat:
+                task = repeat(task, 'b h -> b t 1 h', t=state_in.shape[1])
+                project_context.append(task)
 
         if self.cfg.array_embed_strategy is not EmbedStrat.none: # Note we check earlier that this doesn't accidentally get set for space-time, not supported yet (we need to pass/infer array metadata)
             if self.cfg.array_embed_strategy == EmbedStrat.token:
@@ -778,6 +808,8 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
         "subject_embed_strategy",
         "array_embed_size",
         "array_embed_strategy",
+        "task_embed_size",
+        "task_embed_strategy",
         "readin_strategy",
         "transformer",
         "readout_strategy",

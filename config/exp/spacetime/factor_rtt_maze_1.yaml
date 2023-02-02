@@ -1,27 +1,26 @@
 # @package _global_
-tag: test
+tag: factor_rtt_maze_1
 
 defaults:
   - /model: pretrain_2x
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
-  task_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
   # array_embed_strategy: EmbedStrat.token_add
 
   spike_embed_style: EmbedStrat.token
-  neurons_per_token: 4
+  neurons_per_token: 1
   hidden_size: 256
   transform_space: true
   transformer:
     factorized_space_time: true
 dataset:
-  neurons_per_token: 4
+  neurons_per_token: 1
   bin_size_ms: 20
   # max_channels: 98
   # max_channels: 112
-  max_channels: 140
+  max_channels: 137
   max_arrays: 1
   max_length_ms: 1000
   datasets:
@@ -52,7 +51,6 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-  - MetaKey.task
 train:
   batch_size: 192
   # accumulate_batches: 8

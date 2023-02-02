@@ -184,7 +184,9 @@ class ModelConfig:
 
     subject_embed_strategy: EmbedStrat = EmbedStrat.none # TODO update this once we consider mixed batches
     subject_embed_size: int = 256 # TODO can we bind this?
+
     task_embed_strategy: EmbedStrat = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
+    task_embed_size: int = 256
 
     # This needs a separate API from the rest, likely, tied to readin.
     array_embed_strategy: EmbedStrat = EmbedStrat.none # ? maybe subsumed by subject
