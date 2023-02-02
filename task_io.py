@@ -51,7 +51,6 @@ class TaskPipeline(nn.Module):
         else:
             length_mask = None
         if channel_key in batch: # only some of b x a x c are valid
-            # ! TODO update this...
             channels = batch[channel_key] # b x a of ints < c
             if self.serve_tokens: # if there's multiple arrays, this will show up as b x a (separate from spatial dim in tokens)
                 # we have B S C, goal is to determine which are real vs padding
@@ -79,7 +78,7 @@ class TaskPipeline(nn.Module):
             else:
                 comparison = repeat(torch.arange(c, device=ref.device), 'c -> 1 s c', s=s)
                 channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
-                loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
+            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
         else:
             loss_mask = loss_mask[..., 0] # don't specify channel dim if not used, saves HELDOUT case
             channel_mask = None
@@ -270,7 +269,6 @@ class SelfSupervisedInfill(RatePrediction):
         return batch
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
-
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.logrates in self.cfg.outputs:

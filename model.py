@@ -405,19 +405,22 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.transform_space:
             # collapse space/array, channel/feature --> # b t s h
-            state_in = torch.as_tensor(rearrange(
-                batch[DataKey.spikes],
+            state_in = torch.as_tensor(batch[DataKey.spikes], dtype=int)
+            state_in = rearrange(state_in,
                 'b t s channel h -> b t s (channel h)' if self.data_attrs.serve_tokens else \
-                'b t a (chunk channel) h -> b t (a chunk) (channel h)',
+                'b t a (chunk channel) h -> b t a chunk (channel h)', # do _not_ collapse array here, mostly for code compatibility with existing pathways
                 channel=self.cfg.neurons_per_token
-            ), dtype=int)
+            )
             if self.cfg.spike_embed_style == EmbedStrat.token:
                 state_in = self.readin(state_in)
             elif self.cfg.spike_embed_style == EmbedStrat.project:
                 state_in = self.readin(state_in.float().unsqueeze(-1))
             else:
                 raise NotImplementedError
-            state_in = rearrange(state_in, 'b t s chunk h -> b t s (chunk h)') # yes, we rearrange twice... better for alternative control flows..
+            state_in = rearrange(state_in,
+                'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
+                'b t a s_a chunk h -> b t a s_a (chunk h)'
+            ) # yes, we rearrange twice... better for alternative control flows..
         else: # --> b t a h
             state_in = torch.as_tensor(rearrange(
                 batch[DataKey.spikes], 'b t a c h -> b t a (c h)'
