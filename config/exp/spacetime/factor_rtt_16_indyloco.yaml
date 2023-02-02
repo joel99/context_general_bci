@@ -1,6 +1,6 @@
 # @package _global_
-tag: test2
-# with token
+tag: factor_rtt_16_indyloco
+
 # Parity checking serve_tokenized
 defaults:
   - /model: pretrain_2x
@@ -18,16 +18,9 @@ model:
   transformer:
     factorized_space_time: true
 dataset:
-  serve_tokenized: true
+  serve_tokenized: False
   datasets:
-  - 'odoherty_rtt-Indy-20161005_06'
-  - 'odoherty_rtt-Indy-20160.*'
-  - 'odoherty_rtt-Indy-20161006.*'
-  - 'odoherty_rtt-Indy-20161007.*'
-  - 'odoherty_rtt-Indy-2016101.*'
-  - 'odoherty_rtt-Indy-2016102.*'
-  - 'odoherty_rtt-Indy-201612.*'
-  - 'odoherty_rtt-Indy-2017.*'
+  - 'odoherty_rtt.*'
   - 'mc_rtt'
   eval_datasets:
   - 'odoherty_rtt-Indy-20161005_06'
@@ -43,8 +36,5 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
   bin_size_ms: 20
+
   max_channels: 112
-  neurons_per_token: 16
-  max_tokens: 1024
-train:
-  batch_size: 64

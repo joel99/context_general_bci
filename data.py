@@ -296,9 +296,10 @@ class SpikingDataset(Dataset):
                     space = 0
                 for i in range(self.cfg.max_arrays):
                     alias = trial[f'array_{i}']
-                    if alias == '': # empty, should only occur for i >= 1
+                    if alias == '': # empty, should only occur for i >= 1, so we can identify the right shape from previous entries (squeezing out the array dim)
                         if not self.cfg.serve_tokenized:
                             array_group = torch.full_like(array_spikes[0][:,0], fill_value=self.pad_value)
+                            array_spikes.append(rearrange(array_group, 't c h -> t () c h'))
                         channel_counts.append(torch.tensor(0))
                     else:
                         alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
@@ -324,14 +325,13 @@ class SpikingDataset(Dataset):
                                         array_group.shape[0], self.cfg.max_channels - array_group.shape[-2], array_group.shape[2]
                                     ), fill_value=self.pad_value, dtype=array_group.dtype)
                                 ], -2) # T C H
-                            array_spikes.append(array_group.unsqueeze(1))
+                            array_spikes.append(rearrange(array_group, 't c h -> t () c h'))
                 if self.cfg.serve_tokenized:
                     data_items[k] = torch.cat(array_spikes, 1) # T x S x C x H
                     data_items[DataKey.time] = torch.cat(times, 1)
                     data_items[DataKey.position] = torch.cat(positions, 1)
                 else:
                     data_items[k] = torch.cat(array_spikes, 1) # T A C H
-                    channel_counts.extend([0] * (self.cfg.max_arrays - len(array_spikes)))
             # elif k == DataKey.heldout_spikes and not self.cfg.serve_tokenized:
             #     # no array padding OR channel pad - heldout channel count should be preconfigured, and this only happens in finetuning (no heterogeneity)
             #     assert self.cfg.max_channels > 0, "Heldout spikes logic without max channels not implemented"

@@ -1,50 +1,40 @@
 # @package _global_
 tag: test
-
+# no token
+# Parity checking serve_tokenized
 defaults:
   - /model: pretrain_2x
+  - /dataset: rtt
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
-  task_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
-  # array_embed_strategy: EmbedStrat.token_add
+  # token add not implemented for spacetime
 
   spike_embed_style: EmbedStrat.token
-  neurons_per_token: 4
+  neurons_per_token: 16
   hidden_size: 256
   transform_space: true
   transformer:
     factorized_space_time: true
 dataset:
-  neurons_per_token: 4
-  bin_size_ms: 20
-  # max_channels: 98
-  # max_channels: 112
-  max_channels: 140
-  max_arrays: 1
-  max_length_ms: 1000
+  serve_tokenized: false
   datasets:
-  # Jenkins, Nitschke
-  # - churchland_maze.*
-  # - churchland_misc_nitschke.*
-  - odoherty_rtt.*
-  # - churchland_misc.*
-  # Indy, Loco
-  - mc_rtt
-  - mc_maze.*
+  - 'odoherty_rtt-Indy-20161005_06'
+  - 'odoherty_rtt-Indy-20160.*'
+  - 'odoherty_rtt-Indy-20161006.*'
+  - 'odoherty_rtt-Indy-20161007.*'
+  - 'odoherty_rtt-Indy-2016101.*'
+  - 'odoherty_rtt-Indy-2016102.*'
+  - 'odoherty_rtt-Indy-201612.*'
+  - 'odoherty_rtt-Indy-2017.*'
+  - 'mc_rtt'
   eval_datasets:
-  - 'mc_maze_medium'
-  # - 'odoherty_rtt-Indy-20161005_06'
+  - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
-    arrays:
-    - Indy-M1
-    - Loco-M1
-  churchland_misc:
-    arrays:
-    - Nitschke-M1
-    - Jenkins-M1
-    - Reggie-M1
+      arrays:
+      - Indy-M1
+      - Loco-M1
   data_keys:
   - DataKey.spikes
   meta_keys:
@@ -52,7 +42,9 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-  - MetaKey.task
+  bin_size_ms: 20
+
+  max_channels: 112
+
 train:
-  batch_size: 192
-  # accumulate_batches: 8
+  batch_size: 64

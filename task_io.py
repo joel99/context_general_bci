@@ -35,6 +35,7 @@ class TaskPipeline(nn.Module):
         data_attrs: DataAttrs,
     ) -> None:
         super().__init__()
+        self.pad_value = data_attrs.pad_token
         self.serve_tokens = data_attrs.serve_tokens
         self.serve_tokens_flat = data_attrs.serve_tokens_flat
 
@@ -230,9 +231,9 @@ class SelfSupervisedInfill(RatePrediction):
             })
             return batch
         is_masked = torch.bernoulli(
+            # torch.full(spikes.size()[:2], self.cfg.mask_ratio, device=spikes.device).unsqueeze(-1) # ! testing parity of serve_tokenized, tracing to this spatial masking; see `test2`, change back to re-enable spatial masking
             torch.full(spikes.size()[:-2], self.cfg.mask_ratio, device=spikes.device)
-        ) # B T S or B Token
-
+        ) # B T S or B Token - don't mask part of a token
         mask_type = torch.rand_like(is_masked)
         mask_token = mask_type < self.cfg.mask_token_ratio
         mask_random = (mask_type >= self.cfg.mask_token_ratio) & (mask_type < self.cfg.mask_token_ratio + self.cfg.mask_random_ratio)
@@ -259,7 +260,10 @@ class SelfSupervisedInfill(RatePrediction):
             time_shuffled_spikes = spikes.gather(1, random_draw.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, c, -1))
             spikes[mask_random] = time_shuffled_spikes[mask_random]
         else:
-            spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
+            # if self.serve_tokens: # ! Testing parity, see above, change back to re-enable spatial masking
+            #     mask_random = mask_random.expand(-1, -1, spikes.size(2))
+            #     mask_token = mask_token.expand(-1, -1, spikes.size(2))
+            spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes[spikes != self.pad_value].max().int().item() + 1)
         spikes[mask_token] = 0 # use zero mask per NDT (Ye 21) # TODO revisit for spatial mode; not important in causal mode
         batch.update({
             DataKey.spikes: spikes,

@@ -1,6 +1,6 @@
 # @package _global_
 
-tag: test3
+tag: dyer
 # Testing for utility of spatial tokenization - this one should be relatively efficient, in that we can serve Pitt + Chewie together
 # ! Note when using Pitt data, it's important to go up to 200 spatial tokens (do the math to compute token budget)
 defaults:
@@ -14,8 +14,8 @@ dataset:
   max_length_ms: 4000
   max_arrays: 2
   datasets:
-  - CRS02bHome.data.00445
-  - dyer_co_chewie_2
+  - CRS02bHome.data.*
+  - dyer_co.*
   eval_datasets:
   - dyer_co_chewie_2
   data_keys:
@@ -29,10 +29,10 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-  neurons_per_token: 16
+  neurons_per_token: 4
   max_tokens: 4096
 model:
-  neurons_per_token: 16
+  neurons_per_token: 4
   transform_space: true
   transformer:
     factorized_space_time: true
