@@ -68,6 +68,7 @@ class DataAttrs:
     behavior_dim: int = 3
     pad_token: int = 20 # this needs to be a value that definitely won't appear as a natural spike count for your used bin size.
     serve_tokens: bool = False # if true, serves flat data tokens with additional keys for annotations (e.g. array + timestep) instead of structured data (e.g. with array dimensions)
+    serve_tokens_flat: bool = False
     neurons_per_token: int = 8
 
 class SpikingDataset(Dataset):
@@ -389,10 +390,13 @@ class SpikingDataset(Dataset):
                                 if k in [DataKey.spikes, DataKey.time, DataKey.position]:
                                     # These keys have spatial dimensions that we will serve flat to maximize data throughput across heterogeneous trials
                                     item = item.flatten(0, 1) # T S H
-                            else:
+                            else: # pad in space
                                 if k == DataKey.spikes: # B T S C H
                                     item = F.pad(item, (0, 0, 0, 0, 0, space_lengths[i] - item.size(1)), value=self.pad_value)
                                 elif k in [DataKey.time, DataKey.position]:
+                                    # ! Note... this "pad_value" is set for spikes, and will definitely conflict with meaningful values for
+                                    # time and position. This shouldn't be a problem right now, as we're using LENGTH_KEY and CHANNEL_KEY to determine what's padding and not when computing masks.
+                                    # ! For the flat case, we should directly ID a pad value (e.g. 0) for time/position and adjust in code.
                                     item = F.pad(item, (0, space_lengths[i] - item.size(1)), value=self.pad_value)
                             stack_batch[k].append(item)
                         else:
@@ -465,6 +469,7 @@ class SpikingDataset(Dataset):
             behavior_dim=self.cfg.behavior_dim,
             pad_token=self.pad_value,
             serve_tokens=self.cfg.serve_tokenized,
+            serve_tokens_flat=self.cfg.serve_tokenized_flat,
             neurons_per_token=self.cfg.neurons_per_token,
         )
 

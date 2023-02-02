@@ -35,11 +35,13 @@ class TaskPipeline(nn.Module):
         data_attrs: DataAttrs,
     ) -> None:
         super().__init__()
+        self.serve_tokens = data_attrs.serve_tokens
+        self.serve_tokens_flat = data_attrs.serve_tokens_flat
 
     def get_masks(self, batch, channel_key=CHANNEL_KEY):
         # loss_mask: b t *
         ref = batch[DataKey.spikes][..., 0]
-        b, t, a, c = ref.size()
+        b, t, s, c = ref.size()
         loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
         if LENGTH_KEY in batch: # only some of b x t are valid
             lengths = batch[LENGTH_KEY] # b of ints < t
@@ -49,10 +51,35 @@ class TaskPipeline(nn.Module):
         else:
             length_mask = None
         if channel_key in batch: # only some of b x a x c are valid
+            # ! TODO update this...
             channels = batch[channel_key] # b x a of ints < c
-            comparison = repeat(torch.arange(c, device=ref.device), 'c -> 1 a c', a=a)
-            channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
-            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
+            if self.serve_tokens: # if there's multiple arrays, this will show up as b x a (separate from spatial dim in tokens)
+                # we have B S C, goal is to determine which are real vs padding
+                # at our disposal we have the channel count, separated into b x a
+                # each a is a number, that was divided by neurons per token to create the spatial distribution
+                # to reverse engineer, first compute the relevant spatial tokens for each array
+                # neurons_per_token = c
+                allocated_space_tokens = torch.ceil(channels / c) # B A
+                # I need to somehow distribute the spatial dimension among the arrays
+                # there are number of ways to do this; we'll do what seems simplest at this time
+                # find any leftover padding, declare zero channels
+                comparison = repeat(torch.arange(s, device=ref.device), 's -> 1 s c', c=c)
+                pure_padding_tokens = allocated_space_tokens.sum(-1)
+                channel_mask = comparison < rearrange(pure_padding_tokens, 'b -> b 1 1')
+                # for those fractional tokens, declare the % of channels
+                allocated_fractional = channels % c # B A
+                comparison = repeat(torch.arange(c, device=ref.device), 'c -> 1 a c', a=channels.size(-1))
+                # gather the relevant entries from `chanenl_mask` using `allocated_space_tokens` as an index
+                # If we happen to allocate the perfect number, the ceiling will do nothing and our index won't be appropriately "one above" where we want to index
+                fractional_index = torch.where(allocated_fractional > 0, allocated_space_tokens - 1, allocated_space_tokens).long()
+                channel_mask.scatter_(1,
+                    repeat(fractional_index, 'b a -> b a c', c=c),
+                    comparison < allocated_fractional.unsqueeze(-1)
+                )
+            else:
+                comparison = repeat(torch.arange(c, device=ref.device), 'c -> 1 s c', s=s)
+                channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
+                loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
         else:
             loss_mask = loss_mask[..., 0] # don't specify channel dim if not used, saves HELDOUT case
             channel_mask = None
@@ -124,7 +151,7 @@ class RatePrediction(TaskPipeline):
         if not cfg.lograte:
             decoder_layers.append(nn.ReLU())
 
-        if cfg.transform_space:
+        if cfg.transform_space and not self.serve_tokens: # if serving as tokens, then target has spatial dim
             # after projecting, concatenate along the group dimension to get back into channel space
             decoder_layers.append(Rearrange('b t a s_a c -> b t a (s_a c)'))
         self.out = nn.Sequential(*decoder_layers)
@@ -199,13 +226,13 @@ class SelfSupervisedInfill(RatePrediction):
         if eval_mode:
             batch.update({
                 # don't actually mask
-                'is_masked': torch.zeros(spikes.size()[:3], dtype=torch.bool, device=spikes.device),
+                'is_masked': torch.zeros(spikes.size()[:-2], dtype=torch.bool, device=spikes.device),
                 'spike_target': target
             })
             return batch
         is_masked = torch.bernoulli(
-            torch.full(spikes.size()[:3], self.cfg.mask_ratio, device=spikes.device)
-        )
+            torch.full(spikes.size()[:-2], self.cfg.mask_ratio, device=spikes.device)
+        ) # B T S or B Token
 
         mask_type = torch.rand_like(is_masked)
         mask_token = mask_type < self.cfg.mask_token_ratio
@@ -216,22 +243,23 @@ class SelfSupervisedInfill(RatePrediction):
             mask_random.bool() & is_masked,
         )
 
-        b, t, a, c, _ = spikes.shape
-        if LENGTH_KEY in batch:
-            times = rearrange(batch[LENGTH_KEY], 'b -> b 1 1') # 1 = a
-        else:
-            times = torch.full((b, 1, a), t, device=spikes.device)
         spikes = spikes.clone()
         if self.cfg.mask_random_shuffle:
+            assert not self.serve_tokens, 'shape not updated'
+            b, t, a, c, _ = spikes.shape
+            if LENGTH_KEY in batch:
+                times = rearrange(batch[LENGTH_KEY], 'b -> b 1 1') # 1 = a
+            else:
+                times = torch.full((b, 1, a), t, device=spikes.device)
             # How can we generate a random time if we have different bounds? Use a large number and take modulo, roughly fair
             # (note permute doesn't really work if we have ragged times, we risk shuffling in padding)
             random_draw = torch.randint(0, 100000, (b, t, a), device=times.device) % times
 
             # Use random_draw to index spikes and extract a tensor of size b t a c 1
+            # TODO update this
             time_shuffled_spikes = spikes.gather(1, random_draw.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, c, -1))
             spikes[mask_random] = time_shuffled_spikes[mask_random]
         else:
-            # Old implementation
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes.max().int().item() + 1)
         spikes[mask_token] = 0 # use zero mask per NDT (Ye 21) # TODO revisit for spatial mode; not important in causal mode
         batch.update({
@@ -242,10 +270,11 @@ class SelfSupervisedInfill(RatePrediction):
         return batch
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
-        rates: torch.Tensor = self.out(backbone_features)
 
+        rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.logrates in self.cfg.outputs:
+            assert not self.serve_tokens, 'shape not updated, not too sure what to do here'
             batch_out[Output.logrates] = rates
 
         if not compute_metrics:
@@ -257,7 +286,7 @@ class SelfSupervisedInfill(RatePrediction):
         # import pdb;pdb.set_trace()
         if Metric.all_loss in self.cfg.metrics:
             batch_out[Metric.all_loss] = loss[loss_mask].mean().detach()
-        loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t a -> b t a 1')
+        loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t s -> b t s 1')
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.bps in self.cfg.metrics:

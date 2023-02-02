@@ -404,30 +404,26 @@ class BrainBertInterface(pl.LightningModule):
             array = None
 
         if self.cfg.transform_space:
-            state_in = batch[DataKey.spikes]
-            import pdb;pdb.set_trace()
-            state_in = torch.as_tensor(
-                rearrange(
-                    batch[DataKey.spikes],
-                    'b t a (chunk chunk_item) h -> b t a chunk (chunk_item h)',
-                    chunk_item=self.cfg.neurons_per_token
-                ), dtype=torch.int
-            ) # no cast, these are IDs
+            # collapse space/array, channel/feature --> # b t s h
+            state_in = torch.as_tensor(rearrange(
+                batch[DataKey.spikes],
+                'b t s channel h -> b t s (channel h)' if self.data_attrs.serve_tokens else \
+                'b t a (chunk channel) h -> b t (a chunk) (channel h)',
+                channel=self.cfg.neurons_per_token
+            ), dtype=int)
             if self.cfg.spike_embed_style == EmbedStrat.token:
                 state_in = self.readin(state_in)
             elif self.cfg.spike_embed_style == EmbedStrat.project:
                 state_in = self.readin(state_in.float().unsqueeze(-1))
             else:
                 raise NotImplementedError
-            state_in = rearrange(state_in, 'b t a chunk chunk_item h -> b t a chunk (chunk_item h)')
-            # Out in this case is b t a group H
-        else:
+            state_in = rearrange(state_in, 'b t s chunk h -> b t s (chunk h)') # yes, we rearrange twice... better for alternative control flows..
+        else: # --> b t a h
             state_in = torch.as_tensor(rearrange(
                 batch[DataKey.spikes], 'b t a c h -> b t a (c h)'
             ), dtype=torch.float)
             if self.cfg.readin_strategy == EmbedStrat.contextual_mlp or self.cfg.readout_strategy == EmbedStrat.contextual_mlp:
                 batch['session'] = session # hacky
-            # import pdb;pdb.set_trace()
             if self.cfg.readin_strategy in [EmbedStrat.contextual_mlp, EmbedStrat.unique_project]:
                 state_in = self.readin(state_in, batch) # b t a h
             elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
@@ -437,23 +433,17 @@ class BrainBertInterface(pl.LightningModule):
 
         static_context = []
         project_context = [] # only for static info
-        def mask_padding(x: torch.Tensor):
-            # x: b t a h
-            if CHANNEL_KEY not in batch:
-                return x
-            array_padding_mask = batch[CHANNEL_KEY] == 0
-            array_padding_mask = rearrange(array_padding_mask, 'b a -> b () a ()')
-            return x.masked_fill(array_padding_mask, 0)
-
+        # Note we may augment padding tokens below but if attn is implemented correctly that should be fine
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             if self.cfg.session_embed_strategy == EmbedStrat.token:
                 session = session + self.session_flag # B x H
-                if session.ndim == 3:
+                if session.ndim == 3: # ? JY no longer remembers why this path would occur
+                    raise NotImplementedError
                     static_context.extend(session.unbind(1))
                 else:
                     static_context.append(session)
             elif self.cfg.session_embed_strategy == EmbedStrat.token_add:
-                state_in = state_in + mask_padding(rearrange(session, 'b h -> b 1 1 h'))
+                state_in = state_in + rearrange(session, 'b h -> b 1 1 h')
             elif self.cfg.session_embed_strategy == EmbedStrat.concat: # concat deprecated for readin strategy etc
                 session = repeat(session, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(session)
@@ -463,17 +453,17 @@ class BrainBertInterface(pl.LightningModule):
                 subject = subject + self.subject_flag
                 static_context.append(subject)
             elif self.cfg.subject_embed_strategy == EmbedStrat.token_add:
-                state_in = state_in + mask_padding(rearrange(subject, 'b h -> b 1 1 h'))
+                state_in = state_in + rearrange(subject, 'b h -> b 1 1 h')
             elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
                 subject = repeat(subject, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(subject)
 
-        if self.cfg.array_embed_strategy is not EmbedStrat.none:
+        if self.cfg.array_embed_strategy is not EmbedStrat.none: # Note we check earlier that this doesn't accidentally get set for space-time, not supported yet (we need to pass/infer array metadata)
             if self.cfg.array_embed_strategy == EmbedStrat.token:
                 array = array + self.array_flag
                 static_context.extend(array.unbind(1)) # path not yet tested
             elif self.cfg.array_embed_strategy == EmbedStrat.token_add:
-                state_in = state_in + mask_padding(rearrange(array, 'b a h -> b 1 a h')) # redundant op since array uses 0s for padding
+                state_in = state_in + rearrange(array, 'b a h -> b 1 a h') # redundant op since array uses 0s for padding
             elif self.cfg.array_embed_strategy == EmbedStrat.concat:
                 array = repeat(array, 'b a h -> b t a h', t=state_in.shape[1])
                 project_context.append(array)
@@ -489,18 +479,25 @@ class BrainBertInterface(pl.LightningModule):
         return state_in, static_context, temporal_context
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # returns backbone features B T A H
-        # TODO need to udpate
-        import pdb;pdb.set_trace()
+        # returns backbone features B T S H
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
-        if LENGTH_KEY in batch:
-            temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
+        if self.data_attrs.serve_tokens_flat:
+            raise NotImplementedError # temporal mask must be inferred or subsumed by a broader mask
         else:
-            temporal_padding_mask = None
+            if LENGTH_KEY in batch:
+                temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
+            else:
+                temporal_padding_mask = None
 
         # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
         # But we do want to exclude fully-padded arrays from computation
-        space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
+        if self.data_attrs.serve_tokens_flat:
+            raise NotImplementedError
+        elif self.data_attrs.serve_tokens:
+            allocated_space_tokens = torch.ceil(batch[CHANNEL_KEY] / self.cfg.neurons_per_token).sum(1) # B
+            space_padding_mask = torch.arange(state_in.size(2), device=state_in.device)[None, :] >= allocated_space_tokens[:, None] # -> B A
+        else:
+            space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
 
         outputs: torch.Tensor = self.backbone(
             state_in,
@@ -509,7 +506,7 @@ class BrainBertInterface(pl.LightningModule):
             temporal_padding_mask=temporal_padding_mask,
             space_padding_mask=space_padding_mask,
             causal=ModelTask.next_step_prediction in self.cfg.task.tasks,
-        ) # B x T x A x H
+        ) # B x T x S x H
         if outputs.isnan().any():
             import pdb;pdb.set_trace()
         return outputs
@@ -537,12 +534,11 @@ class BrainBertInterface(pl.LightningModule):
                 channel_counts: B A (counts per array)
         """
 
-        import pdb;pdb.set_trace()
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
             batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
         # TODO are we ok with those unstacked outputs above? We need a padding mask.. currently we just have a channel count per array...?
-        for task in self.cfg.task.tasks: # TODO
+        for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T S H
         if not self.cfg.transform_space:

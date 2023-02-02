@@ -280,41 +280,42 @@ class SpaceTimeTransformer(nn.Module):
 
     def forward(
         self,
-        src: torch.Tensor, # B T A H - embedded already (or possibly B T A G H)
+        src: torch.Tensor, # B T A H - embedded already (or possibly B T A S_A H)
         trial_context: List[torch.Tensor] = [], # T' [B H]
         temporal_context: List[torch.Tensor] = [], # TC' [B T H]
         temporal_padding_mask: Optional[torch.Tensor] = None, # B T
-        array_padding_mask: Optional[torch.Tensor] = None, # B A
+        space_padding_mask: Optional[torch.Tensor] = None, # B A/S
         causal: bool=True
     ) -> torch.Tensor: # T B H
         r"""
             Each H is a token to be transformed with other T x A tokens.
             Additional T' and T tokens from context are included as well.
 
+            `space_padding_mask`: Second dim is Array if src has_array_dim, else Space.
             We assume that the provided trial and temporal context is consistently shaped. i.e. any context provided is provided for all samples.
             (So attention masks do not vary across batch)
         """
         # import pdb;pdb.set_trace()
 
         # === Embeddings ===
+        has_array_dim = src.ndim == 5
         src = self.dropout_in(src)
         # Note that space can essentially use array dim, only logic that needs to account is array_padding_mask
-        if self.cfg.transform_space:
+        if self.cfg.transform_space and has_array_dim:
             b, t, a, s_a, h = src.size() # s_a for space in array
+            src = rearrange(src, 'b t a s_a h -> b t (a s_a) h')
+            s = a * s_a
         else:
             b, t, s, h = src.size() # s for space/array
 
         # TODO make rotary
         time_embed = rearrange(self.time_encoder(src), 'b t h -> b t 1 h')
-        if self.cfg.transform_space:
-            src = rearrange(src, 'b t a s_a h -> b t (a s_a) h')
-            if self.cfg.embed_space:
-                # likely space will soon be given as input or pre-embedded, for now assume range
-                space_embed = rearrange(
-                    self.space_encoder(torch.arange(src.size(2), device=src.device)
-                ), 's h -> 1 1 s h')
-                src = src + space_embed
-            s = a * s_a
+        if self.cfg.transform_space and self.cfg.embed_space:
+            # likely space will soon be given as input or pre-embedded, for now assume range
+            space_embed = rearrange(
+                self.space_encoder(torch.arange(src.size(2), device=src.device)
+            ), 's h -> 1 1 s h')
+            src = src + space_embed
         src = src + time_embed
 
         # === Masks ===
@@ -363,20 +364,20 @@ class SpaceTimeTransformer(nn.Module):
             return src_mask
 
         def make_padding_mask(
-            b, t, s, src: torch.Tensor, temporal_context: torch.Tensor | None, array_padding_mask: torch.Tensor | None
+            b, t, s, src: torch.Tensor, temporal_context: torch.Tensor | None, space_padding_mask: torch.Tensor | None
         ):
             r"""
                 return (b t s) src_key_pad_mask - prevents attending _to_, but not _from_. That should be fine.
                 This doesn't include trial context pad (we keep unsquashed so spacetime code can reuse)
             """
-            if temporal_padding_mask is not None or array_padding_mask is not None:
+            if temporal_padding_mask is not None or space_padding_mask is not None:
                 padding_mask = torch.zeros((b, t, s), dtype=torch.bool, device=src.device)
 
                 # Deal with known src padding tokens
-                if array_padding_mask is not None:
-                    if self.cfg.transform_space:
-                        array_padding_mask = repeat(array_padding_mask, 'b a -> b (a s_a)', s_a=s_a)
-                    padding_mask |= rearrange(array_padding_mask, 'b a -> b () a')
+                if space_padding_mask is not None:
+                    if self.cfg.transform_space and has_array_dim:
+                        space_padding_mask = repeat(space_padding_mask, 'b a -> b (a s_a)', s_a=s_a)
+                    padding_mask |= rearrange(space_padding_mask, 'b s -> b () s')
 
                 # Concat padding mask with temporal context (which augments spatial)
                 if temporal_context is not None:
@@ -403,7 +404,7 @@ class SpaceTimeTransformer(nn.Module):
             trial_context = None
         # === Transform ===
         if getattr(self.cfg, 'factorized_space_time', False):
-            padding_mask = make_padding_mask(b, t, s, src, temporal_context, array_padding_mask)
+            padding_mask = make_padding_mask(b, t, s, src, temporal_context, space_padding_mask)
             # space first
             space_src = [src]
             if temporal_context is not None:
@@ -474,7 +475,7 @@ class SpaceTimeTransformer(nn.Module):
 
             src_mask = make_src_mask(t, s, src, temporal_context, trial_context)
             # TODO validate - this mask flattening better match the token flattening
-            padding_mask = make_padding_mask(b, t, s, src, temporal_context, array_padding_mask)
+            padding_mask = make_padding_mask(b, t, s, src, temporal_context, space_padding_mask)
             padding_mask = rearrange(padding_mask, 'b t s -> b (t s)')
             # Trial context is never padded
             if len(trial_context) > 0:
@@ -485,6 +486,6 @@ class SpaceTimeTransformer(nn.Module):
             output = rearrange(output[:, : t * s], 'b (t s) h -> b t s h', t=t, s=s)
 
         output = self.dropout_out(output)
-        if self.cfg.transform_space:
+        if self.cfg.transform_space and has_array_dim:
             output = rearrange(output, 'b t (a s_a) h -> b t a s_a h', s_a=s_a)
         return output
