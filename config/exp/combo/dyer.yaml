@@ -14,7 +14,7 @@ dataset:
   max_length_ms: 4000
   max_arrays: 2
   datasets:
-  - CRS02bHome.data.*
+  # - CRS02bHome.data.*
   - dyer_co.*
   eval_datasets:
   - dyer_co_chewie_2
