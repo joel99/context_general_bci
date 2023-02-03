@@ -18,6 +18,9 @@ class ExperimentalTask(OrderedEnum):
     dyer_co = "dyer_co"
     gallego_co = "gallego_co"
     pitt_co = "pitt_co"
+    observation = "observation"
+    ortho = "ortho"
+    fbc = "fbc"
     delay_reach = "delay_reach"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader

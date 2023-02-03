@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple, Optional, NamedTuple
 from collections import defaultdict
 from pathlib import Path
 import numpy as np
-
+import yaml
 import logging
 
 from config import DatasetConfig
@@ -364,11 +364,20 @@ class GallegoCOContextInfo(ReachingContextInfo):
         infos = map(make_info, Path(root).glob("*.mat"))
         return filter(lambda x: x is not None, infos)
 
+# read task subtype from `contexts/pitt_type.yaml`
+pitt_metadata = {}
+with open('contexts/pitt_type.yaml') as f:
+    pitt_task_subtype = yaml.load(f, Loader=yaml.FullLoader)
+    for date in pitt_task_subtype:
+        for session in pitt_task_subtype[date]:
+            session_num = int(list(session.keys())[0])
+            session_type = list(session.values())[0]
+            pitt_metadata[f'CRS02bHome.data.{session_num:05d}'] = session_type
 
 @dataclass
 class BCIContextInfo(ReachingContextInfo):
     @classmethod
-    def build_from_dir(cls, root, task: ExperimentalTask, arrays=["main"]):
+    def build_from_dir(cls, root, task_map: Dict[str, ExperimentalTask], arrays=["main"]):
         def make_info(datapath: Path):
             alias = datapath.name
             subject, _, session = alias.split('.')
@@ -378,7 +387,7 @@ class BCIContextInfo(ReachingContextInfo):
                 subject = subject[:-3]
             return BCIContextInfo(
                 subject=SubjectArrayRegistry.query_by_subject(subject),
-                task=task,
+                task=task_map.get(pitt_metadata.get(alias, 'default')),
                 _arrays=[
                     'lateral_s1', 'medial_s1',
                     'lateral_m1', 'medial_m1',

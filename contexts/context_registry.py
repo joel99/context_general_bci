@@ -142,5 +142,12 @@ context_registry = ContextRegistry([
 
     *GallegoCOContextInfo.build_from_dir('./data/gallego_co', task=ExperimentalTask.gallego_co),
     *GDrivePathContextInfo.build_from_dir('./data/churchland_misc'),
-    *BCIContextInfo.build_from_dir('./data/pitt_co/mat', task=ExperimentalTask.pitt_co),
+    *BCIContextInfo.build_from_dir('./data/pitt_co/mat', task_map={
+        'obs': ExperimentalTask.observation,
+        'ortho': ExperimentalTask.ortho,
+        'ortho/fbc': ExperimentalTask.fbc, # when both types are used, opt for more expressive
+        'fbc': ExperimentalTask.fbc,
+        'fbc-stitch': ExperimentalTask.fbc,
+        'default': ExperimentalTask.pitt_co
+    }),
 ])

@@ -73,7 +73,8 @@ def load_trial(fn, use_ql=True):
         spikes = payload['data']['SpikeCount'][..., standard_channels]
         out['spikes'] = torch.from_numpy(spikes)
         # cursor x, y
-        out['position'] = torch.from_numpy(payload['data']['Kinematics']['ActualPos'][:,2:4])
+        out['position'] = torch.from_numpy(payload['data']['Kinematics']['ActualPos'][:,1:3]) # 1 is y, 2 is X. Col 6 is click, src: Jeff Weiss
+        out['position'] = out['position'].roll(1, dims=1) # swap x and y
     else:
         data = payload['iData']
         trial_data = extract_ql_data(data['QL']['Data'])

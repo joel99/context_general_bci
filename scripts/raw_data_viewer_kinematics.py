@@ -34,6 +34,14 @@ dataset_name = 'odoherty_rtt-Loco-20170215_02'
 dataset_name = 'odoherty_rtt-Indy-20161005_06'
 context = context_registry.query(alias=dataset_name)
 datapath = context.datapath
+mode = 'rtt'
+# mode = 'pitt'
+if mode == 'rtt':
+    ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
+else:
+    ctxs = context_registry.query(task=ExperimentalTask.observation)
+session_paths = [ctx.datapath for ctx in ctxs]
+print(f'Found {len(session_paths)} sessions.')
 
 sampling_rate = 1000
 cfg = DatasetConfig()
@@ -73,8 +81,13 @@ def load_bhvr_from_rtt(datapath, sample_strat=None):
                 bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
     return bhvr_vars
 
+def load_bhvr_from_pitt(datapath, sample_strat=None):
+    from tasks.pitt_co import load_trial
+    trial_paths = list(datapath.glob("*.mat"))
+    payloads = [load_trial(trial_path) for trial_path in trial_paths]
+    return payloads
 
-def plot_trace(
+def plot_trace_rtt(
     ax, bhvr_payload,
     length=2000,
     title: Path | None = None,
@@ -90,20 +103,28 @@ def plot_trace(
     if title is not None:
         ax.set_title(title.stem)
 
-ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
-ctxs = context_registry.query(task=ExperimentalTask.pitt_co)
-session_paths = [ctx.datapath for ctx in ctxs]
-#%%
+def plot_trace_pitt(
+    ax, bhvr_payload, trial=0,
+    title: Path | None = None,
+    key = 'position'
+):
+    # plot 2 traces of x/y profiles, not the 2d trace (since paths are often stereotyped)
+    # ax = prep_plt(ax)
+    bhvr_payload = bhvr_payload[trial]
+    if key == 'position':
+        ax.plot(bhvr_payload['position'][:, 0], label='x')
+        ax.plot(bhvr_payload['position'][:, 1], label='y')
+    elif key == DataKey.bhvr_vel:
+        # do velocity
+        pos = bhvr_payload['position']
+        # print(pos.shape)
+        vel = np.gradient(pos, axis=0)
+        ax.plot(vel[:, 0], label='x')
+        ax.plot(vel[:, 1], label='y')
 
-# plot all sessions by loading behavior and calling `plot_trace`
-fig, axs = plt.subplots(
-    ceil(len(session_paths) / 2), 2,
-    figsize=(10 * 2, 10 * ceil(len(session_paths) / 2))
-)
-for i, session_path in enumerate(session_paths):
-    bhvr_payload = load_bhvr_from_rtt(session_path, sample_strat=None)
-    plot_trace(axs.ravel()[i], bhvr_payload, title=session_path, length=10000)
-
+    ax.legend()
+    if title is not None:
+        ax.set_title(title.stem)
 #%%
 tgt_session = session_paths[0]
 f, ax = plt.subplots(1, 1, figsize=(10, 10))
@@ -113,17 +134,30 @@ strat = None
 # strat = 'resample'
 # strat = 'resample_poly'
 # strat = 'decimate'
-bhvr_payload = load_bhvr_from_rtt(tgt_session, sample_strat=strat)
-# take 1st 10% of signal
-length = int(bhvr_payload['finger_pos'].shape[0] * 0.1)
-plot_trace(
-    ax, bhvr_payload, title=session_paths[0], length=length,
-    # key=DataKey.bhvr_vel,
-    key='finger_pos',
-)
-title = strat if strat else 'no resample'
-ax.set_title(tgt_session.stem + ' ' + 'position')
-# ax.set_title(title)
+
+if mode == 'pitt':
+    bhvr_payload = load_bhvr_from_pitt(tgt_session, sample_strat=strat)
+    plot_trace_pitt(
+        ax, bhvr_payload, title=tgt_session, trial=0,
+        key='position',
+        # key=DataKey.bhvr_vel,
+    )
+    # print(bhvr_payload[1]['position'][:,0])
+    # print(len(bhvr_payload))
+    # plot_trace_pitt(ax, bhvr_payload, title=tgt_session, trial=1)
+
+if mode == 'rtt':
+    # take 1st 10% of signal
+    bhvr_payload = load_bhvr_from_rtt(tgt_session, sample_strat=strat)
+    length = int(bhvr_payload['finger_pos'].shape[0] * 0.01)
+    plot_trace_rtt(
+        ax, bhvr_payload, title=session_paths[0], length=length,
+        key=DataKey.bhvr_vel,
+        # key='finger_pos',
+    )
+    title = strat if strat else 'no resample'
+    # ax.set_title(tgt_session.stem + ' ' + 'position')
+    ax.set_title(title)
 
 # bin size 5
 # `resample` better save for edge artifacts
@@ -131,3 +165,26 @@ ax.set_title(tgt_session.stem + ' ' + 'position')
 # bin size 20
 # `resample_poly` most similar to raw data, `decimate` slight offset, `resample` has edge artifacts as before
 # ? what the heck, where is all this data coming from..
+
+#%%
+
+# plot all sessions by loading behavior and calling `plot_trace`
+if mode == 'pitt':
+    fig, axs = plt.subplots(
+        ceil(len(session_paths) / 2), 2,
+        figsize=(10 * 2, 10 * ceil(len(session_paths) / 2))
+    )
+    for i, session_path in enumerate(session_paths):
+        bhvr_payload = load_bhvr_from_pitt(session_path, sample_strat=None)
+        plot_trace_pitt(axs.ravel()[i], bhvr_payload, title=session_path, trial=0)
+        plot_trace_pitt(axs.ravel()[i], bhvr_payload, title=session_path, trial=1)
+        # plot_trace_pitt(axs.ravel()[i], bhvr_payload, title=session_path, trial=2)
+
+if mode == 'rtt':
+    fig, axs = plt.subplots(
+        ceil(len(session_paths) / 2), 2,
+        figsize=(10 * 2, 10 * ceil(len(session_paths) / 2))
+    )
+    for i, session_path in enumerate(session_paths):
+        bhvr_payload = load_bhvr_from_rtt(session_path, sample_strat=None)
+        plot_trace_rtt(axs.ravel()[i], bhvr_payload, title=session_path, length=10000)
