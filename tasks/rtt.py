@@ -8,7 +8,7 @@ import torch
 import pandas as pd
 import h5py
 from scipy.interpolate import interp1d
-from scipy.signal import resample_poly
+import scipy.signal as signal
 
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
@@ -47,14 +47,20 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
             if cfg.odoherty_rtt.load_covariates:
                 covariate_sampling = 250 # Hz
                 def resample(data):
+                    # some notebook work in `data_viewer_kinematics` suggests resample_poly isn't great for 5ms
+                    # and there's edge artifacts for `resample`
+                    # but neither artifact visually survives the velocity gradient
+                    # so it shouldn't matter?
                     return torch.tensor(
-                        resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
+                        signal.resample(data, int(len(data) / covariate_sampling / (cfg.bin_size_ms / 1000)))
+                        # signal.resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
                     )
                 bhvr_vars = {}
-                for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
+                for bhvr in ['finger_pos']:
+                # for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
                     bhvr_vars[bhvr] = h5file[bhvr][()].T
                 # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
-                finger_vel = np.gradient(bhvr_vars['finger_pos'][..., :3], axis=0) # ignore orientation if present
+                finger_vel = np.gradient(bhvr_vars['finger_pos'][..., :2], axis=0) # ignore orientation if present
                 bhvr_vars[DataKey.bhvr_vel] = finger_vel
                 for bhvr in bhvr_vars:
                     bhvr_vars[bhvr] = resample(bhvr_vars[bhvr]).float()

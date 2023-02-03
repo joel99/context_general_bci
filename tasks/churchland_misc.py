@@ -71,6 +71,7 @@ class ChurchlandMiscLoader(ExperimentalTaskLoader):
     name = ExperimentalTask.churchland_misc
     r"""
     Churchland/Kaufman reaching data, from gdrive. Assorted extra sessions that don't overlap with DANDI release.
+    # ! Actually, the Jenkins/Reggie data here corresponds to Even-Chen's study on structure of delay in PMd. (Nitschke data unaccounted for)
 
     List of IDs
     # - register, make task etc

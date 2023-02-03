@@ -73,12 +73,9 @@ def create_spike_payload(spikes: torch.Tensor | np.ndarray, arrays_to_use: List[
         bin_factor = cfg.bin_size_ms // spike_bin_size_ms
         # crop first bit of trial to round off
         trial_spikes = trial_spikes[len(trial_spikes) % bin_factor:]
-        trial_spikes = rearrange(
-            trial_spikes,
-            '(t bin) c -> t bin c',
-            bin=bin_factor
+        trial_spikes = reduce(
+            trial_spikes, '(t bin) c -> t c 1', bin=bin_factor, reduction='sum'
         )
-        trial_spikes = reduce(trial_spikes, 't bin c -> t c 1', 'sum')
     elif spikes.ndim == 2:
         spikes = rearrange(spikes, 't c -> t c ()')
     spike_payload = {}

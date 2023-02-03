@@ -65,7 +65,7 @@ class DataAttrs:
     rtt_heldout_channel_count: int = 0 # Only for NLB, kinda hacky
     maze_heldout_channel_count: int = 0
 
-    behavior_dim: int = 3
+    behavior_dim: int = 2
     pad_token: int = 20 # this needs to be a value that definitely won't appear as a natural spike count for your used bin size.
     serve_tokens: bool = False # if true, serves flat data tokens with additional keys for annotations (e.g. array + timestep) instead of structured data (e.g. with array dimensions)
     serve_tokens_flat: bool = False

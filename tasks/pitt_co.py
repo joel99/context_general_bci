@@ -11,7 +11,7 @@ from scipy.io import loadmat
 
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, create_spike_payload
-from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry, create_spike_payload_from_arrays
+from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 from einops import rearrange, reduce
 
 import logging

@@ -5,6 +5,8 @@ from pathlib import Path
 import numpy as np
 import torch
 import pandas as pd
+from math import ceil
+
 import h5py
 from scipy.interpolate import interp1d
 from scipy.signal import resample_poly
@@ -18,6 +20,7 @@ from nlb_tools.nwb_interface import NWBDataset
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import logging
 
@@ -25,52 +28,77 @@ import pynwb
 from pynwb import TimeSeries, ProcessingModule, NWBFile, NWBHDF5IO
 from pynwb.core import MultiContainerInterface
 
-from nlb_tools.make_tensors import make_train_input_tensors, PARAMS, _prep_mask, make_stacked_array
-from contexts import context_registry
+from nlb_tools.make_tensors import PARAMS, _prep_mask, make_stacked_array
+from contexts import context_registry, ContextInfo
+from analyze_utils import prep_plt
 
 ## Load dataset
 
 dataset_name = 'odoherty_rtt-Loco-20170215_02'
+dataset_name = 'odoherty_rtt-Indy-20161005_06'
 context = context_registry.query(alias=dataset_name)
 datapath = context.datapath
 
 sampling_rate = 1000
 cfg = DatasetConfig()
+cfg.bin_size_ms = 20
 cfg.bin_size_ms = 5
-with h5py.File(datapath, 'r') as h5file:
-    orig_timestamps = np.squeeze(h5file['t'][:])
-    time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
-    if cfg.odoherty_rtt.load_covariates:
-        covariate_sampling = 250 # Hz
-        def resample(data):
-            return torch.tensor(
-                resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
-            )
-        bhvr_vars = {}
-        for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
-            bhvr_vars[bhvr] = h5file[bhvr][()].T
-        # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
-        finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
-        bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel)
-        for bhvr in bhvr_vars:
-            bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
+def load_bhvr_from_raw(datapath):
+    with h5py.File(datapath, 'r') as h5file:
+        orig_timestamps = np.squeeze(h5file['t'][:])
+        time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
+        if cfg.odoherty_rtt.load_covariates:
+            covariate_sampling = 250 # Hz
+            def resample(data):
+                return torch.tensor(
+                    resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
+                )
+            bhvr_vars = {}
+            for bhvr in ['finger_pos']:
+            # for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
+                bhvr_vars[bhvr] = h5file[bhvr][()].T
+            # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
+            finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
+            bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel)
+            for bhvr in bhvr_vars:
+                bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
+    return bhvr_vars
 #%%
-from analyze_utils import prep_plt
+ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
+session_paths = [ctx.datapath for ctx in ctxs]
 
-print(bhvr_vars.keys())
+def plot_trace(
+    ax, bhvr_payload,
+    length=2000,
+    title: Path | None = None,
+    key='finger_pos',
+    # key=DataKey.bhvr_vel,
+): # check baseline qualitative
+    # ax = prep_plt(ax)
+    finger_vel = bhvr_payload[key][:length]
+    ax.plot(finger_vel[:, 0], finger_vel[:, 1])
+    # ax.set_xlim(-0.2, 0.2)
+    # ax.set_ylim(-0.2, 0.2)
+    if title is not None:
+        ax.set_title(title.stem)
 
-finger_pos = bhvr_vars['finger_pos']
-print(finger_pos.shape)
-finger_pos = finger_pos[:200]
-finger_vel = bhvr_vars[DataKey.bhvr_vel]
-finger_vel = finger_vel[:200]
-ax = prep_plt()
-# ax.plot(np.diff(finger_pos[:,2]))
-# ax.plot(finger_pos[:,2])
-ax.plot(finger_vel[:,2])
+# plot all sessions by loading behavior and calling `plot_trace`
+fig, axs = plt.subplots(
+    ceil(len(session_paths) / 2), 2,
+    figsize=(10 * 2, 10 * ceil(len(session_paths) / 2))
+)
+for i, session_path in enumerate(session_paths):
+    bhvr_payload = load_bhvr_from_raw(session_path)
+    plot_trace(axs.ravel()[i], bhvr_payload, title=session_path)
 
 #%%
-from matplotlib import pyplot as plt
+f, ax = plt.subplots(1, 1, figsize=(10, 10))
+ax = prep_plt(ax=ax)
+bhvr_payload = load_bhvr_from_raw(session_paths[0])
+plot_trace(ax, bhvr_payload, title=session_paths[0])
+
+
+#%%
 # print(nwbfile.fields.keys())
 # print(nwbfile.subject)
 

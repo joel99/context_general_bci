@@ -21,6 +21,8 @@ class DelayReachLoader(ExperimentalTaskLoader):
     r"""
     - https://dandiarchive.org/dandiset/000121/0.210815.0703 Even-chen et al.
     - Delayed reaching, with PMd + M1; should contain preparatory dynamics.
+    # ! JY realizes now that the data scraped from gdrive in `churchland_misc` is exactly this data.
+    # ! We prefer to use standardized releases, so we should migrate at some point.
     TODO implement
     TODO subset with NWB loader
     """

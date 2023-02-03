@@ -329,7 +329,7 @@ class DatasetConfig:
 
     # Pad to this number of arrays (for meta and data alike). Must be >= 1
     max_arrays: int = 1
-    behavior_dim: int = 3
+    behavior_dim: int = 2
 
     serve_tokenized: bool = False # master flag for space time operator (in anticipation that space time will move to tokenized)
     # Tokenized == serve B T S H instead of B T A C H
