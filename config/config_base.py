@@ -42,6 +42,7 @@ class Output(Enum):
     spikes = 'spikes' # for debugging
 
     behavior = 'behavior'
+    behavior_pred = 'behavior_pred'
 
 class DataKey(Enum):
     # DataKey are time-varying and typically served with spikes
@@ -217,6 +218,8 @@ class ModelConfig:
     neurons_per_token: int = 1 # how many neurons to embed per token (only makes sense for token/project)
     # This needs to match neurons_per_token in data config if data is in serve_tokenized mode
     max_neuron_count: int = 21 # pretty safe upper bound on number of neurons that can be embedded. Must be > data.pad_value
+
+    causal: bool = False # Set this for fine-tuning
 
 @dataclass
 class ExperimentalConfig:

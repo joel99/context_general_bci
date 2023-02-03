@@ -115,7 +115,8 @@ class RTTDataConfig(DatasetConfig):
     r"""
         Default configuration for all RTT datasets
     """
-    bin_size_ms: int = 5
+    bin_size_ms: int = 20 # 20 is the new king...
+    # bin_size_ms: int = 5
     datasets: List[str] = field(default_factory=lambda: ['mc_rtt', 'odoherty_rtt.*'])
     max_channels: int = 98
     data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
@@ -186,7 +187,7 @@ class RTTDataConfig(DatasetConfig):
     r"""
         Default configuration for all maze datasets NLB fine-tuning
     """
-    bin_size_ms: int = 5
+    bin_size_ms: int = 20
     datasets: List[str] = field(default_factory=lambda: ['mc_rtt', 'odoherty_rtt.*'])
     max_channels: int = 98
     max_arrays: int = 1

@@ -1,15 +1,18 @@
 # @package _global_
-tag: rtt_causal
+tag: indy_rtt_scratch
 
 defaults:
-  - /model: pretrain_2x
+  - /model: pretrain
   - /dataset: rtt
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
   task:
-    tasks: [ModelTask.next_step_prediction]
+    tasks: [ModelTask.kinematic_decoding]
+    metrics: [Metric.kinematic_r2]
+  readin_compress: false
+  causal: True
 dataset:
   max_arrays: 1
   bin_size_ms: 20
@@ -24,17 +27,19 @@ dataset:
   - 'odoherty_rtt-Indy-2016102.*'
   - 'odoherty_rtt-Indy-201612.*'
   - 'odoherty_rtt-Indy-2017.*'
-  - 'mc_rtt'
-  eval_datasets:
-  - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
       arrays:
       - Indy-M1
       - Loco-M1
   data_keys:
   - DataKey.spikes
+  - DataKey.bhvr_vel
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+# init_from_id: rtt_causal-ankuy3ai
+train:
+  batch_size: 32
+  autoscale_batch_size: false

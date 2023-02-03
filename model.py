@@ -6,7 +6,7 @@ import torch
 from torch import nn, optim
 import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack, unpack # baby steps...
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, ListConfig, DictConfig
 import logging
 from pprint import pformat
 
@@ -56,6 +56,8 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg.readout_dim = cfg.hidden_size
         self.cfg.transformer.dropout = cfg.dropout
         self.cfg.transformer.transform_space = cfg.transform_space
+        if hasattr(self.cfg, 'causal'):
+            self.cfg.causal = getattr(self.cfg, 'causal') or ModelTask.next_step_prediction in self.cfg.task.tasks
 
         self.data_attrs = data_attrs
         assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"
@@ -99,7 +101,9 @@ class BrainBertInterface(pl.LightningModule):
         self_copy = self.cfg.copy()
         self_copy = OmegaConf.merge(ModelConfig(), self_copy) # backport novel config
         cfg = OmegaConf.merge(ModelConfig(), cfg)
+
         # Things that are allowed to change on init (actually most things should be allowed to change, but just register them explicitly here as needed)
+
         for safe_attr in [
             'task',
             'lr_init',
@@ -111,7 +115,7 @@ class BrainBertInterface(pl.LightningModule):
             'accelerate_new_params',
         ]:
             setattr(self_copy, safe_attr, getattr(cfg, safe_attr))
-
+        recursive_diff_log(self_copy, cfg)
         return self_copy != cfg
 
     def bind_io(self):
@@ -303,7 +307,9 @@ class BrainBertInterface(pl.LightningModule):
         transfer_data_attrs: DataAttrs = transfer_model.data_attrs
         transfer_cfg: ModelConfig = transfer_model.cfg
         if self.cfg.task != transfer_cfg.task:
-            logger.info(pformat(f'Task config updated from {transfer_cfg.task} to {self.cfg.task}'))
+            logger.info(pformat(f'Task config updating.. (first logged is new config)'))
+            recursive_diff_log(self.cfg.task, transfer_cfg.task)
+            #  from {transfer_cfg.task} to {self.cfg.task}'))
         def try_transfer(module_name: str):
             if (module := getattr(self, module_name, None)) is not None:
                 if (transfer_module := getattr(transfer_model, module_name, None)) is not None:
@@ -538,7 +544,7 @@ class BrainBertInterface(pl.LightningModule):
             temporal_context=temporal_context,
             temporal_padding_mask=temporal_padding_mask,
             space_padding_mask=space_padding_mask,
-            causal=ModelTask.next_step_prediction in self.cfg.task.tasks,
+            causal=getattr(self.cfg, 'causal', False),
         ) # B x T x S x H
         if outputs.isnan().any():
             import pdb;pdb.set_trace()
@@ -606,9 +612,10 @@ class BrainBertInterface(pl.LightningModule):
             raise NotImplementedError
         # there are data keys and meta keys, that might be coming in unbatched
         batch_shapes = {
-            DataKey.spikes: '* t a c h',
+            DataKey.spikes: '* t s h' if self.data_attrs.serve_tokens else '* t a c h',
             DataKey.heldout_spikes: '* t c h',
             DataKey.stim: '* t c h', # TODO review
+            DataKey.bhvr_vel: '* t h',
             MetaKey.session: '*',
             MetaKey.subject: '*',
             MetaKey.array: '* a',
@@ -710,7 +717,13 @@ class BrainBertInterface(pl.LightningModule):
     def common_log(self, metrics, prefix='', **kwargs):
         self.log(f'{prefix}_loss', metrics['loss'], **kwargs)
         for m in self.cfg.task.metrics:
-            self.log(f'{prefix}_{m.value}', metrics[m], **kwargs)
+            if m == Metric.kinematic_r2:
+                labels = ['x', 'y', 'z']
+                for i, r2 in enumerate(metrics[m]):
+                    self.log(f'{prefix}_{m.value}_{labels[i]}', r2, **kwargs)
+                self.log(f'{prefix}_{m.value}', metrics[m].mean(), **kwargs)
+            else:
+                self.log(f'{prefix}_{m.value}', metrics[m], **kwargs)
 
     def training_step(self, batch, batch_idx):
         metrics = self._step(batch)
@@ -814,6 +827,7 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
         "readout_strategy",
         "readout_dim",
         "readin_dim",
+        'causal', # TODO move to diff_cfg, this is temporary
     ]:
         setattr(target_cfg, attr, getattr(src_cfg, attr))
 
@@ -871,3 +885,19 @@ def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data
     new_cls.backbone.load_state_dict(old_model.backbone.state_dict())
     new_cls.transfer_io(old_model)
     return new_cls
+
+def recursive_diff_log(cfg1: DictConfig | ListConfig, cfg2: DictConfig | ListConfig, prefix=""):
+    # cfg intended as new, semantically
+    if not isinstance(cfg1, DictConfig): # Don't step into ListConfigs
+        if cfg1 != cfg2:
+            logger.info(f"{prefix} diff: {cfg1} vs {cfg2}")
+    else:
+        # iterate through attributes
+        for attr in cfg1:
+            if attr not in cfg2:
+                logger.info(f"cfg1 has {attr} but cfg2 does not")
+            else:
+                recursive_diff_log(getattr(cfg1, attr), getattr(cfg2, attr), prefix=attr)
+        for attr in cfg2:
+            if attr not in cfg1:
+                logger.info(f"cfg2 has {attr} but cfg1 does not")

@@ -44,7 +44,4 @@ model:
     - Metric.bps
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.token_add
-train:
-  batch_size: 16
-  accumulate_batches: 4
-sweep_cfg: base
+# sweep_cfg: base

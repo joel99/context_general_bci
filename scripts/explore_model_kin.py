@@ -17,90 +17,21 @@ from model import transfer_model, logger
 from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 from analyze_utils import prep_plt
 
-# wandb_run = get_wandb_run("maze_med-1j0loymb")
-query = "maze_small"
-query = "maze_med"
-# query = "maze_large"
-query = "maze_nlb"
-# query = "maze_med_ft"
-# query = "maze_small_ft"
-# query = "maze_large_ft"
-# query = "maze_all_256"
-# query = "maze_all"
-
-query = "maze_jenkins_stitch"
-# query = "maze_nlb_stitch_out"
-# query = "maze_nlb"
-
-# query = 'maze_med_20'
-
-# query = "rtt_all"
-# query = "rtt_all_256"
-# query = "rtt_nlb_infill_only"
-# query = 'rtt_nlb_07'
-# query = 'rtt_nlb_pt'
-
-# query = "rtt_indy_nlb"
-# query = "rtt_indy_nlb_stitch"
-# query = "rtt_indy1"
-# query = "rtt_indy2"
-# query = "rtt_indy2_noembed"
-# query = "rtt_all_sans_add"
-# query = "rtt_indy_sans_256_d01"
-# query = "rtt_indy_stitch"
-query = "rtt_all_256"
-query = "rtt_all_parity2"
-query = "st_rtt_16"
-
-query = 'factor_maze_8'
-query = "rtt_causal"
-# query = "factor_rtt_16"
-# query = "rtt_all_512"
-# query = "rtt_token_padded_nostitch"
-
-# query = 'test'
-
-# query = 'rtt_loco_d2'
-# query = 'rtt_loco_512'
-# query = 'rtt_loco_256_stitch'
-# query = 'test'
-
-# query = 'nitschke_token'
-# query = 'nitschke'
-# query = 'nitschke_single'
-
-# query = 'gallego_token'
-# query = 'gallego'
-# query = 'gallego_chewie'
-# query = 'gallego_chewie_single'
-
-# query = 'pitt_single'
-# query = 'pitt'
-# query = 'pitt_obs'
-# query = 'pitt_20'
-# query = 'pitt_obs_20'
-# query = 'pitt_obs_causal'
-
-# query = 'ks'
-# query = 'ks_ctx'
-
-# query = 'jenkins_misc'
-# query = 'reggie_misc'
+query = "indy_rtt"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 # cfg.model.task.tasks = [ModelTask.infill]
-cfg.model.task.metrics = [Metric.bps]
+cfg.model.task.metrics = [Metric.kinematic_r2]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
-cfg.model.task.outputs = [Output.logrates, Output.spikes]
-print(cfg.dataset.datasets)
-cfg.dataset.datasets = cfg.dataset.datasets[-1:]
+cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
+# cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
@@ -115,14 +46,6 @@ cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 if 'rtt' in query:
     cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
     # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
-if 'gallego' in query:
-    cfg.dataset.datasets = ['Chewie_CO_20150313']
-    cfg.dataset.datasets = ['Mihili_CO_20140304']
-if 'nitschke' in query:
-    cfg.dataset.datasets = ['churchland_misc_nitschke-1D8KYfy5IwMmEZaKOEv-7U6-4s-7cKINK']
-if 'pitt' in query:
-    cfg.dataset.datasets = ['CRS02bHome.data.00437']
-
 # cfg.dataset.eval_datasets = []
 print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
@@ -155,6 +78,34 @@ print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
+#%%
+# B T H
+# The predictions here are definitely not correct...
+# So why do we have low error?
+# ?
+trials = 1
+print(heldin_outputs[Output.behavior][0,:10,0])
+print(heldin_outputs[Output.behavior_pred][0,:10,0])
+print(heldin_outputs[Output.behavior].mean())
+print(heldin_outputs[Output.behavior].max())
+print(heldin_outputs[Output.behavior].min())
+# sns.histplot(heldin_outputs[Output.behavior].flatten())
+# sns.histplot(heldin_outputs[Output.behavior_pred].flatten())
+ax = prep_plt()
+sns.scatterplot(x=heldin_outputs[Output.behavior].flatten(), y=heldin_outputs[Output.behavior_pred].flatten(), ax=ax)
+#%%
+ax = prep_plt()
+colors = sns.color_palette('colorblind', 10)
+def plot_trial(trial, ax, color):
+    vel_true = heldin_outputs[Output.behavior][trial]
+    vel_pred = heldin_outputs[Output.behavior_pred][trial]
+    pos_true = vel_true.cumsum(0)
+    pos_pred = vel_pred.cumsum(0)
+    ax.plot(pos_true[:,0], pos_true[:,1], label='true', linestyle='-', color=color)
+    ax.plot(pos_pred[:,0], pos_pred[:,1], label='pred', linestyle='--', color=color)
+
+for i in range(trials):
+    plot_trial(i, ax, colors[i])
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]

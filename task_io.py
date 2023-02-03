@@ -231,8 +231,8 @@ class SelfSupervisedInfill(RatePrediction):
             })
             return batch
         is_masked = torch.bernoulli(
-            # torch.full(spikes.size()[:2], self.cfg.mask_ratio, device=spikes.device).unsqueeze(-1) # ! testing parity of serve_tokenized, tracing to this spatial masking; see `test2`, change back to re-enable spatial masking
-            torch.full(spikes.size()[:-2], self.cfg.mask_ratio, device=spikes.device)
+            torch.full(spikes.size()[:2], self.cfg.mask_ratio, device=spikes.device).unsqueeze(-1) # ! testing parity of serve_tokenized, tracing to this spatial masking; see `test2`, change back to re-enable spatial masking
+            # torch.full(spikes.size()[:-2], self.cfg.mask_ratio, device=spikes.device)
         ) # B T S or B Token - don't mask part of a token
         mask_type = torch.rand_like(is_masked)
         mask_token = mask_type < self.cfg.mask_token_ratio
@@ -260,9 +260,9 @@ class SelfSupervisedInfill(RatePrediction):
             time_shuffled_spikes = spikes.gather(1, random_draw.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, c, -1))
             spikes[mask_random] = time_shuffled_spikes[mask_random]
         else:
-            # if self.serve_tokens: # ! Testing parity, see above, change back to re-enable spatial masking
-            #     mask_random = mask_random.expand(-1, -1, spikes.size(2))
-            #     mask_token = mask_token.expand(-1, -1, spikes.size(2))
+            if self.serve_tokens: # ! Testing parity, see above, change back to re-enable spatial masking
+                mask_random = mask_random.expand(-1, -1, spikes.size(2))
+                mask_token = mask_token.expand(-1, -1, spikes.size(2))
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes[spikes != self.pad_value].max().int().item() + 1)
         spikes[mask_token] = 0 # use zero mask per NDT (Ye 21) # TODO revisit for spatial mode; not important in causal mode
         batch.update({
@@ -418,31 +418,48 @@ class BehaviorRegression(TaskPipeline):
             Because this is not intended to be a joint task, we will not make the decoder deep (expectation is tuning)
         """
         # For linear decoder, deal with multiple arrays by concatenating
-        self.decoder = nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)
+        if cfg.transform_space:
+            # raise NotImplementedError
+            self.decoder = nn.Sequential(
+                Rearrange('b t a s h -> b t (a s h)'),
+                nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token), data_attrs.behavior_dim)
+            )
+        else:
+            self.decoder = nn.Sequential(
+                Rearrange('b t a c -> b t (a c)'),
+                nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)
+            )
         self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
-        backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')
+        # backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')
         bhvr = self.decoder(backbone_features)
         if self.bhvr_lag_bins:
             bhvr = bhvr[:, :-self.bhvr_lag_bins]
-        bhvr = F.pad(bhvr, (0, 0, self.bhvr_lag_bins, 0), value=0)
+            bhvr = F.pad(bhvr, (0, 0, self.bhvr_lag_bins, 0), value=0)
+        if Output.behavior_pred in self.cfg.outputs:
+            batch_out[Output.behavior_pred] = bhvr
         if Output.behavior in self.cfg.outputs:
-            batch_out[Output.behavior] = bhvr
+            batch_out[Output.behavior] = batch[self.cfg.behavior_target]
         if not compute_metrics:
             return batch_out
         # Compute loss
         bhvr_tgt = batch[self.cfg.behavior_target]
         loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
         _, length_mask, _ = self.get_masks(batch, channel_key=None)
+
         length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
+
         batch_out['loss'] = loss[length_mask].mean()
         if Metric.kinematic_r2 in self.cfg.metrics:
-            import pdb;pdb.set_trace() # need to test
             valid_bhvr = bhvr[length_mask]
             valid_tgt = bhvr_tgt[length_mask]
-            batch_out[Metric.kinematic_r2] = r2_score(valid_bhvr, valid_tgt)
+            batch_out[Metric.kinematic_r2] = r2_score(valid_bhvr.detach().cpu(), valid_tgt.detach().cpu(), multioutput='raw_values')
+            # print(f'true: {bhvr_tgt[length_mask][:10,0]}')
+            # print(f'pred: {bhvr[length_mask][:10,0]}')
+            # print(f'loss: {loss[length_mask][:10,0]}')
+            # print(f'x_r2: {batch_out[Metric.kinematic_r2][0]}')
         return batch_out
 
 task_modules = {

@@ -483,7 +483,7 @@ class SpikingDataset(Dataset):
 
     def subset_by_key(self,
         key_values: List[Any], key: MetaKey | str=MetaKey.unique, allow_second_subset=True, na=None,
-        keep_index=False
+        keep_index=False, message_prefix="",
     ):
         r"""
             # ! In place
@@ -497,7 +497,7 @@ class SpikingDataset(Dataset):
         if na is not None:
             self.meta_df[key] = self.meta_df[key].fillna(na)
         subset = self.meta_df[key].isin(key_values)
-        logging.info(f"Subset dataset by {key} to {subset.sum()} / {len(self.meta_df)}")
+        logging.info(f"{message_prefix}: Subset dataset by {key} to {subset.sum()} / {len(self.meta_df)}")
         self.meta_df = self.meta_df[self.meta_df[key].isin(key_values)]
         self.meta_df = self.meta_df.reset_index(drop=True)
         if not keep_index:
@@ -524,9 +524,9 @@ class SpikingDataset(Dataset):
             self.build_context_index()
         train_keys, val_keys = self.tv_split_by_split_key(**kwargs)
         train = copy.deepcopy(self)
-        train.subset_by_key(train_keys, key=self.cfg.split_key, keep_index=True)
+        train.subset_by_key(train_keys, key=self.cfg.split_key, keep_index=True, message_prefix="Train:")
         val = copy.deepcopy(self)
-        val.subset_by_key(val_keys, key=self.cfg.split_key, keep_index=True)
+        val.subset_by_key(val_keys, key=self.cfg.split_key, keep_index=True, message_prefix="Val:")
         assert train.context_index == val.context_index, "Context index mismatch between train and val (some condition is unavailable, not supported)"
         return train, val
 
@@ -538,7 +538,7 @@ class SpikingDataset(Dataset):
 
     def subset_split(self, splits=['train'], keep_index=False):
         if 'split' in self.meta_df.columns:
-            self.subset_by_key(key_values=splits, key='split', na='train', keep_index=keep_index)
+            self.subset_by_key(key_values=splits, key='split', na='train', keep_index=keep_index, message_prefix=splits)
         else:
             logger.warning("No split column found, assuming all data is train.")
 
