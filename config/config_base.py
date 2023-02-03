@@ -353,6 +353,11 @@ class DatasetConfig:
     gallego_co: ExperimentalConfig = ExperimentalConfig()
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
     pitt_co: ExperimentalConfig = ExperimentalConfig()
+    observation: ExperimentalConfig = ExperimentalConfig()
+    ortho: ExperimentalConfig = ExperimentalConfig()
+    fbc: ExperimentalConfig = ExperimentalConfig()
+    delay_reach: ExperimentalConfig = ExperimentalConfig()
+
 
 
 @dataclass

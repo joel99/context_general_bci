@@ -1,5 +1,5 @@
 # @package _global_
-tag: indy_rtt
+tag: indy_scratch_decode
 
 defaults:
   - /model: pretrain
@@ -13,8 +13,6 @@ model:
     metrics: [Metric.kinematic_r2]
   readin_compress: false
   causal: True
-  lr_init: 5e-5
-  accelerate_new_params: 10.0
 dataset:
   max_arrays: 1
   bin_size_ms: 20
@@ -29,6 +27,8 @@ dataset:
   - 'odoherty_rtt-Indy-2016102.*'
   - 'odoherty_rtt-Indy-201612.*'
   - 'odoherty_rtt-Indy-2017.*'
+  eval_datasets:
+  - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
       arrays:
       - Indy-M1
@@ -41,7 +41,7 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-init_from_id: rtt_causal-ankuy3ai
+# init_from_id: rtt_causal-ankuy3ai
 train:
   batch_size: 32
   autoscale_batch_size: false

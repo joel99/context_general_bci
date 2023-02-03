@@ -42,6 +42,10 @@ class ExperimentalTaskRegistry:
         return cls._instance
 
     @classmethod
+    def register_manual(cls, name: ExperimentalTask, to_register: ExperimentalTaskLoader):
+        cls._loaders[name] = to_register
+
+    @classmethod
     def register(cls, to_register: ExperimentalTaskLoader):
         def wrap(to_register: ExperimentalTaskLoader):
             cls._loaders[to_register.name] = to_register

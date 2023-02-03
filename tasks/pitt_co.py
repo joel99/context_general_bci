@@ -8,7 +8,7 @@ import pandas as pd
 from pynwb import NWBHDF5IO
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
-
+from scipy.ndimage import gaussian_filter1d
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
@@ -116,6 +116,7 @@ class PittCOLoader(ExperimentalTaskLoader):
                 }
                 if 'position' in payload:
                     position = payload['position']
+                    position = gaussian_filter1d(position, 2.5, axis=0) # derived from iteration in `raw_data_viewer_kinematics.py`
                     vel = torch.tensor(np.gradient(position, axis=0)).float()
                     vel[vel.isnan()] = 0
                     assert cfg.bin_size_ms == 20, 'check out rtt code for resampling'
@@ -124,3 +125,9 @@ class PittCOLoader(ExperimentalTaskLoader):
                 meta_payload['path'].append(single_path)
                 torch.save(single_payload, single_path)
         return pd.DataFrame(meta_payload)
+
+
+# Register aliases
+ExperimentalTaskRegistry.register_manual(ExperimentalTask.observation, PittCOLoader)
+ExperimentalTaskRegistry.register_manual(ExperimentalTask.ortho, PittCOLoader)
+ExperimentalTaskRegistry.register_manual(ExperimentalTask.fbc, PittCOLoader)

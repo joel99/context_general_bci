@@ -27,6 +27,18 @@ dataset:
     arrays:
     - CRS02b-lateral_m1
     - CRS02b-medial_m1
+  observation:
+    arrays:
+    - CRS02b-lateral_m1
+    - CRS02b-medial_m1
+  ortho:
+    arrays:
+    - CRS02b-lateral_m1
+    - CRS02b-medial_m1
+  fbc:
+    arrays:
+    - CRS02b-lateral_m1
+    - CRS02b-medial_m1
   max_length_ms: 4000
   max_arrays: 2
   bin_size_ms: 20
@@ -50,5 +62,5 @@ model:
   array_embed_strategy: EmbedStrat.none
 init_from_id: pitt_obs_causal-57zb7o4m
 train:
-  batch_size: 32
+  batch_size: 32 # small batch, trying to stabilize training
   autoscale_batch_size: false
