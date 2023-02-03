@@ -336,7 +336,8 @@ class DatasetConfig:
     serve_tokenized_flat: bool = False # flatten space (serve spikes as B Token H instead of B T S H)
     neurons_per_token: int = 8 # for tokenized
     max_tokens: int = 1024 # for tokenized - note we will still respect max_length_ms (limit fills in space and then either this inferred time limit or the explicit one)
-    pad_value: int = 20
+    pad_value: int = 0
+    # pad_value: int = 20
 
     # Experimental Task configuration - matching registered names
     # Note - we choose to put task specific things here rather than ModelConfig as model will read the relevant variables
