@@ -320,11 +320,8 @@ class SpikingDataset(Dataset):
                             space += token_space
                         else:
                             if self.cfg.max_channels:
-                                array_group = torch.cat([
-                                    array_group, torch.full((
-                                        array_group.shape[0], self.cfg.max_channels - array_group.shape[-2], array_group.shape[2]
-                                    ), fill_value=self.pad_value, dtype=array_group.dtype)
-                                ], -2) # T C H
+                                pad_amount = self.cfg.max_channels - array_group.size(-2)
+                                array_group = F.pad(array_group, (0, 0, 0, pad_amount), value=self.pad_value)
                             array_spikes.append(rearrange(array_group, 't c h -> t () c h'))
                 if self.cfg.serve_tokenized:
                     data_items[k] = torch.cat(array_spikes, 1) # T x S x C x H

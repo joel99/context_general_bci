@@ -6,10 +6,9 @@ import numpy as np
 import torch
 import pandas as pd
 from pynwb import NWBHDF5IO
-from scipy.interpolate import interp1d
 
 from config import DataKey, DatasetConfig
-from subjects import SubjectInfo, SubjectArrayRegistry
+from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 from einops import rearrange, reduce
 
@@ -132,26 +131,9 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
             # trim to valid length and then reshape
             if cfg.churchland_maze.chop_size_ms > 0:
                 trial_spikes = trial_spikes[:cfg.churchland_maze.chop_size_ms]
-            elif trial_spikes.size(0) % cfg.bin_size_ms:
-                trial_spikes = trial_spikes[:-(trial_spikes.size(0) % cfg.bin_size_ms)]
             trial_spikes = trial_spikes[:cfg.churchland_maze.max_length_ms]
-            trial_spikes = rearrange(
-                trial_spikes,
-                '(t bin) c -> t bin c', bin=cfg.bin_size_ms
-            )
-            trial_spikes = reduce(trial_spikes, 't bin c -> t c 1', 'sum')
-            trial_spikes = trial_spikes.to(dtype=torch.uint8)
-            spike_payload = {}
-            for a in arrays_to_use:
-                array = SubjectArrayRegistry.query_by_array(a)
-                if array.is_exact:
-                    array = SubjectArrayRegistry.query_by_array_geometric(a)
-                    spike_payload[a] = trial_spikes[:, array.as_indices()].clone()
-                else:
-                    assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
-                    spike_payload[a] = trial_spikes.clone()
             single_payload = {
-                DataKey.spikes: spike_payload,
+                DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg=cfg),
             }
             single_path = cache_root / f'{t}.pth'
             meta_payload['path'].append(single_path)

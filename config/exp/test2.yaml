@@ -10,6 +10,7 @@ model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
   # token add not implemented for spacetime
+  # testing padding effect
 
   spike_embed_style: EmbedStrat.token
   neurons_per_token: 16
@@ -19,6 +20,7 @@ model:
     factorized_space_time: true
 dataset:
   serve_tokenized: true
+  pad_value: 0
   datasets:
   - 'odoherty_rtt-Indy-20161005_06'
   - 'odoherty_rtt-Indy-20160.*'

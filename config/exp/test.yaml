@@ -1,6 +1,6 @@
 # @package _global_
-tag: test
-# no token
+tag: test2
+# with token
 # Parity checking serve_tokenized
 defaults:
   - /model: pretrain_2x
@@ -18,7 +18,8 @@ model:
   transformer:
     factorized_space_time: true
 dataset:
-  serve_tokenized: false
+  serve_tokenized: true
+  pad_value: 0
   datasets:
   - 'odoherty_rtt-Indy-20161005_06'
   - 'odoherty_rtt-Indy-20160.*'
@@ -43,8 +44,8 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
   bin_size_ms: 20
-
   max_channels: 112
-
+  neurons_per_token: 16
+  max_tokens: 1024
 train:
   batch_size: 64

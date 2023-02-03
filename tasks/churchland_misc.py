@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 from scipy.io import loadmat
 from scipy.sparse import csc_matrix
 from config import DataKey, DatasetConfig
-from subjects import SubjectInfo, SubjectArrayRegistry
+from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 from einops import rearrange, reduce
 
@@ -92,30 +92,12 @@ class ChurchlandMiscLoader(ExperimentalTaskLoader):
         meta_payload['path'] = []
         arrays_to_use = context_arrays
         def save_raster(trial_spikes: torch.Tensor, trial_id: int):
-                # trim to valid length and then reshape
-                if trial_spikes.size(0) % cfg.bin_size_ms != 0:
-                    trial_spikes = trial_spikes[:-(trial_spikes.size(0) % cfg.bin_size_ms)]
-                trial_spikes = rearrange(
-                    trial_spikes,
-                    '(t bin) c -> t bin c', bin=cfg.bin_size_ms
-                )
-                trial_spikes = reduce(trial_spikes, 't bin c -> t c 1', 'sum')
-                trial_spikes = trial_spikes.to(dtype=torch.uint8)
-                spike_payload = {}
-                for a in arrays_to_use:
-                    array = SubjectArrayRegistry.query_by_array(a)
-                    if array.is_exact:
-                        array = SubjectArrayRegistry.query_by_array_geometric(a)
-                        spike_payload[a] = trial_spikes[:, array.as_indices()].clone()
-                    else:
-                        assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
-                        spike_payload[a] = trial_spikes.clone()
-                single_payload = {
-                    DataKey.spikes: spike_payload,
-                }
-                single_path = cache_root / f'{trial_id}.pth'
-                meta_payload['path'].append(single_path)
-                torch.save(single_payload, single_path)
+            single_payload = {
+                DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg=cfg),
+            }
+            single_path = cache_root / f'{trial_id}.pth'
+            meta_payload['path'].append(single_path)
+            torch.save(single_payload, single_path)
         # Ok, some are hdf5, some are mat (all masquerade with .mat endings)
         try:
             with h5py.File(datapath, 'r') as f:

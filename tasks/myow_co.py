@@ -14,7 +14,7 @@ import pandas as pd
 import torch
 
 from config import DataKey, DatasetConfig
-from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
+from subjects import SubjectInfo, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 
 from utils import loadmat
@@ -104,7 +104,7 @@ class DyerCOLoader(ExperimentalTaskLoader):
             # data_list['labels'].append(targets_binned[mask])
             # data_list['sequence'].append(id_binned[mask])
             single_payload = {
-                DataKey.spikes: create_spike_payload(torch.tensor(neurons_binned[mask]), arrays_to_use),
+                DataKey.spikes: create_spike_payload(neurons_binned[mask], arrays_to_use),
                 DataKey.bhvr_vel: torch.tensor(vel_binned[mask]),
                 # DataKey.bhvr_acc: torch.tensor(acc_binned[mask]),
                 # DataKey.bhvr_force: torch.tensor(force_binned[mask]),

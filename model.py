@@ -241,7 +241,8 @@ class BrainBertInterface(pl.LightningModule):
                 self.readin = nn.Linear(1, spike_embed_dim)
             elif self.cfg.spike_embed_style == EmbedStrat.token:
                 assert self.cfg.max_neuron_count > self.data_attrs.pad_token, "max neuron count must be greater than pad token"
-                self.readin = nn.Embedding(self.cfg.max_neuron_count, spike_embed_dim, padding_idx=self.data_attrs.pad_token) # I'm pretty confident we won't see more than 20 spikes in 20ms but we can always bump up
+                self.readin = nn.Embedding(self.cfg.max_neuron_count, spike_embed_dim, padding_idx=self.data_attrs.pad_token if self.data_attrs.pad_token else None) # I'm pretty confident we won't see more than 20 spikes in 20ms but we can always bump up
+                # Ignore pad token if set to 0 (we're doing 0 pad, not entirely legitimate but may be regularizing)
         else:
             if self.cfg.readin_strategy == EmbedStrat.project or self.cfg.readin_strategy == EmbedStrat.token:
                 # Token is the legacy default

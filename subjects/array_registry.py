@@ -3,8 +3,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from einops import rearrange, reduce
+from config import DatasetConfig
 from subjects import SubjectName, SubjectInfo, ArrayID, ArrayInfo, AliasArrayInfo, GeometricArrayInfo
-
 
 class SubjectArrayRegistry:
     instance = None
@@ -62,10 +63,26 @@ class SubjectArrayRegistry:
         return cls._subject_registry[id]
 
 
-def create_spike_payload(spikes: torch.Tensor, arrays_to_use: List[str]) -> Dict[str, torch.Tensor]:
+def create_spike_payload(spikes: torch.Tensor | np.ndarray, arrays_to_use: List[str], cfg: DatasetConfig | None = None, spike_bin_size_ms=1) -> Dict[str, torch.Tensor]:
+    r"""
+        spikes: full (dense) array from which to extract recording array structure; Time x Channels (x 1/features)
+    """
+    spikes = torch.as_tensor(spikes, dtype=torch.uint8)
+    if cfg:
+        assert cfg.bin_size_ms % spike_bin_size_ms == 0
+        bin_factor = cfg.bin_size_ms // spike_bin_size_ms
+        # crop first bit of trial to round off
+        trial_spikes = trial_spikes[len(trial_spikes) % bin_factor:]
+        trial_spikes = rearrange(
+            trial_spikes,
+            '(t bin) c -> t bin c',
+            bin=bin_factor
+        )
+        trial_spikes = reduce(trial_spikes, 't bin c -> t c 1', 'sum')
+    elif spikes.ndim == 2:
+        spikes = rearrange(spikes, 't c -> t c ()')
     spike_payload = {}
-    if spikes.ndim == 2:
-        spikes = spikes.unsqueeze(-1) # add dim for spike features
+
     for a in arrays_to_use:
         array = SubjectArrayRegistry.query_by_array(a)
         if array.is_exact:

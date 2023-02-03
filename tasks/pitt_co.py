@@ -10,8 +10,8 @@ from scipy.interpolate import interp1d
 from scipy.io import loadmat
 
 from config import DataKey, DatasetConfig
-from subjects import SubjectInfo, SubjectArrayRegistry
-from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
+from subjects import SubjectInfo, create_spike_payload
+from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry, create_spike_payload_from_arrays
 from einops import rearrange, reduce
 
 import logging
@@ -108,29 +108,10 @@ class PittCOLoader(ExperimentalTaskLoader):
         for i, fname in enumerate(datapath.glob("*.mat")):
             if fname.stem.startswith('QL.Task'):
                 payload = load_trial(fname)
-                trial_spikes = payload['spikes']
-                # import pdb;pdb.set_trace()
-                assert cfg.bin_size_ms % payload['bin_size_ms'] == 0
-                bin_factor = cfg.bin_size_ms // payload['bin_size_ms']
-                # crop
-                trial_spikes = trial_spikes[len(trial_spikes) % bin_factor:]
-                trial_spikes = rearrange(
-                    trial_spikes,
-                    '(t bin) c -> t bin c', bin=bin_factor
-                )
-                trial_spikes = reduce(trial_spikes, 't bin c -> t c 1', 'sum')
-                trial_spikes = trial_spikes.to(dtype=torch.uint8)
-                spike_payload = {}
-                for a in arrays_to_use:
-                    array = SubjectArrayRegistry.query_by_array(a)
-                    if array.is_exact:
-                        array = SubjectArrayRegistry.query_by_array_geometric(a)
-                        spike_payload[a] = trial_spikes[:, array.as_indices()].clone()
-                    else:
-                        assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
-                        spike_payload[a] = trial_spikes.clone()
                 single_payload = {
-                    DataKey.spikes: spike_payload,
+                    DataKey.spikes: create_spike_payload(
+                        payload['spikes'], arrays_to_use, cfg, payload['bin_size_ms']
+                    ),
                 }
                 if 'position' in payload:
                     position = payload['position']

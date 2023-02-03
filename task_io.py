@@ -231,7 +231,8 @@ class SelfSupervisedInfill(RatePrediction):
             })
             return batch
         is_masked = torch.bernoulli(
-            torch.full(spikes.size()[:2], self.cfg.mask_ratio, device=spikes.device).unsqueeze(-1) # ! testing parity of serve_tokenized, tracing to this spatial masking; see `test2`, change back to re-enable spatial masking
+            # ! Spatial-masking seems slightly worse on RTT, revisit with tuning + neuron dropout
+            torch.full(spikes.size()[:2], self.cfg.mask_ratio, device=spikes.device).unsqueeze(-1)
             # torch.full(spikes.size()[:-2], self.cfg.mask_ratio, device=spikes.device)
         ) # B T S or B Token - don't mask part of a token
         mask_type = torch.rand_like(is_masked)
@@ -260,7 +261,7 @@ class SelfSupervisedInfill(RatePrediction):
             time_shuffled_spikes = spikes.gather(1, random_draw.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, c, -1))
             spikes[mask_random] = time_shuffled_spikes[mask_random]
         else:
-            if self.serve_tokens: # ! Testing parity, see above, change back to re-enable spatial masking
+            if self.serve_tokens: # ! Spatial-masking seems slightly worse on RTT, revisit with tuning + neuron dropout
                 mask_random = mask_random.expand(-1, -1, spikes.size(2))
                 mask_token = mask_token.expand(-1, -1, spikes.size(2))
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes[spikes != self.pad_value].max().int().item() + 1)

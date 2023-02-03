@@ -19,7 +19,7 @@ from pynwb import NWBFile, NWBHDF5IO, TimeSeries, ProcessingModule
 from pynwb.core import MultiContainerInterface, NWBDataInterface
 
 from config import DataKey, DatasetConfig, MetaKey
-from subjects import SubjectInfo, SubjectName, SubjectArrayRegistry
+from subjects import SubjectInfo, SubjectName, SubjectArrayRegistry, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 TrialNum = int
 MetadataKey = str
@@ -92,17 +92,8 @@ class NLBLoader(ExperimentalTaskLoader):
         for trial in range(train_spikes_heldin.shape[0]):
             spikes = rearrange(train_spikes_heldin[trial], 't c -> t c 1')
             heldout_spikes = rearrange(train_spikes_heldout[trial], 't c -> t c 1')
-            spike_payload = {}
-            for a in arrays_to_use:
-                array = SubjectArrayRegistry.query_by_array(a)
-                if array.is_exact:
-                    array = SubjectArrayRegistry.query_by_array_geometric(a) # get some typing
-                    spike_payload[a] = spikes[:, array.as_indices()].clone()
-                else:
-                    assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
-                    spike_payload[a] = spikes.clone()
             single_payload = {
-                DataKey.spikes: spike_payload,
+                DataKey.spikes: create_spike_payload(spikes, arrays_to_use),
                 DataKey.heldout_spikes: heldout_spikes.clone()
             }
             single_path = cache_root / f"{trial}.pth"
@@ -112,17 +103,8 @@ class NLBLoader(ExperimentalTaskLoader):
         trial_count = train_spikes_heldin.shape[0]
         for trial in range(test_spikes_heldin.shape[0]):
             spikes = rearrange(test_spikes_heldin[trial], 't c -> t c 1')
-            spike_payload = {}
-            for a in arrays_to_use:
-                array = SubjectArrayRegistry.query_by_array(a)
-                if array.is_exact:
-                    array = SubjectArrayRegistry.query_by_array_geometric(a)
-                    spike_payload[a] = spikes[:, array.as_indices()].clone()
-                else:
-                    assert len(arrays_to_use) == 1, "Can't use multiple arrays with non-exact arrays"
-                    spike_payload[a] = spikes.clone()
             single_payload = {
-                DataKey.spikes: spike_payload,
+                DataKey.spikes: create_spike_payload(spikes, arrays_to_use),
             }
             single_path = cache_root / f"test_{trial_count + trial}.pth"
             meta_payload['path'].append(single_path)
