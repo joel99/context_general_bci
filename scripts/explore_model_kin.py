@@ -17,7 +17,8 @@ from model import transfer_model, logger
 from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 from analyze_utils import prep_plt
 
-query = "indy_rtt"
+query = "indy_base_decode"
+query = "pitt_obs_decode"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -95,7 +96,8 @@ ax = prep_plt()
 sns.scatterplot(x=heldin_outputs[Output.behavior].flatten(), y=heldin_outputs[Output.behavior_pred].flatten(), ax=ax)
 #%%
 ax = prep_plt()
-colors = sns.color_palette('colorblind', 10)
+trials = 4
+colors = sns.color_palette('colorblind', trials)
 def plot_trial(trial, ax, color):
     vel_true = heldin_outputs[Output.behavior][trial]
     vel_pred = heldin_outputs[Output.behavior_pred][trial]
