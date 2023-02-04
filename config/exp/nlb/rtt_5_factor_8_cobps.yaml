@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: rtt_5_factor_8_cobps
 
 defaults:
   - /model: pretrain_2x

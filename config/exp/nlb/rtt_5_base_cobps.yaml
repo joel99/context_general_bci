@@ -1,5 +1,5 @@
 # @package _global_
-tag: test
+tag: rtt_5_base_cobps
 
 defaults:
   - /model: pretrain_2x
@@ -19,12 +19,6 @@ model:
     - Metric.block_co_bps
   accelerate_new_params: 10.0
   lr_init: 5e-5
-
-  spike_embed_style: EmbedStrat.token
-  neurons_per_token: 8
-  transform_space: true
-  transformer:
-    factorized_space_time: true
 dataset:
   datasets:
   - 'mc_rtt'
@@ -38,6 +32,6 @@ dataset:
   - MetaKey.subject
   bin_size_ms: 5
 
-  max_channels: 104
-  # max_channels: 98
-init_from_id: rtt_5_factor-jdbk361g
+  # max_channels: 104
+  max_channels: 98
+init_from_id: rtt_5_base-8xqtga7w

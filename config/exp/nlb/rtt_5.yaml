@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_nlb_07
+tag: rtt_5
 
 defaults:
   - /model: pretrain_small

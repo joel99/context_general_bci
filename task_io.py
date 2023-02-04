@@ -128,6 +128,7 @@ class RatePrediction(TaskPipeline):
         channel_count: int,
         cfg: ModelConfig,
         data_attrs: DataAttrs,
+        decoder: nn.Module | None = None,
     ):
         super().__init__(
             backbone_out_size=backbone_out_size,
@@ -136,25 +137,28 @@ class RatePrediction(TaskPipeline):
             data_attrs=data_attrs
         )
         self.cfg = cfg.task
-        readout_size = cfg.neurons_per_token if cfg.transform_space else channel_count
-        if getattr(self.cfg, 'unique_no_head', False):
-            decoder_layers = []
-        elif getattr(self.cfg, 'linear_head', False):
-            decoder_layers = [nn.Linear(backbone_out_size, readout_size)]
+        if decoder is not None:
+            self.out = decoder
         else:
-            decoder_layers = [
-                nn.Linear(backbone_out_size, backbone_out_size),
-                nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
-                nn.Linear(backbone_out_size, readout_size)
-            ]
+            readout_size = cfg.neurons_per_token if cfg.transform_space else channel_count
+            if getattr(self.cfg, 'unique_no_head', False):
+                decoder_layers = []
+            elif getattr(self.cfg, 'linear_head', False):
+                decoder_layers = [nn.Linear(backbone_out_size, readout_size)]
+            else:
+                decoder_layers = [
+                    nn.Linear(backbone_out_size, backbone_out_size),
+                    nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+                    nn.Linear(backbone_out_size, readout_size)
+                ]
 
-        if not cfg.lograte:
-            decoder_layers.append(nn.ReLU())
+            if not cfg.lograte:
+                decoder_layers.append(nn.ReLU())
 
-        if cfg.transform_space and not self.serve_tokens: # if serving as tokens, then target has spatial dim
-            # after projecting, concatenate along the group dimension to get back into channel space
-            decoder_layers.append(Rearrange('b t a s_a c -> b t a (s_a c)'))
-        self.out = nn.Sequential(*decoder_layers)
+            if cfg.transform_space and not self.serve_tokens: # if serving as tokens, then target has no array dim
+                # after projecting, concatenate along the group dimension to get back into channel space
+                decoder_layers.append(Rearrange('b t a s_a c -> b t a (s_a c)'))
+            self.out = nn.Sequential(*decoder_layers)
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
 
     @torch.no_grad()
@@ -363,17 +367,35 @@ class HeldoutPrediction(RatePrediction):
     def __init__(
         self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
     ):
+        self.concatenating = cfg.transform_space and not data_attrs.serve_tokens
+        if self.concatenating:
+            # It takes too much memory to concatenate full length tokens x however many tokens there are
+            # Project down to neuron dim first.
+            decoder_layers = [
+                nn.Linear(backbone_out_size, backbone_out_size),
+                nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+                nn.Linear(backbone_out_size, cfg.neurons_per_token),
+                Rearrange('b t a s_a c -> b t (a s_a c)'),
+                nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+                nn.Linear(data_attrs.max_arrays * data_attrs.max_channel_count, channel_count),
+            ]
+            if not cfg.lograte:
+                decoder_layers.append(nn.ReLU())
+            decoder = nn.Sequential(*decoder_layers)
+        else:
+            backbone_out_size = backbone_out_size * data_attrs.max_arrays
+            decoder = None
         super().__init__(
-            backbone_out_size=backbone_out_size * data_attrs.max_arrays,
+            backbone_out_size=backbone_out_size,
             channel_count=channel_count,
             cfg=cfg,
             data_attrs=data_attrs,
+            decoder=decoder
         )
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
-        # torch.autograd.set_detect_anomaly(True)
-        backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
-        # backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')
+        if not self.concatenating:
+            backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.heldout_logrates in self.cfg.outputs:
@@ -419,8 +441,7 @@ class BehaviorRegression(TaskPipeline):
             Because this is not intended to be a joint task, we will not make the decoder deep (expectation is tuning)
         """
         # For linear decoder, deal with multiple arrays by concatenating
-        if cfg.transform_space:
-            # raise NotImplementedError
+        if cfg.transform_space and not data_attrs.serve_tokens:
             self.decoder = nn.Sequential(
                 Rearrange('b t a s h -> b t (a s h)'),
                 nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token), data_attrs.behavior_dim)
