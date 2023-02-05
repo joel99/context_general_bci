@@ -14,7 +14,7 @@ from tasks import ExperimentalTask
 from matplotlib import pyplot as plt
 import seaborn as sns
 from omegaconf import OmegaConf
-from analyze_utils import prep_plt
+from analyze_utils import prep_plt, wandb_query_latest, load_wandb_run
 
 mode = 'rtt'
 mode = 'pitt'
@@ -28,14 +28,19 @@ print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 
-default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
+sample_query = mode # just pull the latest run
+wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
+_, cfg, _ = load_wandb_run(wandb_run, tag='val_loss')
+default_cfg = cfg.dataset
+# default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 # default_cfg.data_keys = [DataKey.spikes]
 default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 # default_cfg.bin_size_ms = 5
-default_cfg.bin_size_ms = 20
+# default_cfg.bin_size_ms = 20
+# print(default_cfg.datasets )
+# default_cfg.datasets = [context.alias]
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 # default_cfg.max_channels = 250
-default_cfg.datasets = [context.alias]
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
 
@@ -57,7 +62,9 @@ trial_pos = trial_pos - trial_pos[0]
 # # Plot
 fig, ax = plt.subplots(2, 1, sharex=True)
 ax[0].plot(trial_vel)
+ax[0].set_title('Velocity')
 ax[1].plot(trial_pos)
+ax[1].set_title('Position')
 
 #%%
 trial = 10

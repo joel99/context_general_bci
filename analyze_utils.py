@@ -111,6 +111,7 @@ def wandb_query_latest(
     wandb_project='context_general_bci',
     exact=False,
     allow_running=False,
+    use_display=False, # use exact name
     **filter_kwargs
 ) -> List[Any]: # returns list of wandb run objects
     # One can imagine moving towards a world where we track experiment names in config and query by experiment instead of individual variants...
@@ -122,8 +123,7 @@ def wandb_query_latest(
     if allow_running:
         states.append("running")
     filters = {
-        # "display_name": Target,
-        "config.tag": target,
+        "display_name" if use_display else "config.tag": target,
         "state": {"$in": states}, # crashed == timeout
         **filter_kwargs
     }

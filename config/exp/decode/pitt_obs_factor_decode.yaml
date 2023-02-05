@@ -1,12 +1,24 @@
 # @package _global_
 
-tag: test
+tag: pitt_obs_factor_decode
 
 defaults:
   - /model: pretrain
   - /train: pretrain
 dataset:
   datasets:
+  - CRS02bHome.data.00329
+  - CRS02bHome.data.00336
+  - CRS02bHome.data.00339
+  - CRS02bHome.data.00345
+  - CRS02bHome.data.00360
+  - CRS02bHome.data.00371
+  - CRS02bHome.data.00402
+  - CRS02bHome.data.00422
+  - CRS02bHome.data.00424
+  - CRS02bHome.data.00437
+  # - CRS02bHome.data.00445
+  eval_datasets:
   - CRS02bHome.data.00437
   data_keys:
   - DataKey.spikes
@@ -39,21 +51,22 @@ dataset:
   - MetaKey.subject
 model:
   causal: True
-  # accelerate_new_params: 10.0
-  lr_init: 2e-4
-  lr_schedule: fixed
-  # lr_init: 5e-5
+  lr_init: 3e-4
   task:
     tasks:
     - ModelTask.kinematic_decoding
     metrics:
     - Metric.kinematic_r2
-  session_embed_strategy: EmbedStrat.none
-  subject_embed_strategy: EmbedStrat.none
+  subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
+
+  spike_embed_style: EmbedStrat.token
+  neurons_per_token: 8 # we've got 192 tokens
+  hidden_size: 128
+  transform_space: true
+  transformer:
+    factorized_space_time: true
 train:
-  batch_size: 1 # small batch, trying to stabilize training
-  autoscale_batch_size: false
-  epochs: 10000
-  patience: 10000
-  overfit_batches: true
+  epochs: 100000
+  patience: 5000
+sweep_cfg: small_wide

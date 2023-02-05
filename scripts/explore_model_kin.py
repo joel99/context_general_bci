@@ -18,10 +18,13 @@ from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_quer
 from analyze_utils import prep_plt
 
 query = "indy_base_decode"
-query = "pitt_obs_decode"
-
+# query = "pitt_obs_decode"
+query = "pitt_obs_decode_scratch"
+query = "test_overfit"
+query = "pitt_obs_decode_scratch-sweep-small_wide-7ycit09t"
+# query = "pitt_obs_decode_scratch-sweep-small_wide-t1h7knvd"
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
-wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
+wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
@@ -33,22 +36,13 @@ cfg.model.task.metrics = [Metric.kinematic_r2]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
-# cfg.dataset.datasets = ['mc_maze$']
-# cfg.dataset.datasets = ['mc_maze_large']
-# cfg.dataset.datasets = ['mc_maze_medium']
-# cfg.dataset.datasets = ['mc_maze_small']
-# cfg.dataset.datasets = ['churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI']
-# cfg.dataset.datasets = ['churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG']
-# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
-# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170214_02']
-# cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
 
 # cfg.dataset.datasets = ['mc_rtt']
 if 'rtt' in query:
     cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
     # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
-# cfg.dataset.eval_datasets = []
-print(cfg.dataset.datasets)
+cfg.dataset.eval_datasets = []
+# print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets:
     dataset.subset_split(splits=['eval'])
@@ -57,13 +51,9 @@ else:
 dataset.build_context_index()
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
-# data_attrs.context.session = ['ExperimentalTask.odoherty_rtt-Indy-20161014_04'] # definitely using..
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
-# print(context_registry.query(alias='Mihi'))
-# model.cfg.task.outputs = [Output.heldout_logrates]
-# model.cfg.task.metrics = [Metric.bps]
 def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,
@@ -94,6 +84,15 @@ print(heldin_outputs[Output.behavior].min())
 # sns.histplot(heldin_outputs[Output.behavior_pred].flatten())
 ax = prep_plt()
 sns.scatterplot(x=heldin_outputs[Output.behavior].flatten(), y=heldin_outputs[Output.behavior_pred].flatten(), ax=ax)
+ax.set_xlabel('bhvr')
+ax.set_ylabel('pred')
+#%%
+ax = prep_plt()
+sns.histplot(heldin_outputs[Output.behavior_pred].flatten(), ax=ax, bins=20)
+# sns.histplot(heldin_outputs[Output.behavior].flatten(), ax=ax, bins=20)
+ax.set_yscale('log')
+ax.set_title('Distribution of velocity predictions')
+# ax.set_title('Distribution of velocity targets')
 #%%
 ax = prep_plt()
 trials = 4

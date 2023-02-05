@@ -163,6 +163,7 @@ def run_exp(cfg : RootConfig) -> None:
         accelerator='gpu',
         devices=torch.cuda.device_count(),
         check_val_every_n_epoch=1,
+        log_every_n_steps=cfg.train.log_every_n_steps,
         # val_check_interval=cfg.train.val_check_interval,
         callbacks=callbacks,
         default_root_dir=cfg.default_root_dir,
@@ -172,6 +173,7 @@ def run_exp(cfg : RootConfig) -> None:
         gradient_clip_val=cfg.train.gradient_clip_val,
         accumulate_grad_batches=cfg.train.accumulate_batches,
         profiler=cfg.train.profiler if cfg.train.profiler else None,
+        overfit_batches=1 if cfg.train.overfit_batches else 0
     )
 
     if torch.cuda.device_count() <= 1 or trainer.global_rank == 0:

@@ -48,7 +48,30 @@ sweep_space = {
         "seed": {
             'feasible_points': [0, 1, 2]
         },
-    }
+    },
+    "small_wide": {
+        # we will use a fixed 6-layer architecture for now, sweep hidden.
+        "model.hidden_size": {
+            'feasible_points': [128, 192, 256]
+        },
+        "model.lr_init": {
+            'min': 1e-4,
+            'max': 5e-3, # models reliably crash past 1e-2
+            # 'max': 5e-2,
+            'scaling': 'log',
+        },
+        "model.weight_decay": {
+            'min': 1e-3,
+            'max': 5e-2,
+            'scaling': 'log',
+        },
+        "model.dropout": {
+            'feasible_points': [0.1, 0.2, 0.3]
+        },
+        "seed": {
+            'feasible_points': [0, 1, 2]
+        },
+    },
 }
 
 r"""

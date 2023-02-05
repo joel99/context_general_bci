@@ -444,7 +444,7 @@ class BehaviorRegression(TaskPipeline):
         if cfg.transform_space and not data_attrs.serve_tokens:
             self.decoder = nn.Sequential(
                 Rearrange('b t a s h -> b t (a s h)'),
-                nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token), data_attrs.behavior_dim)
+                nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token) * data_attrs.max_arrays, data_attrs.behavior_dim)
             )
         else:
             self.decoder = nn.Sequential(
@@ -472,7 +472,6 @@ class BehaviorRegression(TaskPipeline):
         _, length_mask, _ = self.get_masks(batch, channel_key=None)
 
         length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
-
         batch_out['loss'] = loss[length_mask].mean()
         if Metric.kinematic_r2 in self.cfg.metrics:
             valid_bhvr = bhvr[length_mask]

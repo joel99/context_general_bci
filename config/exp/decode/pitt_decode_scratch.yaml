@@ -1,12 +1,15 @@
 # @package _global_
 
-tag: test
+tag: pitt_decode_scratch
 
 defaults:
   - /model: pretrain
+  # - /model: pretrain_2x
   - /train: pretrain
 dataset:
   datasets:
+  - CRS02bHome.data.*
+  eval_datasets:
   - CRS02bHome.data.00437
   data_keys:
   - DataKey.spikes
@@ -37,23 +40,24 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+  - MetaKey.task
 model:
   causal: True
   # accelerate_new_params: 10.0
   lr_init: 2e-4
-  lr_schedule: fixed
   # lr_init: 5e-5
+  # lr_schedule: fixed
   task:
     tasks:
     - ModelTask.kinematic_decoding
     metrics:
     - Metric.kinematic_r2
-  session_embed_strategy: EmbedStrat.none
   subject_embed_strategy: EmbedStrat.none
+  # subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
 train:
-  batch_size: 1 # small batch, trying to stabilize training
+  batch_size: 32 # small batch, trying to stabilize training
   autoscale_batch_size: false
-  epochs: 10000
-  patience: 10000
-  overfit_batches: true
+  epochs: 100000
+  patience: 5000
+sweep_cfg: small_wide

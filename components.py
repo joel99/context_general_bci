@@ -478,7 +478,7 @@ class SpaceTimeTransformer(nn.Module):
             padding_mask = make_padding_mask(b, t, s, src, temporal_context, space_padding_mask)
             padding_mask = rearrange(padding_mask, 'b t s -> b (t s)')
             # Trial context is never padded
-            if len(trial_context) > 0:
+            if trial_context is not None:
                 padding_mask = F.pad(padding_mask, (0, trial_context.size(-2)), value=False)
             # import pdb;pdb.set_trace()
             # print(t, s, contextualized_src.size(), src_mask.size(), padding_mask.size())

@@ -420,9 +420,10 @@ class SpikingDataset(Dataset):
                     if max_bins and isinstance(k, DataKey):
                         # Leading dimension for DataKeys should be time
                         crop_seq = [b[k][-max_bins:] for b in batch] # terminal crop - most trials have long start paddings (e.g. Gallego)
-                    if k == DataKey.spikes: # T A C H
-                        stack_batch[k] = pad_sequence(crop_seq, batch_first=True)
+                    if k == DataKey.spikes:
                         stack_batch[LENGTH_KEY] = torch.tensor([cs.shape[0] for cs in crop_seq])
+                    if k in [DataKey.spikes, DataKey.bhvr_vel]: # T A C H
+                        stack_batch[k] = pad_sequence(crop_seq, batch_first=True)
                     else:
                         stack_batch[k] = torch.stack(crop_seq, 0)
                 return stack_batch
