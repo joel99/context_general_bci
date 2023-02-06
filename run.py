@@ -53,6 +53,13 @@ reset_early_stop = True # todo move into config
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
     # Check for sweeping. Note we process data above because I never intend to sweep over data config.
+    if cfg.tag == "":
+        r"""
+            JY is used to having experimental variant names tracked with filename (instead of manually setting tags)
+            take sys.argv and set the tag to the query. Only set it if we're not sweeping (where tag was already explicitly set)
+        """
+        cfg.tag = sys.argv[sys.argv.index('run.py')+1]
+        cfg.tag = cfg.tag[cfg.tag.index('=') + 1 if '=' in cfg.tag else 0:]
     if cfg.sweep_cfg and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
         sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
         for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
@@ -67,7 +74,6 @@ def run_exp(cfg : RootConfig) -> None:
             # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
             subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
         exit(0)
-
 
     logger = logging.getLogger(__name__)
     logger.info(f"Running NDT2, dumping config:")
@@ -182,6 +188,7 @@ def run_exp(cfg : RootConfig) -> None:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
         if os.environ.get('SLURM_JOB_ID'):
             wandb.run.notes = f"SLURM_JOB_ID={os.environ['SLURM_JOB_ID']}"
+            cfg.slurm_id = int(os.environ['SLURM_JOB_ID'])
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
         wandb.config.update({'data_attrs': dataclasses.asdict(data_attrs)})
         # Of course now I find these

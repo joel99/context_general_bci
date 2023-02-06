@@ -1,7 +1,5 @@
 # @package _global_
 
-tag: test_overfit
-
 defaults:
   - /model: pretrain
   - /train: pretrain
