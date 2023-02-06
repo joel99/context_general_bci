@@ -43,3 +43,4 @@ dataset:
 
   max_channels: 138
   # max_channels: 98
+load_from_id: rtt_maze_5_factor_2-srnflb1z

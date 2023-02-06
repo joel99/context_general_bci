@@ -1,8 +1,8 @@
 # @package _global_
-tag: rtt_5_factor_4
-
+tag: dandi_small_factor_16
+# small in time
 defaults:
-  - /model: pretrain_2x
+  - /model: pretrain
   - /dataset: rtt
   - /train: pretrain
 model:
@@ -11,24 +11,22 @@ model:
   # token add not implemented for spacetime
 
   spike_embed_style: EmbedStrat.token
-  neurons_per_token: 4
-  hidden_size: 256
+  neurons_per_token: 16
+  hidden_size: 128
   transform_space: true
   transformer:
     factorized_space_time: true
 dataset:
+  max_arrays: 1
+  churchland_maze:
+    arrays:
+    - Nitschke-M1
+    - Jenkins-M1
   datasets:
-  - 'odoherty_rtt-Indy-20161005_06'
-  - 'odoherty_rtt-Indy-20160.*'
-  - 'odoherty_rtt-Indy-20161006.*'
-  - 'odoherty_rtt-Indy-20161007.*'
-  - 'odoherty_rtt-Indy-2016101.*'
-  - 'odoherty_rtt-Indy-2016102.*'
-  - 'odoherty_rtt-Indy-201612.*'
-  - 'odoherty_rtt-Indy-2017.*'
-  - 'mc_rtt'
+  - churchland_maze_jenkins-0
+  - churchland_maze_jenkins-1
   eval_datasets:
-  - 'mc_rtt'
+  - 'churchland_maze_jenkins-0'
   odoherty_rtt:
       arrays:
       - Indy-M1
@@ -40,7 +38,14 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-  bin_size_ms: 5
+  bin_size_ms: 20
 
-  max_channels: 100
-load_from_id: rtt_5_factor_4-cat9untx
+  max_channels: 144
+
+# disabled 2/5/13 for comparing with ablation
+# train:
+#   batch_size: 64
+#   # accumulate_batches: 1
+#   accumulate_batches: 4
+#   autoscale_batch_size: false
+# sweep_cfg: base

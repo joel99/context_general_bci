@@ -1,5 +1,5 @@
 # @package _global_
-tag: rtt_5_factor_4
+tag: rtt_5_factor_1_multi
 
 defaults:
   - /model: pretrain_2x
@@ -11,7 +11,7 @@ model:
   # token add not implemented for spacetime
 
   spike_embed_style: EmbedStrat.token
-  neurons_per_token: 4
+  neurons_per_token: 1
   hidden_size: 256
   transform_space: true
   transformer:
@@ -42,5 +42,9 @@ dataset:
   - MetaKey.subject
   bin_size_ms: 5
 
-  max_channels: 100
-load_from_id: rtt_5_factor_4-cat9untx
+  max_channels: 98
+train:
+  # DDP doesn't support autoscale as of 2/6/23. Workflow is to manually launch a single GPU run; check batch size, load here.
+  autoscale_batch_size: false
+  batch_size: 4
+load_from_id: rtt_5_factor_1_multi-j1vknwc8

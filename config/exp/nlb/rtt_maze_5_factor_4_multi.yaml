@@ -1,9 +1,8 @@
 # @package _global_
-tag: rtt_5_factor_4
+tag: rtt_maze_5_factor_4_multi
 
 defaults:
   - /model: pretrain_2x
-  - /dataset: rtt
   - /train: pretrain
 model:
   subject_embed_strategy: EmbedStrat.token
@@ -16,23 +15,23 @@ model:
   transform_space: true
   transformer:
     factorized_space_time: true
+
+  task:
+    tasks:
+    - ModelTask.infill
+    metrics:
+    - Metric.bps
 dataset:
   datasets:
-  - 'odoherty_rtt-Indy-20161005_06'
-  - 'odoherty_rtt-Indy-20160.*'
-  - 'odoherty_rtt-Indy-20161006.*'
-  - 'odoherty_rtt-Indy-20161007.*'
-  - 'odoherty_rtt-Indy-2016101.*'
-  - 'odoherty_rtt-Indy-2016102.*'
-  - 'odoherty_rtt-Indy-201612.*'
-  - 'odoherty_rtt-Indy-2017.*'
-  - 'mc_rtt'
-  eval_datasets:
-  - 'mc_rtt'
+  - odoherty_rtt-Indy.* # Note we're just using indy here.
+  - mc_rtt
+  - mc_maze.*
   odoherty_rtt:
-      arrays:
-      - Indy-M1
-      - Loco-M1
+    arrays:
+    - Indy-M1
+    - Loco-M1
+  eval_datasets:
+  - mc_rtt
   data_keys:
   - DataKey.spikes
   meta_keys:
@@ -42,5 +41,9 @@ dataset:
   - MetaKey.subject
   bin_size_ms: 5
 
-  max_channels: 100
-load_from_id: rtt_5_factor_4-cat9untx
+  max_channels: 140
+  # max_channels: 98
+train:
+  # DDP doesn't support autoscale as of 2/6/23. Workflow is to manually launch a single GPU run; check batch size, load here.
+  autoscale_batch_size: false
+  batch_size: 16

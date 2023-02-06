@@ -87,6 +87,9 @@ query = "rtt_causal"
 # query = 'jenkins_misc'
 # query = 'reggie_misc'
 
+query = "rtt_maze_5_factor_2_multi"
+query = "rtt_maze_5_factor_2"
+
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
@@ -100,7 +103,7 @@ cfg.model.task.metrics = [Metric.bps]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.logrates, Output.spikes]
 print(cfg.dataset.datasets)
-cfg.dataset.datasets = cfg.dataset.datasets[-1:]
+# cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
@@ -112,16 +115,16 @@ cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170213_02']
 
 # cfg.dataset.datasets = ['mc_rtt']
-if 'rtt' in query:
-    cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
-    # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
-if 'gallego' in query:
-    cfg.dataset.datasets = ['Chewie_CO_20150313']
-    cfg.dataset.datasets = ['Mihili_CO_20140304']
-if 'nitschke' in query:
-    cfg.dataset.datasets = ['churchland_misc_nitschke-1D8KYfy5IwMmEZaKOEv-7U6-4s-7cKINK']
-if 'pitt' in query:
-    cfg.dataset.datasets = ['CRS02bHome.data.00437']
+# if 'rtt' in query:
+#     cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+#     # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
+# if 'gallego' in query:
+#     cfg.dataset.datasets = ['Chewie_CO_20150313']
+#     cfg.dataset.datasets = ['Mihili_CO_20140304']
+# if 'nitschke' in query:
+#     cfg.dataset.datasets = ['churchland_misc_nitschke-1D8KYfy5IwMmEZaKOEv-7U6-4s-7cKINK']
+# if 'pitt' in query:
+#     cfg.dataset.datasets = ['CRS02bHome.data.00437']
 
 # cfg.dataset.eval_datasets = []
 print(cfg.dataset.datasets)
@@ -149,7 +152,8 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
         collate_fn=dataset.collater_factory()
     )
 
-dataloader = get_dataloader(dataset)
+# dataloader = get_dataloader(dataset)
+dataloader = get_dataloader(dataset, batch_size=4)
 #%%
 print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
