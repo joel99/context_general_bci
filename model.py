@@ -399,6 +399,7 @@ class BrainBertInterface(pl.LightningModule):
             Format spikes and context into tokens for backbone.
             In:
                 spikes: B T A C H=1 (features provided on channel dim for principles but functionally useless)
+                or B (Token) C H if `serve_tokens_flat`
             Returns:
                 state_in: B x T x A x H (A should be flattened in backbone)
                 static_context: List(T') [B x H]
@@ -433,21 +434,25 @@ class BrainBertInterface(pl.LightningModule):
         if self.cfg.transform_space:
             # collapse space/array, channel/feature --> # b t s h
             state_in = torch.as_tensor(batch[DataKey.spikes], dtype=int)
-            state_in = rearrange(state_in,
-                'b t s channel h -> b t s (channel h)' if self.data_attrs.serve_tokens else \
-                'b t a (chunk channel) h -> b t a chunk (channel h)', # do _not_ collapse array here, mostly for code compatibility with existing pathways
-                channel=self.cfg.neurons_per_token
-            )
+            if self.data_attrs.serve_tokens_flat:
+                reshape = 'b t c h -> b t (c h)'
+            elif self.data_attrs.serve_tokens:
+                reshape = 'b t s c h -> b t s (c h)'
+            else:
+                # do _not_ collapse array here, mostly for code compatibility with existing pathways
+                reshape = 'b t a (chunk c) h -> b t a chunk (c h)'
+            state_in = rearrange(state_in, reshape, c=self.cfg.neurons_per_token)
             if self.cfg.spike_embed_style == EmbedStrat.token:
                 state_in = self.readin(state_in)
             elif self.cfg.spike_embed_style == EmbedStrat.project:
                 state_in = self.readin(state_in.float().unsqueeze(-1))
             else:
                 raise NotImplementedError
-            state_in = rearrange(state_in,
-                'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
-                'b t a s_a chunk h -> b t a s_a (chunk h)'
-            ) # yes, we rearrange twice... better for alternative control flows..
+            state_in = state_in.flatten(-2, -1) # b t s h
+            # state_in = rearrange(state_in,
+            #     'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
+            #     'b t a s_a chunk h -> b t a s_a (chunk h)'
+            # ) # yes, we rearrange twice... better for alternative control flows..
         else: # --> b t a h
             state_in = torch.as_tensor(rearrange(
                 batch[DataKey.spikes], 'b t a c h -> b t a (c h)'
@@ -473,8 +478,10 @@ class BrainBertInterface(pl.LightningModule):
                 else:
                     static_context.append(session)
             elif self.cfg.session_embed_strategy == EmbedStrat.token_add:
+                assert not self.cfg.transform_space, 'not implemented'
                 state_in = state_in + rearrange(session, 'b h -> b 1 1 h')
             elif self.cfg.session_embed_strategy == EmbedStrat.concat: # concat deprecated for readin strategy etc
+                assert not self.cfg.transform_space, 'not implemented'
                 session = repeat(session, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(session)
 
@@ -483,8 +490,10 @@ class BrainBertInterface(pl.LightningModule):
                 subject = subject + self.subject_flag
                 static_context.append(subject)
             elif self.cfg.subject_embed_strategy == EmbedStrat.token_add:
+                assert not self.cfg.transform_space, 'not implemented'
                 state_in = state_in + rearrange(subject, 'b h -> b 1 1 h')
             elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
+                assert not self.cfg.transform_space, 'not implemented'
                 subject = repeat(subject, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(subject)
 
@@ -493,12 +502,15 @@ class BrainBertInterface(pl.LightningModule):
                 task = task + self.task_flag
                 static_context.append(task)
             elif self.cfg.task_embed_strategy == EmbedStrat.token_add:
+                assert not self.cfg.transform_space, 'not implemented'
                 state_in = state_in + rearrange(task, 'b h -> b 1 1 h')
             elif self.cfg.task_embed_strategy == EmbedStrat.concat:
+                assert not self.cfg.transform_space, 'not implemented'
                 task = repeat(task, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(task)
 
         if self.cfg.array_embed_strategy is not EmbedStrat.none: # Note we check earlier that this doesn't accidentally get set for space-time, not supported yet (we need to pass/infer array metadata)
+            assert not self.cfg.transform_space, 'not implemented'
             if self.cfg.array_embed_strategy == EmbedStrat.token:
                 array = array + self.array_flag
                 static_context.extend(array.unbind(1)) # path not yet tested
@@ -521,18 +533,16 @@ class BrainBertInterface(pl.LightningModule):
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
-        if self.data_attrs.serve_tokens_flat:
-            raise NotImplementedError # temporal mask must be inferred or subsumed by a broader mask
+        if LENGTH_KEY in batch:
+            temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
+            # temporal_padding refers to general length padding in `serve_tokens_flat` case
         else:
-            if LENGTH_KEY in batch:
-                temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
-            else:
-                temporal_padding_mask = None
+            temporal_padding_mask = None
 
         # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
         # But we do want to exclude fully-padded arrays from computation
         if self.data_attrs.serve_tokens_flat:
-            raise NotImplementedError
+            space_padding_mask = None
         elif self.data_attrs.serve_tokens:
             allocated_space_tokens = torch.ceil(batch[CHANNEL_KEY] / self.cfg.neurons_per_token).sum(1) # B
             space_padding_mask = torch.arange(state_in.size(2), device=state_in.device)[None, :] >= allocated_space_tokens[:, None] # -> B A
@@ -546,7 +556,9 @@ class BrainBertInterface(pl.LightningModule):
             temporal_padding_mask=temporal_padding_mask,
             space_padding_mask=space_padding_mask,
             causal=getattr(self.cfg, 'causal', False),
-        ) # B x T x S x H
+            times=batch.get(DataKey.time, None),
+            positions=batch.get(DataKey.position, None),
+        ) # B x T x S x H or B x Token x H (flat)
         if outputs.isnan().any():
             import pdb;pdb.set_trace()
         return outputs
@@ -573,7 +585,6 @@ class BrainBertInterface(pl.LightningModule):
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
-        # import pdb;pdb.set_trace()
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
             batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]

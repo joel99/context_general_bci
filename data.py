@@ -99,6 +99,8 @@ class SpikingDataset(Dataset):
             cfg: DatasetConfig = OmegaConf.create(cfg)
         self.cfg = cfg
         assert DataKey.spikes in cfg.data_keys, "Must have spikes"
+        if self.cfg.serve_tokenized_flat:
+            assert self.cfg.serve_tokenized, 'codepaths assume serve_tokenized is true if serve_tokenized_flat is true'
 
         meta_df = []
         if self.cfg.datasets:
@@ -283,16 +285,18 @@ class SpikingDataset(Dataset):
         """
         data_items = {}
         payload = torch.load(trial.path)
-        channel_counts = [] # 1 value per array
+        channel_counts = [] # 1 value per array in base + serve_tokenized. 1 value per token for `serve_tokenized_flat`
+        # Note the main reason we track channel_counts for `serve_tokenized_flat` is because we already implemented the unsplit version for `serve_tokenized` but would now like something easier.
         # while heldout channels are never provided in multiple shapes
         # the alternative to padding is to define custom readout via DataAttrs
         # we would rather maintain consistent interface and pad
         # heldout_channel_counts = []
-
         for k in self.cfg.data_keys:
             if k == DataKey.spikes:
                 array_spikes = []
                 if self.cfg.serve_tokenized:
+                    times = []
+                    positions = []
                     space = 0
                 for i in range(self.cfg.max_arrays):
                     alias = trial[f'array_{i}']
@@ -300,17 +304,16 @@ class SpikingDataset(Dataset):
                         if not self.cfg.serve_tokenized:
                             array_group = torch.full_like(array_spikes[0][:,0], fill_value=self.pad_value)
                             array_spikes.append(rearrange(array_group, 't c h -> t () c h'))
-                        channel_counts.append(torch.tensor(0))
+                        if not self.cfg.serve_tokenized_flat:
+                            channel_counts.append(torch.tensor(0))
                     else:
                         alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
                         array_group = torch.cat([payload[k][a] for a in alias_arrays], dim=-2) # T C' H
-                        channel_counts.append(array_group.shape[-2])
-                        # ! Note to get array tokenization to respect array boundaries, use non-alias full array references
-                        # TODO experiment if there's a diff
+                        if not self.cfg.serve_tokenized_flat:
+                            channel_counts.append(array_group.shape[-2])
+                        # * Note to get array tokenization to respect array boundaries, use non-alias full array references
                         if self.cfg.serve_tokenized:
-                            times = []
-                            positions = []
-                            pad_amount = self.cfg.neurons_per_token - array_group.size(-2) % self.cfg.neurons_per_token
+                            pad_amount = (self.cfg.neurons_per_token - array_group.size(-2) % self.cfg.neurons_per_token) % self.cfg.neurons_per_token
                             array_group = F.pad(array_group, (0, 0, 0, pad_amount), value=self.pad_value)
                             tokenized_spikes = array_group.unfold(1, self.cfg.neurons_per_token, self.cfg.neurons_per_token) # time space H channel_in_token
                             array_spikes.append(rearrange(tokenized_spikes, 'time space h c -> time space c h'))
@@ -318,6 +321,10 @@ class SpikingDataset(Dataset):
                             times.append(repeat(torch.arange(time), 'time -> time space', space=token_space))
                             positions.append(repeat(torch.arange(space, space+token_space), 'space -> time space', time=time))
                             space += token_space
+                            if self.cfg.serve_tokenized_flat:
+                                channel_counts.append(torch.full((time, token_space), fill_value=self.cfg.neurons_per_token, dtype=torch.long))
+                                if pad_amount:
+                                    channel_counts[-1][:,-1] = self.cfg.neurons_per_token - pad_amount
                         else:
                             if self.cfg.max_channels:
                                 pad_amount = self.cfg.max_channels - array_group.size(-2)
@@ -327,6 +334,8 @@ class SpikingDataset(Dataset):
                     data_items[k] = torch.cat(array_spikes, 1) # T x S x C x H
                     data_items[DataKey.time] = torch.cat(times, 1)
                     data_items[DataKey.position] = torch.cat(positions, 1)
+                    if self.cfg.serve_tokenized_flat:
+                        data_items[CHANNEL_KEY] = torch.cat(channel_counts, 1)
                 else:
                     data_items[k] = torch.cat(array_spikes, 1) # T A C H
             # JY: Current state of heldout decoding is that we only do one dataset at a time; no need to pad due to consistent interface
@@ -345,7 +354,7 @@ class SpikingDataset(Dataset):
             **data_items,
             **meta_items,
         }
-        if self.cfg.max_channels:
+        if self.cfg.max_channels and not self.cfg.serve_tokenized_flat:
             out[CHANNEL_KEY] = torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
             # if heldout_channel_counts:
             #     out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
@@ -378,6 +387,7 @@ class SpikingDataset(Dataset):
                 time_budget = (self.cfg.max_tokens // space_lengths)
                 if max_bins:
                     time_budget = time_budget.min(torch.tensor(max_bins))
+                # TODO separate out/remove this cropping logic for flat spacetime
                 crop_start_limit = (torch.tensor([b[DataKey.spikes].size(0) for b in batch]) - time_budget).max(torch.tensor(1))
                 crop_start = torch.randint(0, 10000, (len(batch),), dtype=torch.long) % crop_start_limit
                 for i, b in enumerate(batch):
@@ -387,7 +397,7 @@ class SpikingDataset(Dataset):
                             if self.cfg.serve_tokenized_flat:
                                 if k in [DataKey.spikes, DataKey.time, DataKey.position]:
                                     # These keys have spatial dimensions that we will serve flat to maximize data throughput across heterogeneous trials
-                                    item = item.flatten(0, 1) # T S H
+                                    item = item.flatten(0, 1) # T S H -> Token H
                             else: # pad in space
                                 if k == DataKey.spikes: # B T S C H
                                     item = F.pad(item, (0, 0, 0, 0, 0, space_lengths[i] - item.size(1)), value=self.pad_value)
@@ -398,10 +408,14 @@ class SpikingDataset(Dataset):
                                     item = F.pad(item, (0, space_lengths[i] - item.size(1)), value=self.pad_value)
                             stack_batch[k].append(item)
                         else:
-                            stack_batch[k].append(b[k])
+                            if self.cfg.serve_tokenized_flat and k == CHANNEL_KEY:
+                                b[k] = b[k][crop_start[i]:crop_start[i]+time_budget[i]]
+                                stack_batch[k].append(b[k].flatten(0, 1))
+                            else:
+                                stack_batch[k].append(b[k])
                 lengths = torch.tensor([el.size(0) for el in stack_batch[DataKey.spikes]])
                 for k in stack_batch.keys():
-                    if isinstance(k, DataKey):
+                    if isinstance(k, DataKey) or (self.cfg.serve_tokenized_flat and k == CHANNEL_KEY):
                         stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True)
                     else:
                         stack_batch[k] = torch.stack(stack_batch[k])

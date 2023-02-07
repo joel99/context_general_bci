@@ -119,9 +119,10 @@ class TransformerConfig:
     learnable_position: bool = False
     scale_sin: bool = False # per https://proceedings.mlr.press/v162/hua22a/hua22a.pdf
 
-    max_trial_length: int = 1500 # Ideally we can bind this to DatasetConfig.max_trial_length
+    max_trial_length: int = 250 # This is in BINS for the position encoding Ideally we can bind this to DatasetConfig.max_trial_length
 
     transform_space: bool = False # match ModelConfig.transform_space
+    flat_encoder: bool = False # for serve_tokens_flat
     embed_space: bool = True
     max_spatial_tokens: bool = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
 
@@ -249,6 +250,10 @@ class ExperimentalConfig:
         """
         return {}
 
+    @staticmethod
+    def create_with_arrays(arrays: List[str]):
+        return ExperimentalConfig(arrays=arrays)
+
 @dataclass
 class RTTConfig(ExperimentalConfig):
     chop_size_ms: int = 1000
@@ -352,10 +357,10 @@ class DatasetConfig:
     dyer_co: DyerCOConfig = DyerCOConfig()
     gallego_co: ExperimentalConfig = ExperimentalConfig()
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
-    pitt_co: ExperimentalConfig = ExperimentalConfig()
-    observation: ExperimentalConfig = ExperimentalConfig()
-    ortho: ExperimentalConfig = ExperimentalConfig()
-    fbc: ExperimentalConfig = ExperimentalConfig()
+    pitt_co: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
+    observation: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
+    ortho: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
+    fbc: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
     delay_reach: ExperimentalConfig = ExperimentalConfig()
 
 

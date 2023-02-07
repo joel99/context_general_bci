@@ -8,47 +8,42 @@ dataset:
   - CRS02bHome.data.00437
   data_keys:
   - DataKey.spikes
-  - DataKey.bhvr_vel
-  pitt_co:
-    arrays:
-    - CRS02b-lateral_m1
-    - CRS02b-medial_m1
-  observation:
-    arrays:
-    - CRS02b-lateral_m1
-    - CRS02b-medial_m1
-  ortho:
-    arrays:
-    - CRS02b-lateral_m1
-    - CRS02b-medial_m1
-  fbc:
-    arrays:
-    - CRS02b-lateral_m1
-    - CRS02b-medial_m1
+  # - DataKey.bhvr_vel
   max_length_ms: 4000
   max_arrays: 2
   bin_size_ms: 20
-  max_channels: 96
+  # max_channels: 96
   behavior_dim: 2
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+  serve_tokenized: true
+  serve_tokenized_flat: true
+  neurons_per_token: 8
+  max_channels: 200
 model:
-  dropout: 0.2
+  transform_space: true
   transformer:
-    dropout: 0.2
-  causal: True
+    flat_encoder: true
+    learnable_position: true
+    max_trial_length: 250 # 5K ms / 20ms bins
+    # factorized_space_time: true
+  spike_embed_style: EmbedStrat.token
+  neurons_per_token: 8
+  hidden_size: 256
+  # causal: True
   # accelerate_new_params: 10.0
   lr_init: 2e-5
   lr_schedule: fixed
   # lr_init: 5e-5
   task:
     tasks:
-    - ModelTask.kinematic_decoding
-    metrics:
-    - Metric.kinematic_r2
+    - ModelTask.infill
+    # - ModelTask.kinematic_decoding
+    metrics: []
+    # - Metric.kinematic_r2
   session_embed_strategy: EmbedStrat.none
   subject_embed_strategy: EmbedStrat.none
   array_embed_strategy: EmbedStrat.none

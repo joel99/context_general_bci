@@ -22,6 +22,9 @@ model:
   readout_dim: 256
 dataset:
   bin_size_ms: 5
+  datasets:
+  - 'odoherty_rtt-Indy.*'
+  - 'mc_rtt'
   eval_datasets:
   - 'mc_rtt'
   # - 'odoherty_rtt-Indy-20161005_06'

@@ -42,18 +42,25 @@ class TaskPipeline(nn.Module):
     def get_masks(self, batch, channel_key=CHANNEL_KEY):
         # loss_mask: b t *
         ref = batch[DataKey.spikes][..., 0]
-        b, t, s, c = ref.size()
+        if self.serve_tokens_flat:
+            b, t, c = ref.size()
+            s = 1
+        else:
+            b, t, s, c = ref.size()
         loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
         if LENGTH_KEY in batch: # only some of b x t are valid
             lengths = batch[LENGTH_KEY] # b of ints < t
             length_mask = torch.arange(t, device=ref.device)[None, :] < lengths[:, None] # B T
-            loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
+            if self.serve_tokens_flat:
+                loss_mask = loss_mask & length_mask.unsqueeze(-1)
+            else:
+                loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
             # import pdb;pdb.set_trace() # TODO needs testing in padding mode
         else:
             length_mask = None
         if channel_key in batch: # only some of b x a x c are valid
-            channels = batch[channel_key] # b x a of ints < c
-            if self.serve_tokens: # if there's multiple arrays, this will show up as b x a (separate from spatial dim in tokens)
+            channels = batch[channel_key] # b x a of ints < c (or b x t)
+            if self.serve_tokens and not self.serve_tokens_flat: # if there's multiple arrays, this will show up as b x a (separate from spatial dim in tokens)
                 # we have B S C, goal is to determine which are real vs padding
                 # at our disposal we have the channel count, separated into b x a
                 # each a is a number, that was divided by neurons per token to create the spatial distribution
@@ -78,8 +85,11 @@ class TaskPipeline(nn.Module):
                 )
             else:
                 comparison = repeat(torch.arange(c, device=ref.device), 'c -> 1 s c', s=s)
-                channel_mask = comparison < rearrange(channels, 'b a -> b a 1') # B A C
-            loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
+                channel_mask = comparison < rearrange(channels, 'b t -> b t 1') # dim 2 is either arrays (base case) or tokens (flat)
+            if not self.serve_tokens_flat:
+                loss_mask = loss_mask & rearrange(channel_mask, 'b a c -> b 1 a c')
+            else:
+                loss_mask = loss_mask & channel_mask
         else:
             loss_mask = loss_mask[..., 0] # don't specify channel dim if not used, saves HELDOUT case
             channel_mask = None
@@ -137,6 +147,8 @@ class RatePrediction(TaskPipeline):
             data_attrs=data_attrs
         )
         self.cfg = cfg.task
+        if self.serve_tokens_flat:
+            assert Metric.bps not in self.cfg.metrics, "bps metric not supported for flat tokens"
         if decoder is not None:
             self.out = decoder
         else:
@@ -236,9 +248,11 @@ class SelfSupervisedInfill(RatePrediction):
             return batch
         is_masked = torch.bernoulli(
             # ! Spatial-masking seems slightly worse on RTT, revisit with tuning + neuron dropout
-            torch.full(spikes.size()[:2], self.cfg.mask_ratio, device=spikes.device).unsqueeze(-1)
+            torch.full(spikes.size()[:2], self.cfg.mask_ratio, device=spikes.device)
             # torch.full(spikes.size()[:-2], self.cfg.mask_ratio, device=spikes.device)
         ) # B T S or B Token - don't mask part of a token
+        if not self.serve_tokens_flat:
+            is_masked = is_masked.unsqueeze(-1) # mock spatial masking
         mask_type = torch.rand_like(is_masked)
         mask_token = mask_type < self.cfg.mask_token_ratio
         mask_random = (mask_type >= self.cfg.mask_token_ratio) & (mask_type < self.cfg.mask_token_ratio + self.cfg.mask_random_ratio)
@@ -265,7 +279,7 @@ class SelfSupervisedInfill(RatePrediction):
             time_shuffled_spikes = spikes.gather(1, random_draw.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, c, -1))
             spikes[mask_random] = time_shuffled_spikes[mask_random]
         else:
-            if self.serve_tokens: # ! Spatial-masking seems slightly worse on RTT, revisit with tuning + neuron dropout
+            if self.serve_tokens and not self.serve_tokens_flat: # ! Spatial-masking seems slightly worse on RTT, revisit with tuning + neuron dropout
                 mask_random = mask_random.expand(-1, -1, spikes.size(2))
                 mask_token = mask_token.expand(-1, -1, spikes.size(2))
             spikes[mask_random] = torch.randint_like(spikes[mask_random], 0, spikes[spikes != self.pad_value].max().int().item() + 1)
@@ -290,10 +304,10 @@ class SelfSupervisedInfill(RatePrediction):
         loss: torch.Tensor = self.loss(rates, spikes)
         # Infill update mask
         loss_mask, length_mask, channel_mask = self.get_masks(batch)
-        # import pdb;pdb.set_trace()
         if Metric.all_loss in self.cfg.metrics:
             batch_out[Metric.all_loss] = loss[loss_mask].mean().detach()
-        loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t s -> b t s 1')
+        loss_mask = loss_mask & batch['is_masked'].unsqueeze(-1) # add channel dim
+        # loss_mask = loss_mask & rearrange(batch['is_masked'], 'b t s -> b t s 1')
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.bps in self.cfg.metrics:

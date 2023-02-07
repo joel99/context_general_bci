@@ -87,16 +87,16 @@ query = "rtt_causal"
 # query = 'jenkins_misc'
 # query = 'reggie_misc'
 
-query = "rtt_maze_5_factor_2_multi"
-query = "rtt_maze_5_factor_2"
+query = "rtt_5_factor_1_multi"
+# query = "rtt_maze_5_factor_2"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 # cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps]
@@ -164,11 +164,11 @@ heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # test = heldin_outputs[Output.heldout_rates]
 rates = heldin_outputs[Output.rates] # b t c
 
-
 spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
 ax = prep_plt()
 
 num = 20
+num = 5
 # channel = 5
 # channel = 10
 # channel = 18
@@ -189,11 +189,11 @@ y_lim = ax.get_ylim()[1]
 #     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
 trial = 10
-trial = 15
+# trial = 15
 # trial = 17
 # trial = 18
 # trial = 80
-# trial = 85
+trial = 85
 for channel in range(num):
     # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
     ax.plot(rates[trial][:,channel * 2], color=colors[channel])
@@ -213,7 +213,7 @@ for channel in range(num):
 ax.set_ylabel('FR (Hz)')
 ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
 # relabel xtick unit from 5ms to ms
-ax.set_xlim(0, 50)
+# ax.set_xlim(0, 50)
 ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
 ax.set_xlabel('Time (ms)')
 # plt.plot(test[0,:,0])
