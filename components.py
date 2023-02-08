@@ -224,7 +224,12 @@ class SpaceTimeTransformer(nn.Module):
             - i.e. data stream as <SUBJECT> <ARRAY1> <group 1> <group 2> ... <group N1> <ARRAY2> <group 1> <group 2> ... <group N2> ...
         - We will now refactor into a more generic space dimension.
     """
-    def __init__(self, config: TransformerConfig, max_spatial_tokens: int=0):
+    def __init__(
+        self,
+        config: TransformerConfig,
+        max_spatial_tokens: int = 0,
+        n_layers: int = 0, # override
+    ):
         super().__init__()
         self.cfg = config
         # self.encoder = torch.jit.script( # In a basic timing test, this didn't appear faster. Built-in transformer likely already very fast.
@@ -237,13 +242,14 @@ class SpaceTimeTransformer(nn.Module):
             activation=self.cfg.activation,
             norm_first=self.cfg.pre_norm,
         )
+        n_layers = n_layers or self.cfg.n_layers
         if self.cfg.factorized_space_time:
             assert not getattr(self.cfg, 'flat_encoder', False), "Flat encoder not supported with factorized space time"
-            self.space_transformer_encoder = nn.TransformerEncoder(enc_layer, round(self.cfg.n_layers / 2))
-            self.time_transformer_encoder = nn.TransformerEncoder(enc_layer, self.cfg.n_layers - round(self.cfg.n_layers / 2))
+            self.space_transformer_encoder = nn.TransformerEncoder(enc_layer, round(n_layers / 2))
+            self.time_transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers - round(n_layers / 2))
         else:
-            self.transformer_encoder = nn.TransformerEncoder(enc_layer, self.cfg.n_layers)
-        if getattr(self.cfg, 'flat_encoder', False):
+            self.transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers)
+        if getattr(self.cfg, 'flat_encoder', False) or self.cfg.learnable_position:
             self.time_encoder = nn.Embedding(self.cfg.max_trial_length, self.cfg.n_state)
         else:
             self.time_encoder = PositionalEncoding(self.cfg)
@@ -299,7 +305,8 @@ class SpaceTimeTransformer(nn.Module):
         """
         src = self.dropout_in(src)
         # import pdb;pdb.set_trace()
-
+        if src.size(0) == 4:
+            import pdb;pdb.set_trace()
         # === Embeddings ===
 
         if getattr(self.cfg, 'flat_encoder', False):
@@ -318,14 +325,23 @@ class SpaceTimeTransformer(nn.Module):
                 b, t, s, h = src.size() # s for space/array
 
             # TODO make rotary
-            time_embed = rearrange(self.time_encoder(src), 'b t h -> b t 1 h')
+            if isinstance(self.time_encoder, nn.Embedding):
+                if times is not None:
+                    time_embed = rearrange(self.time_encoder(times), 'b t h -> b t 1 h')
+                else:
+                    time_embed = rearrange(self.time_encoder(torch.arange(t, device=src.device)), 't h -> 1 t 1 h')
+            else:
+                time_embed = rearrange(self.time_encoder(src), 'b t h -> b t 1 h')
+            src = src + time_embed
             if self.cfg.transform_space and self.cfg.embed_space:
                 # likely space will soon be given as input or pre-embedded, for now assume range
-                space_embed = rearrange(
-                    self.space_encoder(torch.arange(src.size(2), device=src.device)
-                ), 's h -> 1 1 s h')
+                if positions is not None:
+                    space_embed = rearrange(self.space_encoder(positions), 'b s h -> b 1 s h')
+                else:
+                    space_embed = rearrange(self.space_encoder(
+                        torch.arange(src.size(2), device=src.device)
+                    ), 's h -> 1 1 s h')
                 src = src + space_embed
-            src = src + time_embed
 
         # === Masks ===
         def make_src_mask(src: torch.Tensor, temporal_context: torch.Tensor | None, trial_context: torch.Tensor | None, t: int, s: int=1):
@@ -487,7 +503,6 @@ class SpaceTimeTransformer(nn.Module):
             contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
             src_mask = make_src_mask(src, temporal_context, trial_context, t, s)
-            # TODO update this and below...
             if getattr(self.cfg, 'flat_encoder', False):
                 if temporal_padding_mask is not None:
                     padding_mask = temporal_padding_mask

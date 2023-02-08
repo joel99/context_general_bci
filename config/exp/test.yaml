@@ -1,55 +1,57 @@
 # @package _global_
 
+# Really just a test of heterogeneity throughput rather than any specific win; can compare with scores in just Pitt
+
 defaults:
-  - /model: pretrain
+  - /model: flat_enc_dec
   - /train: pretrain
+model:
+  subject_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.none
+  # array_embed_strategy: EmbedStrat.token_add
+  # causal: True
+
+  transformer:
+    n_layers: 12
+
+  neurons_per_token: 8
+  hidden_size: 256
+
+  task:
+    mask_ratio: 0.4
+    tasks:
+    - ModelTask.shuffle_infill
+    # - ModelTask.kinematic_decoding
+    metrics: []
+    # - Metric.kinematic_r2
 dataset:
-  datasets:
-  - CRS02bHome.data.00437
-  data_keys:
-  - DataKey.spikes
-  # - DataKey.bhvr_vel
-  max_length_ms: 4000
+  max_tokens: 2048
+  max_length_ms: 2000
   max_arrays: 2
   bin_size_ms: 20
-  # max_channels: 96
-  behavior_dim: 2
+  serve_tokenized: true
+  serve_tokenized_flat: true
+  neurons_per_token: 8
+  max_channels: 192 # 2 x 96... this should also cover Dyer.
+  datasets:
+  - churchland_maze.*
+  - churchland_misc.*
+  - CRS02bHome.data.*
+  - dyer_co.*
+
+  # - mc_rtt
+  eval_datasets:
+  - CRS02bHome.data.00437
+  # - 'mc_rtt'
+  # - 'odoherty_rtt-Indy-20161005_06'
+  odoherty_rtt:
+      arrays:
+      - Indy-M1
+      - Loco-M1
+  data_keys:
+  - DataKey.spikes
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-  serve_tokenized: true
-  serve_tokenized_flat: true
-  neurons_per_token: 8
-  max_channels: 200
-model:
-  transform_space: true
-  transformer:
-    flat_encoder: true
-    learnable_position: true
-    max_trial_length: 250 # 5K ms / 20ms bins
-    # factorized_space_time: true
-  spike_embed_style: EmbedStrat.token
-  neurons_per_token: 8
-  hidden_size: 256
-  # causal: True
-  # accelerate_new_params: 10.0
-  lr_init: 2e-5
-  lr_schedule: fixed
-  # lr_init: 5e-5
-  task:
-    tasks:
-    - ModelTask.infill
-    # - ModelTask.kinematic_decoding
-    metrics: []
-    # - Metric.kinematic_r2
-  session_embed_strategy: EmbedStrat.none
-  subject_embed_strategy: EmbedStrat.none
-  array_embed_strategy: EmbedStrat.none
-train:
-  batch_size: 1 # small batch, trying to stabilize training
-  autoscale_batch_size: false
-  epochs: 10000
-  patience: 10000
-  overfit_batches: true

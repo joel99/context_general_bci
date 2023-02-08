@@ -79,6 +79,30 @@ class FinetuningModelConfig(ModelConfig):
 
 cs.store(group="model", name="finetune", node=FinetuningModelConfig)
 
+
+@dataclass
+class FlatEncDecTransformerConfig(TransformerConfig):
+    n_state: int = 256
+    n_heads: int = 4
+    n_layers: int = 6
+    dropout: float = 0.1
+    flat_encoder: bool = True
+    learnable_position: bool = True
+    max_trial_length: int = 250
+
+@dataclass
+class FlatEncDecModelConfig(ModelConfig):
+    lr_init: float = 5e-5
+    lr_ramp_steps: int = 3000
+    hidden_size: int = 256
+    dropout: float = 0.1
+    encode_decode: bool = True
+    transform_space: bool = True
+    spike_embed_style: EmbedStrat = EmbedStrat.token
+    transformer: TransformerConfig = field(default_factory=FlatEncDecTransformerConfig)
+
+cs.store(group="model", name="flat_enc_dec", node=FlatEncDecModelConfig)
+
 @dataclass
 class NLBModelTaskConfig(TaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.heldout_decoding])

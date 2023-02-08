@@ -89,14 +89,15 @@ query = "rtt_causal"
 
 query = "rtt_5_factor_1_multi"
 # query = "rtt_maze_5_factor_2"
+query = "rtt_maze_5_factor_4"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 # cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.bps]
@@ -188,12 +189,12 @@ y_lim = ax.get_ylim()[1]
 #     y_height = y_lim * (trial+1) / num
 #     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
-trial = 10
-# trial = 15
+# trial = 10
+trial = 15
 # trial = 17
 # trial = 18
 # trial = 80
-trial = 85
+# trial = 85
 for channel in range(num):
     # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
     ax.plot(rates[trial][:,channel * 2], color=colors[channel])

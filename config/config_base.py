@@ -15,6 +15,8 @@ class ModelTask(Enum):
     next_step_prediction = 'next_step'
     infill = 'infill'
 
+    shuffle_infill = 'shuffle_infill'
+
     # Time-varying - these tasks are currently implemented by matching time-varying input shape
     # But could hypothetically call for enc-dec etc
     heldout_decoding = 'heldout_decoding'
@@ -148,6 +150,12 @@ class ModelConfig:
     hidden_size: int = 256 # For parts outside of backbones
     arch: Architecture = Architecture.ndt
     transformer: TransformerConfig = TransformerConfig()
+
+    # Asymmetric
+    encode_decode: bool = False # If true, split model into encode-decode pathways per Kaiming's scaling vision/video papers.
+    # This is a master flag, and changes a few pathways
+    decoder_layers: int = 2
+    # 1. makes masking shuffle-based
 
     half_precision: bool = True
     lr_init: float = 0.0005 # be careful of interxn with bsz

@@ -32,7 +32,7 @@ from components import (
     ReadinCrossAttention,
     ContextualMLP,
 )
-from task_io import task_modules
+from task_io import task_modules, SHUFFLE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,8 @@ class BrainBertInterface(pl.LightningModule):
             assert self.cfg.transform_space, 'Transform space must be true if serving (spacetime) tokens'
             assert self.data_attrs.neurons_per_token == self.cfg.neurons_per_token, \
                 f"Neurons per token served by data ({self.data_attrs.neurons_per_token}) must match model token size {self.cfg.neurons_per_token}"
-
+        if self.data_attrs.serve_tokens_flat:
+            assert getattr(self.cfg.transformer, 'flat_encoder', False), "Flat encoder must be true if serving flat tokens"
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
         if data_attrs.serve_tokens: # no spatial dim
             max_spatial_tokens = round(
@@ -453,6 +454,11 @@ class BrainBertInterface(pl.LightningModule):
             #     'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
             #     'b t a s_a chunk h -> b t a s_a (chunk h)'
             # ) # yes, we rearrange twice... better for alternative control flows..
+            if getattr(self.cfg, 'encode_decode'):
+                # cache context
+                batch['session'] = session
+                batch['subject'] = subject
+                batch['task'] = task
         else: # --> b t a h
             state_in = torch.as_tensor(rearrange(
                 batch[DataKey.spikes], 'b t a c h -> b t a (c h)'
@@ -534,7 +540,10 @@ class BrainBertInterface(pl.LightningModule):
         # returns backbone features B T S H
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
-            temporal_padding_mask = torch.arange(state_in.size(1), device=state_in.device)[None, :] >= batch[LENGTH_KEY][:, None] # -> B T
+            token_position = rearrange(torch.arange(state_in.size(1), device=state_in.device), 't -> () t') # not to be confused with DataKey.time or DataKey.position
+            if SHUFFLE_KEY in batch:
+                token_position = rearrange(batch[SHUFFLE_KEY][:batch['encoder_frac']], 't -> () t')
+            temporal_padding_mask = token_position >= rearrange(batch[LENGTH_KEY], 'b -> b ()')
             # temporal_padding refers to general length padding in `serve_tokens_flat` case
         else:
             temporal_padding_mask = None
@@ -545,7 +554,8 @@ class BrainBertInterface(pl.LightningModule):
             space_padding_mask = None
         elif self.data_attrs.serve_tokens:
             allocated_space_tokens = torch.ceil(batch[CHANNEL_KEY] / self.cfg.neurons_per_token).sum(1) # B
-            space_padding_mask = torch.arange(state_in.size(2), device=state_in.device)[None, :] >= allocated_space_tokens[:, None] # -> B A
+            space_comparison = torch.arange(state_in.size(2), device=state_in.device)[None, :]
+            space_padding_mask = space_comparison >= allocated_space_tokens[:, None] # -> B A
         else:
             space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
 

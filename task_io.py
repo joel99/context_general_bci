@@ -16,8 +16,17 @@ from config import (
 
 from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY
 from subjects import subject_array_registry, SortedArrayInfo
+
+from components import SpaceTimeTransformer
+
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
+SHUFFLE_KEY = "shuffle"
+
+def apply_shuffle(item: torch.Tensor, shuffle: torch.Tensor):
+    # item: B T *
+    # shuffle: T
+    return item.transpose(1, 0)[shuffle].transpose(1, 0)
 
 class TaskPipeline(nn.Module):
     r"""
@@ -50,7 +59,10 @@ class TaskPipeline(nn.Module):
         loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
         if LENGTH_KEY in batch: # only some of b x t are valid
             lengths = batch[LENGTH_KEY] # b of ints < t
-            length_mask = torch.arange(t, device=ref.device)[None, :] < lengths[:, None] # B T
+            comparison = torch.arange(t, device=ref.device)[None, :]
+            if SHUFFLE_KEY in batch:
+                comparison = apply_shuffle(comparison, batch[SHUFFLE_KEY])
+            length_mask = comparison < lengths[:, None] # B T
             if self.serve_tokens_flat:
                 loss_mask = loss_mask & length_mask.unsqueeze(-1)
             else:
@@ -60,6 +72,8 @@ class TaskPipeline(nn.Module):
             length_mask = None
         if channel_key in batch: # only some of b x a x c are valid
             channels = batch[channel_key] # b x a of ints < c (or b x t)
+            # Note no shuffling occurs here because 1. channel_key shuffle is done when needed earlier
+            # 2. no spatial shuffling occurs so we do need to apply_shuffle(torch.arange(c))
             if self.serve_tokens and not self.serve_tokens_flat: # if there's multiple arrays, this will show up as b x a (separate from spatial dim in tokens)
                 # we have B S C, goal is to determine which are real vs padding
                 # at our disposal we have the channel count, separated into b x a
@@ -319,7 +333,140 @@ class SelfSupervisedInfill(RatePrediction):
 
         return batch_out
 
+class ShuffleInfill(RatePrediction):
+    r"""
+        Technical design decision note:
+        - JY instinctively decided to split up inputs and just carry around split tensors rather than the splitting metadata.
+        - This is somewhat useful in the end (rather than the unshuffling solution) as we can simply collect the masked crop
+        - However the code is pretty dirty and this may eventually change
 
+    """
+    def __init__(
+        self,
+        backbone_out_size: int,
+        channel_count: int,
+        cfg: ModelConfig,
+        data_attrs: DataAttrs,
+    ):
+        super().__init__(
+            backbone_out_size=backbone_out_size,
+            channel_count=channel_count,
+            cfg=cfg,
+            data_attrs=data_attrs
+        )
+        self.cfg = cfg.task
+        assert self.serve_tokens and self.serve_tokens_flat, 'other paths not implemented'
+        max_spatial_tokens = round(
+            data_attrs.max_channel_count / cfg.neurons_per_token
+        )
+        assert cfg.encode_decode, 'non-symmetric evaluation not implemented (since this task crops)'
+        # ! Need to figure out how to wire different parameters e.g. num layers here
+        self.decoder = SpaceTimeTransformer(
+            cfg.transformer,
+            max_spatial_tokens=max_spatial_tokens,
+            n_layers=cfg.decoder_layers,
+        )
+        out_layers = [
+            nn.Linear(backbone_out_size, cfg.neurons_per_token)
+        ]
+        if not cfg.lograte:
+            out_layers.append(nn.ReLU())
+        self.out = nn.Sequential(*out_layers)
+        self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
+        self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
+
+    does_update_root = True
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
+        r"""
+            Shuffle inputs, keep only what we need for evaluation
+        """
+        spikes = batch[DataKey.spikes]
+        target = spikes[..., 0]
+        if eval_mode:
+            batch.update({
+                SHUFFLE_KEY: torch.arange(spikes.size(1), device=spikes.device),
+                'spike_target': target
+            })
+            return batch
+        # spikes: B T S H or B T H (no array support)
+        # TODO (low-pri) also support spacetime shuffle
+        shuffle = torch.randperm(spikes.size(1), device=spikes.device)
+        encoder_frac = int((1 - self.cfg.mask_ratio) * spikes.size(1))
+        # shuffle_spikes = spikes.gather(1, shuffle.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, spikes.size(2), spikes.size(3)))
+        for key in [DataKey.time, DataKey.position, CHANNEL_KEY]:
+            if key in batch:
+                shuffled = apply_shuffle(batch[key], shuffle)
+                batch.update({
+                    key: shuffled[:, :encoder_frac],
+                    f'{key}_target': shuffled[:, encoder_frac:],
+                })
+        # import pdb;pdb.set_trace()
+        batch.update({
+            DataKey.spikes: apply_shuffle(spikes, shuffle)[:,:encoder_frac],
+            'spike_target': apply_shuffle(target, shuffle)[:,encoder_frac:],
+            'encoder_frac': encoder_frac,
+            SHUFFLE_KEY: shuffle, # seems good to keep around...
+        })
+        return batch
+
+    def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
+        # B T
+        target = batch['spike_target']
+        if target.ndim == 5:
+            raise NotImplementedError("cannot even remember what this should look like")
+            # decoder_mask_tokens = repeat(self.mask_token, 'h -> b t s h', b=target.size(0), t=target.size(1), s=target.size(2))
+        else:
+            decoder_mask_tokens = repeat(self.mask_token, 'h -> b t h', b=target.size(0), t=target.size(1))
+            decoder_input = torch.cat([backbone_features, decoder_mask_tokens], dim=1)
+            times = torch.cat([batch[DataKey.time], batch[f'{DataKey.time}_target']], 1)
+            positions = torch.cat([batch[DataKey.position], batch[f'{DataKey.position}_target']], 1)
+
+            trial_context = []
+            for key in ['session', 'subject', 'task']:
+                if batch.get(key, None) is not None:
+                    trial_context.append(batch[key])
+
+            if LENGTH_KEY in batch:
+                token_position = rearrange(batch[SHUFFLE_KEY], 't -> () t')
+                temporal_padding_mask = token_position >= rearrange(batch[LENGTH_KEY], 'b -> b ()')
+            reps: torch.Tensor = self.decoder(
+                decoder_input,
+                trial_context=trial_context,
+                temporal_padding_mask=temporal_padding_mask,
+                space_padding_mask=None, # TODO implement (low pri)
+                causal=False, # TODO implement (low pri)
+                times=times,
+                positions=positions
+            )
+            reps = reps[:, -target.size(1):]
+            rates = self.out(reps)
+        batch_out = {}
+        assert not Metric.bps in self.cfg.metrics, 'not supported'
+        assert not Output.logrates in self.cfg.outputs, 'not implemented'
+
+        if not compute_metrics:
+            return batch_out
+        loss: torch.Tensor = self.loss(rates, target) # b t' c
+        # get_masks
+        loss_mask = torch.ones(loss.size(), device=loss.device, dtype=torch.bool)
+        # note LENGTH_KEY and CHANNEL_KEY are for padding tracking
+        # while DataKey.time and DataKey.position are for content
+        if LENGTH_KEY in batch:
+            token_position = rearrange(batch[SHUFFLE_KEY][batch['encoder_frac']:], 't -> () t')
+            length_mask = token_position < rearrange(batch[LENGTH_KEY], 'b -> b ()')
+            loss_mask = loss_mask & length_mask.unsqueeze(-1)
+        if CHANNEL_KEY in batch:
+            # CHANNEL_KEY padding tracking has already been shuffled
+            # And within each token, we just have c channels to track, always in order
+            comparison = repeat(torch.arange(loss.size(-1), device=loss.device), 'c -> 1 t c', t=loss.size(1)) # ! assuming flat - otherwise we need the space dimension as well.
+            channel_mask = comparison < batch[f'{CHANNEL_KEY}_target'].unsqueeze(-1) # unsqueeze the channel dimension
+            loss_mask = loss_mask & channel_mask
+        loss = loss[loss_mask]
+        batch_out['loss'] = loss.mean()
+        return batch_out
+
+
+# todo make shuffle next step prediction
 class NextStepPrediction(RatePrediction):
     r"""
         One-step-ahead modeling prediction.
@@ -499,6 +646,7 @@ class BehaviorRegression(TaskPipeline):
 
 task_modules = {
     ModelTask.infill: SelfSupervisedInfill,
+    ModelTask.shuffle_infill: ShuffleInfill,
     ModelTask.next_step_prediction: NextStepPrediction, # ! not implemented, above logic is infill specific
     ModelTask.heldout_decoding: HeldoutPrediction,
     ModelTask.kinematic_decoding: BehaviorRegression,
