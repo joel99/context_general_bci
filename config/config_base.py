@@ -349,6 +349,7 @@ class DatasetConfig:
     serve_tokenized_flat: bool = False # flatten space (serve spikes as B Token H instead of B T S H)
     neurons_per_token: int = 8 # for tokenized
     max_tokens: int = 1024 # for tokenized - note we will still respect max_length_ms (limit fills in space and then either this inferred time limit or the explicit one)
+    # ! note that the above is going to be strictly more than amount proc-ed in encoder-decoder encoder -- since things are cropped.
     pad_value: int = 0
     # pad_value: int = 20
 

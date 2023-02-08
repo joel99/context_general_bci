@@ -34,14 +34,14 @@ dataset:
   neurons_per_token: 8
   max_channels: 192 # 2 x 96... this should also cover Dyer.
   datasets:
-  # - churchland_maze.*
-  # - churchland_misc.*
-  # - CRS02bHome.data.*
+  - churchland_maze.*
+  - churchland_misc.*
+  - CRS02bHome.data.*
   - dyer_co.*
 
   # - mc_rtt
-  eval_datasets: []
-  # - CRS02bHome.data.00437
+  eval_datasets:
+  - CRS02bHome.data.00437
   # - 'mc_rtt'
   # - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
@@ -55,3 +55,7 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+
+train:
+  batch_size: 8
+  autoscale_batch_size: false # multi-gpu

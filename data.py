@@ -113,6 +113,7 @@ class SpikingDataset(Dataset):
             self.meta_df = None
         self.context_index = None
         self.subsetted = False
+        self.max_bins = round(self.cfg.max_length_ms / self.cfg.bin_size_ms)
 
         self.mark_eval_split_if_exists()
 
@@ -366,7 +367,7 @@ class SpikingDataset(Dataset):
     def collater_factory(self):
         if not self.cfg.pad_batches:
             raise NotImplementedError("Need to implement trimming")
-        max_bins = round(self.cfg.max_length_ms / self.cfg.bin_size_ms)
+
         if self.cfg.serve_tokenized:
             # Design decisions for cropping sequences
             # Note we don't take randomized slices over full datasets - (like in NLP) -- this is added complexity that will not obviously be useful
@@ -385,15 +386,19 @@ class SpikingDataset(Dataset):
                 if not self.cfg.serve_tokenized_flat: # account for padding in space calculation
                     space_lengths = torch.full_like(space_lengths, space_lengths.max())
                 time_budget = (self.cfg.max_tokens // space_lengths)
-                if max_bins:
-                    time_budget = time_budget.min(torch.tensor(max_bins))
+                if self.max_bins:
+                    time_budget = time_budget.min(torch.tensor(self.max_bins))
                 # TODO separate out/remove this cropping logic for flat spacetime
                 crop_start_limit = (torch.tensor([b[DataKey.spikes].size(0) for b in batch]) - time_budget).max(torch.tensor(1))
                 crop_start = torch.randint(0, 10000, (len(batch),), dtype=torch.long) % crop_start_limit
+                # ! currently, DataKey.time is with respect to trial time; what we really need is a time relative to the crop_start
+                # ! we have several ways of instancing this, but we're picking the most convenient for now anticipating near future changes
                 for i, b in enumerate(batch):
                     for k in b.keys():
                         if isinstance(k, DataKey):
                             item = b[k][crop_start[i]:crop_start[i]+time_budget[i]]
+                            if k == DataKey.time:
+                                item = item - item[0]
                             if self.cfg.serve_tokenized_flat:
                                 if k in [DataKey.spikes, DataKey.time, DataKey.position]:
                                     # These keys have spatial dimensions that we will serve flat to maximize data throughput across heterogeneous trials
@@ -420,7 +425,7 @@ class SpikingDataset(Dataset):
                     else:
                         stack_batch[k] = torch.stack(stack_batch[k])
                 stack_batch[LENGTH_KEY] = lengths
-                return stack_batch
+                return dict(stack_batch) # cast back to dict as pytorch distributed can act up with defaultdicts
             return collater
         else:
             def collater(batch):
@@ -431,9 +436,9 @@ class SpikingDataset(Dataset):
                 for k in batch[0].keys():
                     crop_seq = [b[k] for b in batch]
                     # TODO randomize crop
-                    if max_bins and isinstance(k, DataKey):
+                    if self.max_bins and isinstance(k, DataKey):
                         # Leading dimension for DataKeys should be time
-                        crop_seq = [b[k][-max_bins:] for b in batch] # terminal crop - most trials have long start paddings (e.g. Gallego)
+                        crop_seq = [b[k][-self.max_bins:] for b in batch] # terminal crop - most trials have long start paddings (e.g. Gallego)
                     if k == DataKey.spikes:
                         stack_batch[LENGTH_KEY] = torch.tensor([cs.shape[0] for cs in crop_seq])
                     if k in [DataKey.spikes, DataKey.bhvr_vel]: # T A C H

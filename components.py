@@ -305,8 +305,6 @@ class SpaceTimeTransformer(nn.Module):
         """
         src = self.dropout_in(src)
         # import pdb;pdb.set_trace()
-        if src.size(0) == 4:
-            import pdb;pdb.set_trace()
         # === Embeddings ===
 
         if getattr(self.cfg, 'flat_encoder', False):
