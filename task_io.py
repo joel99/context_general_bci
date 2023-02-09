@@ -595,7 +595,7 @@ class HeldoutPrediction(RatePrediction):
         elif self.cfg.decode_strategy == EmbedStrat.token:
             self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes)
             decoder_layers = [
-                nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
+                nn.Linear(cfg.hidden_size, channel_count)
             ]
             if not cfg.lograte:
                 decoder_layers.append(nn.ReLU())
@@ -607,11 +607,11 @@ class HeldoutPrediction(RatePrediction):
         return self.injector.inject(batch)
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
-        if not self.concatenating:
-            backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
         if self.cfg.decode_strategy == EmbedStrat.token:
             # crop out injected tokens, -> B T H
             backbone_features = self.injector.extract(batch, backbone_features)
+        elif self.cfg.decode_strategy == EmbedStrat.project and not self.concatenating:
+            backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.heldout_logrates in self.cfg.outputs:
@@ -623,7 +623,7 @@ class HeldoutPrediction(RatePrediction):
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
         loss = rearrange(loss, 'b t c -> b t 1 c')
-        loss_mask, length_mask, channel_mask = self.get_masks(batch, channel_key=HELDOUT_CHANNEL_KEY) # channel_key expected to be no-op since we don't provide this mask
+        loss_mask, length_mask, channel_mask = self.get_masks(batch, ref=batch[DataKey.heldout_spikes][..., 0], channel_key=HELDOUT_CHANNEL_KEY) # channel_key expected to be no-op since we don't provide this mask
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.co_bps in self.cfg.metrics:

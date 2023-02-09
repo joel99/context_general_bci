@@ -1,4 +1,5 @@
 # @package _global_
+# Kinematic smoketest
 defaults:
   - /model: finetune
   # - /model: flat_enc_dec

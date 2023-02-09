@@ -1,49 +1,57 @@
 # @package _global_
-tag: rtt_maze_5_factor_2_multi
-
+# RTT NLB cobps smoketest
 defaults:
-  - /model: pretrain_2x
-  - /train: pretrain
+  - /model: finetune
+  - /dataset: rtt
+  - /train: finetune
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
-  # token add not implemented for spacetime
 
-  spike_embed_style: EmbedStrat.token
-  neurons_per_token: 2
-  hidden_size: 256
-  transform_space: true
+  neurons_per_token: 8
+
+  dropout: 0.7
   transformer:
-    factorized_space_time: true
-
+    dropout: 0.7
+    n_heads: 2
   task:
     tasks:
-    - ModelTask.infill
+    # - ModelTask.infill
+    - ModelTask.heldout_decoding
     metrics:
-    - Metric.bps
+    # - Metric.bps
+    - Metric.co_bps
+    - Metric.block_co_bps
+    decode_strategy: EmbedStrat.token
+
+  lr_init: 5e-5
+  accelerate_new_params: 10.0
 dataset:
+  max_tokens: 2048
+  neurons_per_token: 8
+  max_arrays: 1
+  bin_size_ms: 5
+  serve_tokenized: true
+  serve_tokenized_flat: true
+  max_channels: 104
   datasets:
-  - odoherty_rtt-Indy.* # Note we're just using indy here.
   - mc_rtt
-  - mc_maze.*
-  odoherty_rtt:
-    arrays:
-    - Indy-M1
-    - Loco-M1
   eval_datasets:
   - mc_rtt
+  # - 'odoherty_rtt-Indy-20161005_06'
+  odoherty_rtt:
+      arrays:
+      - Indy-M1
+      - Loco-M1
   data_keys:
   - DataKey.spikes
+  - DataKey.heldout_spikes
+  # - DataKey.bhvr_vel
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-  bin_size_ms: 5
 
-  max_channels: 138
-  # max_channels: 98
-train:
-  # DDP doesn't support autoscale as of 2/6/23. Workflow is to manually launch a single GPU run; check batch size, load here.
-  autoscale_batch_size: false
-  batch_size: 8
+init_from_id: rtt_m75-t6ofj5ae
+init_tag: val_loss

@@ -23,8 +23,9 @@ query = "pitt_obs_decode_scratch"
 query = "test_overfit"
 query = "pitt_obs_decode_scratch-sweep-small_wide-7ycit09t"
 # query = "pitt_obs_decode_scratch-sweep-small_wide-t1h7knvd"
-# wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
-wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
+query = 'test'
+wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
+# wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
