@@ -135,6 +135,14 @@ cs.store(group="train", name="nlb", node=NLBTrainConfig)
 cs.store(group="train", name="small", node=NLBTrainConfig) # alias
 
 @dataclass
+class FineTuneConfig(TrainConfig):
+    epochs: int = 10000
+    batch_size: int = 64 # arbitrary, expectation is autoscale
+    patience: int = 200
+
+cs.store(group="train", name="finetune", node=FineTuneConfig)
+
+@dataclass
 class RTTDataConfig(DatasetConfig):
     r"""
         Default configuration for all RTT datasets

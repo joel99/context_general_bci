@@ -39,6 +39,7 @@ r"""
 
 # Padding tokens
 LENGTH_KEY = 'length'
+COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for padded sequences of covariates in the flat case
 CHANNEL_KEY = 'channel_counts'
 HELDOUT_CHANNEL_KEY = 'heldout_channel_counts'
 
@@ -393,6 +394,7 @@ class SpikingDataset(Dataset):
                 crop_start = torch.randint(0, 10000, (len(batch),), dtype=torch.long) % crop_start_limit
                 # ! currently, DataKey.time is with respect to trial time; what we really need is a time relative to the crop_start
                 # ! we have several ways of instancing this, but we're picking the most convenient for now anticipating near future changes
+                covariate_key = None
                 for i, b in enumerate(batch):
                     for k in b.keys():
                         if isinstance(k, DataKey):
@@ -403,6 +405,8 @@ class SpikingDataset(Dataset):
                                 if k in [DataKey.spikes, DataKey.time, DataKey.position]:
                                     # These keys have spatial dimensions that we will serve flat to maximize data throughput across heterogeneous trials
                                     item = item.flatten(0, 1) # T S H -> Token H
+                                else:
+                                    covariate_key = k # will need separate padding, track for later
                             else: # pad in space
                                 if k == DataKey.spikes: # B T S C H
                                     item = F.pad(item, (0, 0, 0, 0, 0, space_lengths[i] - item.size(1)), value=self.pad_value)
@@ -419,12 +423,18 @@ class SpikingDataset(Dataset):
                             else:
                                 stack_batch[k].append(b[k])
                 lengths = torch.tensor([el.size(0) for el in stack_batch[DataKey.spikes]])
+                if covariate_key is not None:
+                    covariate_lengths = torch.tensor([el.size(0) for el in stack_batch[covariate_key]])
                 for k in stack_batch.keys():
                     if isinstance(k, DataKey) or (self.cfg.serve_tokenized_flat and k == CHANNEL_KEY):
+                        if isinstance(k, DataKey):
+                            covariate_key = k
                         stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True)
                     else:
                         stack_batch[k] = torch.stack(stack_batch[k])
                 stack_batch[LENGTH_KEY] = lengths
+                if covariate_key is not None:
+                    stack_batch[COVARIATE_LENGTH_KEY] = covariate_lengths
                 return dict(stack_batch) # cast back to dict as pytorch distributed can act up with defaultdicts
             return collater
         else:

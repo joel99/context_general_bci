@@ -4,6 +4,7 @@ import math
 import numpy as np
 import torch
 from torch import nn, optim
+import torch.nn.functional as F
 import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack, unpack # baby steps...
 from omegaconf import OmegaConf, ListConfig, DictConfig
@@ -21,7 +22,7 @@ from config import (
     Architecture,
 )
 
-from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, COVARIATE_LENGTH_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
@@ -406,14 +407,14 @@ class BrainBertInterface(pl.LightningModule):
                 static_context: List(T') [B x H]
                 temporal_context: List(?) [B x T x H]
         """
-        if getattr(self.cfg, 'layer_norm_input', False):
+        if self.cfg.layer_norm_input:
             state_in = self.layer_norm_input(state_in)
         temporal_context = []
         for task in self.cfg.task.tasks:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
 
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            if getattr(self.cfg, 'session_embed_token_count', 1) > 1:
+            if self.cfg.session_embed_token_count > 1:
                 session: torch.Tensor = self.session_embed[batch[MetaKey.session]] # B x K x H
             else:
                 session: torch.Tensor = self.session_embed(batch[MetaKey.session]) # B x H
@@ -547,16 +548,26 @@ class BrainBertInterface(pl.LightningModule):
             # temporal_padding refers to general length padding in `serve_tokens_flat` case
         else:
             temporal_padding_mask = None
+        if DataKey.extra in batch:
+            # TODO - the "extra" data that refers to padding should be masked
+            # We can determine whether this is true
+            state_in = torch.cat([state_in, batch[DataKey.extra]], dim=1)
+            if temporal_padding_mask is not None:
+                extra_position = rearrange(torch.arange(batch[DataKey.extra].size(1), device=state_in.device), 't -> () t')
+                extra_padding_mask = extra_position >= rearrange(batch[COVARIATE_LENGTH_KEY], 'b -> b ()')
+                temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
 
         # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
         # But we do want to exclude fully-padded arrays from computation
         if self.data_attrs.serve_tokens_flat:
             space_padding_mask = None
         elif self.data_attrs.serve_tokens:
+            assert not DataKey.extra in batch, 'not implemented'
             allocated_space_tokens = torch.ceil(batch[CHANNEL_KEY] / self.cfg.neurons_per_token).sum(1) # B
             space_comparison = torch.arange(state_in.size(2), device=state_in.device)[None, :]
             space_padding_mask = space_comparison >= allocated_space_tokens[:, None] # -> B A
         else:
+            assert not DataKey.extra in batch, 'not implemented'
             space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
 
         outputs: torch.Tensor = self.backbone(
@@ -851,6 +862,9 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
         "readout_dim",
         "readin_dim",
         'causal', # TODO move to diff_cfg, this is temporary
+        "transform_space",
+        "encode_decode",
+        "spike_embed_style",
     ]:
         setattr(target_cfg, attr, getattr(src_cfg, attr))
 

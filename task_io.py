@@ -14,7 +14,7 @@ from config import (
     ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey,
 )
 
-from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY, COVARIATE_LENGTH_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 
 from components import SpaceTimeTransformer
@@ -44,23 +44,25 @@ class TaskPipeline(nn.Module):
         data_attrs: DataAttrs,
     ) -> None:
         super().__init__()
+        self.cfg = cfg.task
         self.pad_value = data_attrs.pad_token
         self.serve_tokens = data_attrs.serve_tokens
         self.serve_tokens_flat = data_attrs.serve_tokens_flat
 
-    def get_masks(self, batch, channel_key=CHANNEL_KEY):
+    def get_masks(self, batch, channel_key=CHANNEL_KEY, length_key=LENGTH_KEY, ref=None, compute_channel=True):
         # loss_mask: b t *
-        ref = batch[DataKey.spikes][..., 0]
+        if ref is None:
+            ref = batch[DataKey.spikes][..., 0]
         if self.serve_tokens_flat:
             b, t, c = ref.size()
             s = 1
         else:
             b, t, s, c = ref.size()
         loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
-        if LENGTH_KEY in batch: # only some of b x t are valid
-            lengths = batch[LENGTH_KEY] # b of ints < t
+        if length_key in batch: # only some of b x t are valid
+            lengths = batch[length_key] # b of ints < t
             comparison = torch.arange(t, device=ref.device)[None, :]
-            if SHUFFLE_KEY in batch:
+            if length_key == LENGTH_KEY and SHUFFLE_KEY in batch:
                 comparison = apply_shuffle(comparison, batch[SHUFFLE_KEY])
             length_mask = comparison < lengths[:, None] # B T
             if self.serve_tokens_flat:
@@ -70,7 +72,7 @@ class TaskPipeline(nn.Module):
             # import pdb;pdb.set_trace() # TODO needs testing in padding mode
         else:
             length_mask = None
-        if channel_key in batch: # only some of b x a x c are valid
+        if channel_key in batch and compute_channel: # only some of b x a x c are valid
             channels = batch[channel_key] # b x a of ints < c (or b x t)
             # Note no shuffling occurs here because 1. channel_key shuffle is done when needed earlier
             # 2. no spatial shuffling occurs so we do need to apply_shuffle(torch.arange(c))
@@ -160,7 +162,6 @@ class RatePrediction(TaskPipeline):
             cfg=cfg,
             data_attrs=data_attrs
         )
-        self.cfg = cfg.task
         if self.serve_tokens_flat:
             assert Metric.bps not in self.cfg.metrics, "bps metric not supported for flat tokens"
         if decoder is not None:
@@ -354,7 +355,6 @@ class ShuffleInfill(RatePrediction):
             cfg=cfg,
             data_attrs=data_attrs
         )
-        self.cfg = cfg.task
         assert self.serve_tokens and self.serve_tokens_flat, 'other paths not implemented'
         max_spatial_tokens = round(
             data_attrs.max_channel_count / cfg.neurons_per_token
@@ -588,6 +588,11 @@ class HeldoutPrediction(RatePrediction):
         return batch_out
 
 class BehaviorRegression(TaskPipeline):
+    r"""
+        Because this is not intended to be a joint task, and backbone is expected to be tuned
+        We will not make decoder fancy.
+    """
+
     def __init__(
         self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
     ):
@@ -597,26 +602,54 @@ class BehaviorRegression(TaskPipeline):
             cfg=cfg,
             data_attrs=data_attrs
         )
-        self.cfg = cfg.task
-        r"""
-            Because this is not intended to be a joint task, we will not make the decoder deep (expectation is tuning)
-        """
         # For linear decoder, deal with multiple arrays by concatenating
-        if cfg.transform_space and not data_attrs.serve_tokens:
-            self.decoder = nn.Sequential(
-                Rearrange('b t a s h -> b t (a s h)'),
-                nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token) * data_attrs.max_arrays, data_attrs.behavior_dim)
-            )
-        else:
-            self.decoder = nn.Sequential(
-                Rearrange('b t a c -> b t (a c)'),
-                nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)
-            )
+        if self.cfg.decode_strategy == EmbedStrat.project:
+            assert not data_attrs.serve_tokens_flat, "behavior regression not implemented for flat serving"
+            if cfg.transform_space and not data_attrs.serve_tokens:
+                self.decoder = nn.Sequential(
+                    Rearrange('b t a s h -> b t (a s h)'),
+                    nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token) * data_attrs.max_arrays, data_attrs.behavior_dim)
+                )
+            else:
+                self.decoder = nn.Sequential(
+                    Rearrange('b t a c -> b t (a c)'),
+                    nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)
+                )
+        elif self.cfg.decode_strategy == EmbedStrat.token:
+            self.hidden_size = cfg.hidden_size
+            self.cls_token = nn.Parameter(torch.randn(self.hidden_size))
+            self.decoder = nn.Linear(self.hidden_size, data_attrs.behavior_dim)
+            self.pad_value = data_attrs.pad_token
         self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
+
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
+        if self.cfg.decode_strategy != EmbedStrat.token:
+            return
+        # Implement injection
+        # Assumption is that behavior time == spike time (i.e. if spike is packed, so is behavior)
+        injected_tokens = repeat(self.cls_token, 'h -> b t h',
+            b=batch[self.cfg.behavior_target].size(0),
+            t=batch[self.cfg.behavior_target].size(1), # Time (not _token_, i.e. in spite of flat serving)
+        )
+        injected_time = repeat(torch.arange(
+            batch[self.cfg.behavior_target].size(1),
+            device=batch[self.cfg.behavior_target].device
+        ), 't -> b t', b=batch[self.cfg.behavior_target].size(0))
+        injected_space = torch.full(
+            batch[self.cfg.behavior_target].size()[:2],
+            self.pad_value,
+            device=batch[self.cfg.behavior_target].device
+        )
+        # I want to inject padding tokens for space so nothing actually gets added on that dimension
+        batch[DataKey.extra] = injected_tokens # B T H
+        batch[DataKey.time] = torch.cat([batch[DataKey.time], injected_time], dim=1)
+        batch[DataKey.position] = torch.cat([batch[DataKey.position], injected_space], dim=1)
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
-        # backbone_features = rearrange(backbone_features, 'b t a c -> b t (a c)')
+        if self.cfg.decode_strategy == EmbedStrat.token:
+            # crop out injected tokens, -> B T H
+            backbone_features = backbone_features[:, -batch[self.cfg.behavior_target].size(1):] # assuming it was stitched to back
         bhvr = self.decoder(backbone_features)
         if self.bhvr_lag_bins:
             bhvr = bhvr[:, :-self.bhvr_lag_bins]
@@ -630,7 +663,12 @@ class BehaviorRegression(TaskPipeline):
         # Compute loss
         bhvr_tgt = batch[self.cfg.behavior_target]
         loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
-        _, length_mask, _ = self.get_masks(batch, channel_key=None)
+        # import pdb;pdb.set_trace()
+        _, length_mask, _ = self.get_masks(
+            batch, ref=backbone_features,
+            length_key=COVARIATE_LENGTH_KEY,
+            compute_channel=False
+        )
 
         length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
         batch_out['loss'] = loss[length_mask].mean()

@@ -60,6 +60,7 @@ class DataKey(Enum):
 
     time = 'time'
     position = 'position' # space, however you want to think about it. Tracks channel cluster.
+    extra = 'extra' # utility for decoding
 
 class MetaKey(Enum):
     r"""
@@ -75,6 +76,22 @@ class MetaKey(Enum):
     # Note these two are trial-wise metadata, and are stored in meta.csv. Currently easier to just store string 'split' and 'path' rather than parse out the enums from the csv.
     split = 'split' # for NLB, sometimes data is loaded that has special labels/should be processed differently
     path = 'path'
+
+
+class EmbedStrat(Enum):
+    # Embedding strategies, used in several contexts (overloaded)
+    none = "" # Just ignore context
+    token = 'token' # Embed context as a token
+    token_add = 'token_add' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
+    concat = 'concat' # concat embedding and downproject
+
+    # readin specific
+    project = 'project'
+    unique_project = 'unique_project' # learn a separate projection per context
+    mirror_project = 'mirror_project'
+
+    readin_cross_attn = 'cross_attn'
+    contextual_mlp = 'contextual_mlp' # feed raw context.
 
 @dataclass
 class TaskConfig:
@@ -103,6 +120,8 @@ class TaskConfig:
     behavior_lag: int = 0 # in ms
     behavior_target: DataKey = DataKey.bhvr_vel
 
+    decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
+
 @dataclass
 class TransformerConfig:
     n_state: int = 256
@@ -129,21 +148,6 @@ class TransformerConfig:
     max_spatial_tokens: bool = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
 
     factorized_space_time: bool = False # will split layers evenly in space and time
-
-class EmbedStrat(Enum):
-    # Embedding strategies, used in several contexts (overloaded)
-    none = "" # Just ignore context
-    token = 'token' # Embed context as a token
-    token_add = 'token_add' # Like token, but gets added instead of being context. Typically used for array embed, because it differentiates within trial.
-    concat = 'concat' # concat embedding and downproject
-
-    # readin specific
-    project = 'project'
-    unique_project = 'unique_project' # learn a separate projection per context
-    mirror_project = 'mirror_project'
-
-    readin_cross_attn = 'cross_attn'
-    contextual_mlp = 'contextual_mlp' # feed raw context.
 
 @dataclass
 class ModelConfig:
