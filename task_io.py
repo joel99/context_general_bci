@@ -520,6 +520,39 @@ class ICMSNextStepPrediction(NextStepPrediction):
         parent = super().get_temporal_context(batch)
         return [*parent, batch[DataKey.stim]]
 
+class TemporalTokenInjector(nn.Module):
+    def __init__(
+        self, cfg: ModelConfig, data_attrs: DataAttrs, reference: DataKey
+    ):
+        super().__init__()
+        self.reference = reference
+        self.cls_token = nn.Parameter(torch.randn(cfg.hidden_size))
+        self.pad_value = data_attrs.pad_token
+
+    def inject(self, batch: Dict[str, torch.Tensor]):
+        # Implement injection
+        # Assumption is that behavior time == spike time (i.e. if spike is packed, so is behavior)
+        injected_tokens = repeat(self.cls_token, 'h -> b t h',
+            b=batch[self.reference].size(0),
+            t=batch[self.reference].size(1), # Time (not _token_, i.e. in spite of flat serving)
+        )
+        injected_time = repeat(torch.arange(
+            batch[self.reference].size(1),
+            device=batch[self.reference].device
+        ), 't -> b t', b=batch[self.reference].size(0))
+        injected_space = torch.full(
+            batch[self.reference].size()[:2],
+            self.pad_value,
+            device=batch[self.reference].device
+        )
+        # I want to inject padding tokens for space so nothing actually gets added on that dimension
+        batch[DataKey.extra] = injected_tokens # B T H
+        batch[DataKey.time] = torch.cat([batch[DataKey.time], injected_time], dim=1)
+        batch[DataKey.position] = torch.cat([batch[DataKey.position], injected_space], dim=1)
+        return batch
+
+    def extract(self, batch: Dict[str, torch.Tensor], features: torch.Tensor) -> torch.Tensor:
+        return features[:, -batch[self.reference].size(1):] # assuming it was stitched to back
 
 class HeldoutPrediction(RatePrediction):
     r"""
@@ -528,24 +561,15 @@ class HeldoutPrediction(RatePrediction):
     def __init__(
         self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
     ):
-        self.concatenating = cfg.transform_space and not data_attrs.serve_tokens
-        if self.concatenating:
-            # It takes too much memory to concatenate full length tokens x however many tokens there are
-            # Project down to neuron dim first.
-            decoder_layers = [
-                nn.Linear(backbone_out_size, backbone_out_size),
-                nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
-                nn.Linear(backbone_out_size, cfg.neurons_per_token),
-                Rearrange('b t a s_a c -> b t (a s_a c)'),
-                nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
-                nn.Linear(data_attrs.max_arrays * data_attrs.max_channel_count, channel_count),
-            ]
-            if not cfg.lograte:
-                decoder_layers.append(nn.ReLU())
-            decoder = nn.Sequential(*decoder_layers)
-        else:
-            backbone_out_size = backbone_out_size * data_attrs.max_arrays
-            decoder = None
+        if cfg.task.decode_strategy == EmbedStrat.project:
+            self.concatenating = cfg.transform_space and not data_attrs.serve_tokens
+            if self.concatenating:
+                decoder = nn.Identity() # dummy
+            else:
+                backbone_out_size = backbone_out_size * data_attrs.max_arrays
+                decoder = None
+        elif cfg.task.decode_strategy == EmbedStrat.token:
+            decoder = nn.Identity()
         super().__init__(
             backbone_out_size=backbone_out_size,
             channel_count=channel_count,
@@ -553,10 +577,41 @@ class HeldoutPrediction(RatePrediction):
             data_attrs=data_attrs,
             decoder=decoder
         )
+        if self.cfg.decode_strategy == EmbedStrat.project:
+            if self.concatenating:
+                # It takes too much memory to concatenate full length tokens x however many tokens there are
+                # Project down to neuron dim first.
+                decoder_layers = [
+                    nn.Linear(backbone_out_size, backbone_out_size),
+                    nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+                    nn.Linear(backbone_out_size, cfg.neurons_per_token),
+                    Rearrange('b t a s_a c -> b t (a s_a c)'),
+                    nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+                    nn.Linear(data_attrs.max_arrays * data_attrs.max_channel_count, channel_count),
+                ]
+                if not cfg.lograte:
+                    decoder_layers.append(nn.ReLU())
+                self.out = nn.Sequential(*decoder_layers) # override
+        elif self.cfg.decode_strategy == EmbedStrat.token:
+            self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes)
+            decoder_layers = [
+                nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
+            ]
+            if not cfg.lograte:
+                decoder_layers.append(nn.ReLU())
+            self.out = nn.Sequential(*decoder_layers)
+
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
+        if self.cfg.decode_strategy != EmbedStrat.token:
+            return
+        return self.injector.inject(batch)
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         if not self.concatenating:
             backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
+        if self.cfg.decode_strategy == EmbedStrat.token:
+            # crop out injected tokens, -> B T H
+            backbone_features = self.injector.extract(batch, backbone_features)
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.heldout_logrates in self.cfg.outputs:
@@ -616,40 +671,21 @@ class BehaviorRegression(TaskPipeline):
                     nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)
                 )
         elif self.cfg.decode_strategy == EmbedStrat.token:
-            self.hidden_size = cfg.hidden_size
-            self.cls_token = nn.Parameter(torch.randn(self.hidden_size))
-            self.decoder = nn.Linear(self.hidden_size, data_attrs.behavior_dim)
-            self.pad_value = data_attrs.pad_token
+            self.injector = TemporalTokenInjector(cfg, data_attrs, self.cfg.behavior_target)
+            self.decoder = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
+
         self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token:
             return
-        # Implement injection
-        # Assumption is that behavior time == spike time (i.e. if spike is packed, so is behavior)
-        injected_tokens = repeat(self.cls_token, 'h -> b t h',
-            b=batch[self.cfg.behavior_target].size(0),
-            t=batch[self.cfg.behavior_target].size(1), # Time (not _token_, i.e. in spite of flat serving)
-        )
-        injected_time = repeat(torch.arange(
-            batch[self.cfg.behavior_target].size(1),
-            device=batch[self.cfg.behavior_target].device
-        ), 't -> b t', b=batch[self.cfg.behavior_target].size(0))
-        injected_space = torch.full(
-            batch[self.cfg.behavior_target].size()[:2],
-            self.pad_value,
-            device=batch[self.cfg.behavior_target].device
-        )
-        # I want to inject padding tokens for space so nothing actually gets added on that dimension
-        batch[DataKey.extra] = injected_tokens # B T H
-        batch[DataKey.time] = torch.cat([batch[DataKey.time], injected_time], dim=1)
-        batch[DataKey.position] = torch.cat([batch[DataKey.position], injected_space], dim=1)
+        return self.injector.inject(batch)
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
         if self.cfg.decode_strategy == EmbedStrat.token:
             # crop out injected tokens, -> B T H
-            backbone_features = backbone_features[:, -batch[self.cfg.behavior_target].size(1):] # assuming it was stitched to back
+            backbone_features = self.injector.extract(batch, backbone_features)
         bhvr = self.decoder(backbone_features)
         if self.bhvr_lag_bins:
             bhvr = bhvr[:, :-self.bhvr_lag_bins]
