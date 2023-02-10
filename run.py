@@ -58,8 +58,9 @@ def run_exp(cfg : RootConfig) -> None:
             JY is used to having experimental variant names tracked with filename (instead of manually setting tags)
             take sys.argv and set the tag to the query. Only set it if we're not sweeping (where tag was already explicitly set)
         """
-        cfg.tag = sys.argv[sys.argv.index('run.py')+1]
-        cfg.tag = cfg.tag[cfg.tag.index('=') + 1 if '=' in cfg.tag else 0:]
+        exp_arg = [arg for arg in sys.argv if '+exp' in arg]
+        if len(exp_arg) > 0:
+            cfg.tag = exp_arg[0].split('=')[1]
     if cfg.sweep_cfg and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
         sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
         for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
@@ -76,8 +77,6 @@ def run_exp(cfg : RootConfig) -> None:
         exit(0)
 
     logger = logging.getLogger(__name__)
-    logger.info(f"Running NDT2, dumping config:")
-    logger.info(OmegaConf.to_yaml(cfg))
     pl.seed_everything(seed=cfg.seed)
 
     dataset = SpikingDataset(cfg.dataset)
@@ -89,7 +88,7 @@ def run_exp(cfg : RootConfig) -> None:
     train, val = dataset.create_tv_datasets()
     logger.info(f"Training on {len(train)} examples")
     data_attrs = dataset.get_data_attrs()
-    logger.info(pformat(f"Data attributes: {data_attrs}"))
+    # logger.info(pformat(f"Data attributes: {data_attrs}"))
 
     if cfg.init_from_id:
         init_ckpt = get_best_ckpt_from_wandb_id(
@@ -149,11 +148,6 @@ def run_exp(cfg : RootConfig) -> None:
                 )
             )
 
-    wandb_logger = WandbLogger(
-        project=cfg.wandb_project,
-        save_dir=cfg.default_root_dir,
-    )
-
     pl.seed_everything(seed=cfg.seed)
 
     if cfg.train.steps:
@@ -162,12 +156,20 @@ def run_exp(cfg : RootConfig) -> None:
     else:
         max_steps = -1
 
+    wandb_logger = WandbLogger(
+        project=cfg.wandb_project,
+        save_dir=cfg.default_root_dir,
+    )
+
+    is_distributed = (torch.cuda.device_count() > 1) or getattr(cfg, 'nodes', 1) > 1
+
     trainer = pl.Trainer(
         logger=wandb_logger,
         max_epochs=epochs,
         max_steps=max_steps,
         accelerator='gpu',
         devices=torch.cuda.device_count(),
+        num_nodes=getattr(cfg, 'nodes', 1),
         check_val_every_n_epoch=1,
         log_every_n_steps=cfg.train.log_every_n_steps,
         # val_check_interval=cfg.train.val_check_interval,
@@ -175,15 +177,19 @@ def run_exp(cfg : RootConfig) -> None:
         default_root_dir=cfg.default_root_dir,
         track_grad_norm=2 if cfg.train.log_grad else -1,
         precision=16 if cfg.model.half_precision else 32,
-        strategy=DDPStrategy(find_unused_parameters=False) if torch.cuda.device_count() > 1 else None,
+        strategy=DDPStrategy(find_unused_parameters=False) if is_distributed else None,
         gradient_clip_val=cfg.train.gradient_clip_val,
         accumulate_grad_batches=cfg.train.accumulate_batches,
         profiler=cfg.train.profiler if cfg.train.profiler else None,
         overfit_batches=1 if cfg.train.overfit_batches else 0
     )
 
-    if torch.cuda.device_count() <= 1 or trainer.global_rank == 0:
-        # Note, wandb.run can also be accessed as logger.experiment but there's no benefit
+
+    # Note, wandb.run can also be accessed as logger.experiment but there's no benefit
+    # torch.cuda.device_count() > 1 or cfg.nodes > 1
+    if trainer.global_rank == 0:
+        logger.info(f"Running NDT2, dumping config:")
+        logger.info(OmegaConf.to_yaml(cfg))
         if cfg.tag:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
         if os.environ.get('SLURM_JOB_ID'):

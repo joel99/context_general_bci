@@ -569,7 +569,7 @@ class BrainBertInterface(pl.LightningModule):
         else:
             assert not DataKey.extra in batch, 'not implemented'
             space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
-
+        # import pdb;pdb.set_trace()
         outputs: torch.Tensor = self.backbone(
             state_in,
             trial_context=trial_context,
@@ -834,6 +834,13 @@ class BrainBertInterface(pl.LightningModule):
         if scheduler is not None:
             out['lr_scheduler'] = scheduler
         return out
+
+    # def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+    #     super().on_load_checkpoint(checkpoint)
+    #     import pdb;pdb.set_trace()
+    #     # TODO hook diff_cfg for LR and reset LR schedule if LR changed
+    #     return
+    # ? No hope, IDK how to do this; just use `init_from_id` if you messed up the schedule
 
 # === Model loading ===
 def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):

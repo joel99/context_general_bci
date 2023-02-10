@@ -63,5 +63,6 @@ dataset:
 train:
   batch_size: 8
   autoscale_batch_size: false # multi-gpu
-load_from_id: base_20_faster-8cfb2byv
+init_from_id: base_20_faster-8cfb2byv
 # load_from_id: base_20_faster_m8_f4-o1mo7inh
+init_tag: val_loss

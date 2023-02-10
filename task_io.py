@@ -53,11 +53,13 @@ class TaskPipeline(nn.Module):
         # loss_mask: b t *
         if ref is None:
             ref = batch[DataKey.spikes][..., 0]
-        if self.serve_tokens_flat:
-            b, t, c = ref.size()
-            s = 1
-        else:
-            b, t, s, c = ref.size()
+        b, t = ref.size()[:2]
+        if compute_channel:
+            if self.serve_tokens_flat:
+                c = ref.size(2)
+                s = 1
+            else:
+                s, c = ref.size(2), ref.size(3)
         loss_mask = torch.ones(ref.size(), dtype=torch.bool, device=ref.device)
         if length_key in batch: # only some of b x t are valid
             lengths = batch[length_key] # b of ints < t
@@ -623,7 +625,10 @@ class HeldoutPrediction(RatePrediction):
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
         loss = rearrange(loss, 'b t c -> b t 1 c')
-        loss_mask, length_mask, channel_mask = self.get_masks(batch, ref=batch[DataKey.heldout_spikes][..., 0], channel_key=HELDOUT_CHANNEL_KEY) # channel_key expected to be no-op since we don't provide this mask
+        loss_mask, length_mask, channel_mask = self.get_masks(
+            batch,
+            compute_channel=False
+        ) # channel_key expected to be no-op since we don't provide this mask
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.co_bps in self.cfg.metrics:

@@ -418,3 +418,4 @@ class RootConfig:
 
     exp: Any = MISSING # delta config, provide via yaml and on CLI as `+exp=<test>.yaml`
     slurm_id: int = 0 # for experiment tracking...
+    nodes: int = 1

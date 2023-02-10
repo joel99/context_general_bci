@@ -14,3 +14,7 @@ This codebase mixes many different heterogenuous datasets in an attempt to make 
 
 ## Admin
 - note that we installed NLB tools via pip and that this constrained our pandas to be <1.34 (whereas it was originally ~1.5). A bit annoying - we should go back and re-add NLB tools dependency at some point.
+
+
+## coding tasklog
+- currently no data throw on tokenized path for if a dataset has more channels than we can embed; expect cuda selection errors in that case.

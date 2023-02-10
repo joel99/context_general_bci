@@ -10,10 +10,6 @@ model:
 
   neurons_per_token: 8
 
-  dropout: 0.7
-  transformer:
-    dropout: 0.7
-    n_heads: 2
   task:
     tasks:
     # - ModelTask.infill
@@ -36,8 +32,9 @@ dataset:
   max_channels: 104
   datasets:
   - mc_rtt
-  eval_datasets:
-  - mc_rtt
+  # eval_datasets:
+  # - mc_rtt # hits around 0.1 bps which is no diff than before
+
   # - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
       arrays:
@@ -53,5 +50,6 @@ dataset:
   - MetaKey.array
   - MetaKey.subject
 
-init_from_id: rtt_m75-t6ofj5ae
+init_from_id: rtt_5_factor_1_multi-y44m7r1p
+# init_from_id: rtt_m75-t6ofj5ae # doesn't do > baseline
 init_tag: val_loss

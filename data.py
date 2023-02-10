@@ -427,8 +427,6 @@ class SpikingDataset(Dataset):
                     covariate_lengths = torch.tensor([el.size(0) for el in stack_batch[covariate_key]])
                 for k in stack_batch.keys():
                     if isinstance(k, DataKey) or (self.cfg.serve_tokenized_flat and k == CHANNEL_KEY):
-                        if isinstance(k, DataKey):
-                            covariate_key = k
                         stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True)
                     else:
                         stack_batch[k] = torch.stack(stack_batch[k])

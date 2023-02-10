@@ -91,15 +91,22 @@ class FlatEncDecTransformerConfig(TransformerConfig):
     max_trial_length: int = 250
 
 @dataclass
+class FlatEncDecTaskConfig(TaskConfig):
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.shuffle_infill])
+    metrics: List[Metric] = field(default_factory=lambda: [])
+
+@dataclass
 class FlatEncDecModelConfig(ModelConfig):
-    lr_init: float = 5e-5
-    lr_ramp_steps: int = 3000
+    lr_init: float = 5e-4
+    lr_ramp_steps: int = 100
+    lr_decay_steps: int = 1000
     hidden_size: int = 256
     dropout: float = 0.1
     encode_decode: bool = True
     transform_space: bool = True
     spike_embed_style: EmbedStrat = EmbedStrat.token
     transformer: TransformerConfig = field(default_factory=FlatEncDecTransformerConfig)
+    task: TaskConfig = field(default_factory=FlatEncDecTaskConfig)
 
 cs.store(group="model", name="flat_enc_dec", node=FlatEncDecModelConfig)
 
