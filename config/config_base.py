@@ -131,6 +131,7 @@ class TransformerConfig:
     dropout: float = 0.2 # applies generically
     activation: str = 'gelu'
     pre_norm: bool = False
+    final_norm: bool = True # if pre-norm, add another layer norm at the end of the transformer, per Kaiming's MAE for vision and GPT
     # causal: bool = True # Pretty sure this should be passed in by task, not configured
 
     # Optional pattern for phasing in config?

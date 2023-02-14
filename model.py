@@ -479,8 +479,7 @@ class BrainBertInterface(pl.LightningModule):
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
             if self.cfg.session_embed_strategy == EmbedStrat.token:
                 session = session + self.session_flag # B x H
-                if session.ndim == 3: # ? JY no longer remembers why this path would occur
-                    raise NotImplementedError
+                if session.ndim == 3: # this is for multi-token sessions
                     static_context.extend(session.unbind(1))
                 else:
                     static_context.append(session)
@@ -539,6 +538,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
+        # import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if LENGTH_KEY in batch:
             token_position = rearrange(torch.arange(state_in.size(1), device=state_in.device), 't -> () t') # not to be confused with DataKey.time or DataKey.position

@@ -242,6 +242,8 @@ class SpaceTimeTransformer(nn.Module):
             activation=self.cfg.activation,
             norm_first=self.cfg.pre_norm,
         )
+        if self.cfg.pre_norm and getattr(self.cfg, 'final_norm', True):
+            self.final_norm = nn.LayerNorm(self.cfg.n_state) # per Kaiming's MAE for vision
         n_layers = n_layers or self.cfg.n_layers
         if self.cfg.factorized_space_time:
             assert not getattr(self.cfg, 'flat_encoder', False), "Flat encoder not supported with factorized space time"
@@ -427,7 +429,8 @@ class SpaceTimeTransformer(nn.Module):
         else:
             temporal_context = None
         if len(trial_context) > 0:
-            trial_context = rearrange(trial_context, 'tc b h -> b tc h') # trial context doesn't really belong in either space or time, can expand along each
+            trial_context, _ = pack(trial_context, 'b * h')
+            # trial_context = rearrange(trial_context, 'tc b h -> b tc h') # trial context doesn't really belong in either space or time, can expand along each
         else:
             trial_context = None
         # === Transform ===
@@ -520,6 +523,8 @@ class SpaceTimeTransformer(nn.Module):
             if not getattr(self.cfg, 'flat_encoder', False):
                 output = rearrange(output, 'b (t s) h -> b t s h', t=t, s=s)
         output = self.dropout_out(output)
+        if self.cfg.pre_norm and getattr(self.cfg, 'final_norm', True):
+            output = self.final_norm(output)
         if self.cfg.transform_space and has_array_dim:
             output = rearrange(output, 'b t (a s_a) h -> b t a s_a h', s_a=s_a)
         return output

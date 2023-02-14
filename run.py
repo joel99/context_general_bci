@@ -61,6 +61,7 @@ def run_exp(cfg : RootConfig) -> None:
         exp_arg = [arg for arg in sys.argv if '+exp' in arg]
         if len(exp_arg) > 0:
             cfg.tag = exp_arg[0].split('=')[1]
+            cfg.experiment_set = exp_arg[0].split('=')[0][len('+exp/'):]
     if cfg.sweep_cfg and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
         sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
         for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
@@ -70,7 +71,8 @@ def run_exp(cfg : RootConfig) -> None:
             meta_flags = [
                 'sweep_cfg=""',
                 f'sweep_tag={cfg.sweep_cfg}',
-                f'tag={cfg.tag}-sweep-{cfg.sweep_cfg}'
+                f'tag={cfg.tag}-sweep-{cfg.sweep_cfg}',
+                f'experiment_set={cfg.experiment_set}'
             ]
             # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
             subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
@@ -219,7 +221,7 @@ def run_exp(cfg : RootConfig) -> None:
         train, val_datasets
     )
     # import pdb;pdb.set_trace()
-    if torch.cuda.device_count() <= 1 and cfg.train.autoscale_batch_size: # don't scale test debug runs
+    if not is_distributed and cfg.train.autoscale_batch_size: # autoscale doesn't work for DDP
     # if torch.cuda.device_count() <= 1 and 'test' not in cfg.tag and cfg.train.autoscale_batch_size: # don't scale test debug runs
         new_bsz = trainer.tuner.scale_batch_size(model, datamodule=data_module, mode="power", steps_per_trial=15, max_trials=20)
         data_module.batch_size = new_bsz

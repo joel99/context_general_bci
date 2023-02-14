@@ -6,6 +6,7 @@ defaults:
   - /model: flat_enc_dec
   - /train: pretrain
 model:
+  session_embed_token_count: 8 # plenty of specific capacity...
   task_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
@@ -18,6 +19,7 @@ model:
 
   neurons_per_token: 8
   hidden_size: 384
+
 
   task:
     mask_ratio: 0.8

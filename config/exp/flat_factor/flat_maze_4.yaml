@@ -10,19 +10,20 @@ dataset:
   - mc_maze_medium
   data_keys:
   - DataKey.spikes
-  bin_size_ms: 20
+  bin_size_ms: 5
 
   max_channels: 140
-  neurons_per_token: 140
-  max_tokens: 2048
+  neurons_per_token: 4
+  max_tokens: 4096
+  serve_tokenized: true
+  serve_tokenized_flat: true
 model:
-  subject_embed_strategy: EmbedStrat.token
+  dropout: 0.1
+  transformer:
+    dropout: 0.1
+    n_heads: 2
+  subject_embed_strategy: EmbedStrat.none
   array_embed_strategy: EmbedStrat.none
   hidden_size: 128
-  task:
-    tasks:
-    - ModelTask.infill
-    metrics:
-    - Metric.bps
   neurons_per_token: 4
   transform_space: true

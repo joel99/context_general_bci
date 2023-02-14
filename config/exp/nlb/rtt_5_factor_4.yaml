@@ -43,4 +43,6 @@ dataset:
   bin_size_ms: 5
 
   max_channels: 100
-load_from_id: rtt_5_factor_4-cat9untx
+train:
+  autoscale_batch_size: false
+  batch_size: 16

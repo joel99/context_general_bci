@@ -91,18 +91,22 @@ query = "rtt_5_factor_1_multi"
 # query = "rtt_maze_5_factor_2"
 query = "rtt_maze_5_factor_4"
 
+query = 'test'
+query = 'pitt_20_9l'
+query = 'base_20'
+
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 # cfg.model.task.tasks = [ModelTask.infill]
-cfg.model.task.metrics = [Metric.bps]
+# cfg.model.task.metrics = [Metric.bps]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
-cfg.model.task.outputs = [Output.logrates, Output.spikes]
+# cfg.model.task.outputs = [Output.logrates, Output.spikes]
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
@@ -155,6 +159,10 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
 
 # dataloader = get_dataloader(dataset)
 dataloader = get_dataloader(dataset, batch_size=4)
+
+#%%
+# print(list(model.backbone.space_transformer_encoder.layers[0].self_attn.parameters()))
+print(list(model.backbone.transformer_encoder.layers[0].self_attn.parameters()))
 #%%
 print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))

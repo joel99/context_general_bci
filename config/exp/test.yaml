@@ -1,54 +1,67 @@
 # @package _global_
-# Kinematic smoketest
+
+# Really just a test of heterogeneity throughput rather than any specific win; can compare with scores in just Pitt
+
 defaults:
-  - /model: finetune
-  # - /model: flat_enc_dec
-  - /dataset: rtt
-  - /train: finetune
+  - /model: flat_enc_dec
+  - /train: pretrain
 model:
+  session_embed_token_count: 8 # plenty of specific capacity...
+  task_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
   # array_embed_strategy: EmbedStrat.token_add
   # causal: True
 
+  transformer:
+    n_layers: 12
+    # 6 layers used for 30K, 9 layers for ~60K, 15 for 120K
+
   neurons_per_token: 8
+  hidden_size: 384
+
 
   task:
-    # mask_ratio: 0.75
+    mask_ratio: 0.8
     tasks:
-    - ModelTask.kinematic_decoding
-    # - ModelTask.shuffle_infill
-    metrics:
-    - Metric.kinematic_r2
-    decode_strategy: EmbedStrat.token
-
-  lr_init: 5e-5
-  accelerate_new_params: 10.0
+    - ModelTask.shuffle_infill
+    # - ModelTask.kinematic_decoding
+    metrics: []
+    # - Metric.kinematic_r2
 dataset:
-  max_tokens: 2048
-  neurons_per_token: 8
-  max_arrays: 1
-  bin_size_ms: 5
+  max_tokens: 4096
+  max_length_ms: 2000
+  max_arrays: 2
+  bin_size_ms: 20
   serve_tokenized: true
   serve_tokenized_flat: true
-  max_channels: 104
+  neurons_per_token: 8
+  max_channels: 192 # 2 x 96... this should also cover Dyer.
   datasets:
-  - 'odoherty_rtt-Indy.*'
+  - churchland_maze.*
+  - churchland_misc.*
+  - CRS02bHome.data.*
+  - odoherty_rtt.*
+  - mc_maze.*
+  - dyer_co.*
+  # - mc_rtt
   eval_datasets:
+  - CRS02bHome.data.00437 # using this as a convenient marker where we already have 20ms experiments
   # - 'mc_rtt'
-  - 'odoherty_rtt-Indy-20161005_06'
+  # - 'odoherty_rtt-Indy-20161005_06'
   odoherty_rtt:
-      arrays:
-      - Indy-M1
-      - Loco-M1
+    arrays:
+    - Indy-M1
+    - Loco-M1
   data_keys:
   - DataKey.spikes
-  - DataKey.bhvr_vel
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+  - MetaKey.task
 
-init_from_id: rtt_m75-t6ofj5ae
-init_tag: val_loss
+train:
+  autoscale_batch_size: false
+  batch_size: 12

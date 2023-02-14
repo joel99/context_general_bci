@@ -20,7 +20,7 @@ model:
   hidden_size: 384
 
   task:
-    mask_ratio: 0.8
+    mask_ratio: 0.4
     tasks:
     - ModelTask.shuffle_infill
     # - ModelTask.kinematic_decoding
@@ -61,4 +61,6 @@ dataset:
   - MetaKey.task
 
 train:
-  batch_size: 12
+  batch_size: 4
+load_from_id: base_20-yjhvosga
+init_tag: val_loss

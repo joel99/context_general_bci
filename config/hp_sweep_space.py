@@ -5,6 +5,29 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "lr": {
+        "model.lr_init": {
+            'min': 1e-4,
+            'max': 3e-3,
+            'scaling': 'log',
+        },
+        "model.lr_ramp_steps": {
+            'feasible_points': [10, 25, 50, 100],
+        },
+    },
+    "lr_and_dropout": {
+        "model.lr_init": {
+            'min': 1e-4,
+            'max': 3e-3,
+            'scaling': 'log',
+        },
+        "model.lr_ramp_steps": {
+            'feasible_points': [10, 25, 50, 100],
+        },
+        "model.dropout": {
+            'feasible_points': [0.1, 0.3, 0.5, 0.7] # in lieu of sweeping capacity
+        }
+    },
     "base": {
         # we will use a fixed 6-layer architecture for now, sweep hidden.
         "model.hidden_size": {
@@ -12,7 +35,7 @@ sweep_space = {
         },
         "model.lr_init": {
             'min': 1e-4,
-            'max': 2e-2, # models reliably crash past 1e-2
+            'max': 3e-3,
             # 'max': 5e-2,
             'scaling': 'log',
         },
@@ -56,7 +79,7 @@ sweep_space = {
         },
         "model.lr_init": {
             'min': 1e-4,
-            'max': 5e-3, # models reliably crash past 1e-2
+            'max': 3e-3,
             # 'max': 5e-2,
             'scaling': 'log',
         },
