@@ -385,7 +385,7 @@ class TrainConfig:
     steps: int = 0 # Prefer to specify steps over epochs for FLOP consistency (pretty loose), but most other training settings are on epochs
     log_every_n_steps: int = 10
     batch_size: int = 64
-    patience: int = 25 # these are in units of val checks (epochs)
+    patience: int = 50 # these are in units of val checks (epochs)
     log_grad: bool = False
     gradient_clip_val: float = 1.0
     accumulate_batches: int = 1

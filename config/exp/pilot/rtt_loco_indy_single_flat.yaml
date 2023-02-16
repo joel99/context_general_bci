@@ -26,7 +26,7 @@ dataset:
   datasets:
   - odoherty_rtt-Loco.*
   - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161014_04 # one other full one for reference
+  # - odoherty_rtt-Indy-20161014_04 # one other full one for reference
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
   data_keys:

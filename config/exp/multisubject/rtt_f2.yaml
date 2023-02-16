@@ -4,14 +4,12 @@ defaults:
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
-  hidden_size: 128
+  # token add not implemented for spacetime
+
+  spike_embed_style: EmbedStrat.token
   task:
     mask_ratio: 0.8
-    # tasks:
-    # - ModelTask.infill
-    # metrics:
-    # - Metric.bps
-  neurons_per_token: 8
+  neurons_per_token: 2
 dataset:
   max_tokens: 4096 # fit
   max_length_ms: 2000 # fit
@@ -19,16 +17,19 @@ dataset:
 
   serve_tokenized: true
   serve_tokenized_flat: true
-  neurons_per_token: 8
+  neurons_per_token: 2
 
-  max_channels: 104
-  bin_size_ms: 20
   datasets:
-  - odoherty_rtt-Loco.*
-  - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161014_04 # one other full one for reference
+  - odoherty_rtt-Indy.* # Note we're just using indy here.
+  - mc_rtt
+  # - mc_maze.*
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
+  # - mc_rtt
+  odoherty_rtt:
+    arrays:
+    - Indy-M1
+    - Loco-M1
   data_keys:
   - DataKey.spikes
   meta_keys:
@@ -36,11 +37,6 @@ dataset:
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
-  odoherty_rtt:
-    arrays:
-    - Indy-M1
-    - Loco-M1
-# train:
-  # autoscale_batch_size: false
-  # batch_size: 64 # restrict due to small dataset
-sweep_cfg: lr_and_dropout
+  bin_size_ms: 20
+  max_channels: 138
+  # max_channels: 98

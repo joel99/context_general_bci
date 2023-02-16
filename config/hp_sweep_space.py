@@ -28,6 +28,27 @@ sweep_space = {
             'feasible_points': [0.1, 0.3, 0.5, 0.7] # in lieu of sweeping capacity
         }
     },
+    'lr_v3': {
+        "model.lr_init": {
+            'min': 2e-4,
+            'max': 8e-4,
+            'scaling': 'log',
+        },
+        "model.dropout": {
+            'feasible_points': [0.05, 0.1, 0.2]
+        }
+    },
+    "lr_v2": {
+        "model.lr_init": {
+            'min': 2e-4,
+            # 'min': 1e-4,
+            'max': 1e-3,
+            'scaling': 'log',
+        },
+        "model.dropout": {
+            'feasible_points': [0.1, 0.3, 0.5, 0.7] # in lieu of sweeping capacity
+        }
+    }, # post-mortem. dropout of 0.7 kills unless carefully regulated, don't do this. Sweep hidden size instead.
     "base": {
         # we will use a fixed 6-layer architecture for now, sweep hidden.
         "model.hidden_size": {

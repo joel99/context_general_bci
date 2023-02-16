@@ -1,16 +1,17 @@
 # @package _global_
+
 defaults:
   - /model: flat_enc_dec
+  - /dataset: maze_nlb
+  - /train: nlb
 model:
-  subject_embed_strategy: EmbedStrat.token
-  array_embed_strategy: EmbedStrat.none
   hidden_size: 128
   task:
     mask_ratio: 0.8
-    # tasks:
-    # - ModelTask.infill
-    # metrics:
-    # - Metric.bps
+  subject_embed_strategy: EmbedStrat.token
+  task_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.none
+  spike_embed_style: EmbedStrat.token
   neurons_per_token: 8
 dataset:
   max_tokens: 4096 # fit
@@ -21,26 +22,24 @@ dataset:
   serve_tokenized_flat: true
   neurons_per_token: 8
 
-  max_channels: 104
-  bin_size_ms: 20
   datasets:
-  - odoherty_rtt-Loco.*
-  - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161014_04 # one other full one for reference
+  - odoherty_rtt-Indy.*
+  - mc_maze_medium
   eval_datasets:
-  - odoherty_rtt-Indy-20161005_06
+  - mc_maze_medium
   data_keys:
   - DataKey.spikes
+  bin_size_ms: 20
+  max_channels: 144
   meta_keys:
   - MetaKey.unique
   - MetaKey.session
   - MetaKey.array
   - MetaKey.subject
+  - MetaKey.task
   odoherty_rtt:
     arrays:
     - Indy-M1
     - Loco-M1
-# train:
-  # autoscale_batch_size: false
-  # batch_size: 64 # restrict due to small dataset
+
 sweep_cfg: lr_and_dropout

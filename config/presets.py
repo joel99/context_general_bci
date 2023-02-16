@@ -34,7 +34,7 @@ class PretrainingModelConfig(ModelConfig):
     """
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_ramp_steps: int = 500
-    lr_decay_steps: int = 10000
+    lr_decay_steps: int = 10000 # this is not that much for small models
     dropout: float = 0.3
     hidden_size: int = 128
     session_embed_size: int = 128

@@ -5,10 +5,12 @@ model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
   hidden_size: 128
+  transformer:
+    n_layers: 8
   task:
     mask_ratio: 0.8
-    # tasks:
-    # - ModelTask.infill
+    tasks:
+    - ModelTask.infill
     # metrics:
     # - Metric.bps
   neurons_per_token: 8
@@ -24,9 +26,8 @@ dataset:
   max_channels: 104
   bin_size_ms: 20
   datasets:
-  - odoherty_rtt-Loco.*
-  - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161014_04 # one other full one for reference
+  - odoherty_rtt-Indy.*
+  # - odoherty_rtt-Indy-20161014_04
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
   data_keys:

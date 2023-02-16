@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - /model: flat_enc_dec
+  - /train: nlb
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
@@ -24,9 +25,8 @@ dataset:
   max_channels: 104
   bin_size_ms: 20
   datasets:
-  - odoherty_rtt-Loco.*
   - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161014_04 # one other full one for reference
+  # - odoherty_rtt-Indy-20161014_04
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
   data_keys:
@@ -40,7 +40,9 @@ dataset:
     arrays:
     - Indy-M1
     - Loco-M1
-# train:
-  # autoscale_batch_size: false
-  # batch_size: 64 # restrict due to small dataset
+train:
+  autoscale_batch_size: false
+  batch_size: 64 # restrict due to small dataset
+  patience: 200
 sweep_cfg: lr_and_dropout
+sweep_trials: 16 # likely more sensitive due to small size
