@@ -293,6 +293,21 @@ class SpaceTimeTransformer(nn.Module):
     def out_size(self):
         return self.cfg.n_state
 
+    @staticmethod
+    def generate_square_subsequent_mask_from_times(times: torch.Tensor) -> torch.Tensor:
+        r"""
+            Generate a square mask for the sequence. The masked positions are filled with float('-inf').
+            Unmasked positions are filled with float(0.0).
+
+            times: B x Token
+
+            out: B x T x T
+        """
+        return torch.where(
+            times[:, :, None] >= times[:, None, :],
+            0.0, float('-inf')
+        )
+
     def forward(
         self,
         src: torch.Tensor, # B T A H - embedded already (or possibly B T A S_A H), or B Token H
@@ -316,7 +331,7 @@ class SpaceTimeTransformer(nn.Module):
         # import pdb;pdb.set_trace()
         # === Embeddings ===
 
-        if getattr(self.cfg, 'flat_encoder', False):
+        if self.cfg.flat_encoder:
             # The aesthetics though
             src = src + self.time_encoder(times) + self.space_encoder(positions)
             b, t, s = src.size(0), src.size(1), 1 # it's implied that codepaths get that "space" is not really 1, but it's not used
@@ -362,13 +377,16 @@ class SpaceTimeTransformer(nn.Module):
                 Use t=1 to produce a space only mask, s=1 to produce a time only mask
             """
             if causal:
-                src_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
-                # Add array dimension
-                # this tiles such that the flat (t x a) tokens should be t1a1, t1a2, t2a1, t2a2, etc.
-                src_mask = rearrange(
-                    repeat(src_mask, 't1 t2 -> t1 t2 a1 a2', a1=s, a2=s),
-                    't1 t2 a1 a2 -> (t1 a1) (t2 a2)'
-                )
+                if self.cfg.flat_encoder:
+                    src_mask = SpaceTimeTransformer.generate_square_subsequent_mask_from_times(times)
+                else:
+                    src_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
+                    # Add array dimension
+                    # this tiles such that the flat (t x a) tokens should be t1a1, t1a2, t2a1, t2a2, etc.
+                    src_mask = rearrange(
+                        repeat(src_mask, 't1 t2 -> t1 t2 a1 a2', a1=s, a2=s),
+                        't1 t2 a1 a2 -> (t1 a1) (t2 a2)'
+                    )
             else:
                 src_mask = None
             # Update src mask for context. Note that row is attender, col is attended.
@@ -378,7 +396,7 @@ class SpaceTimeTransformer(nn.Module):
             # Trial Context is allowed to attend to self acausally, but that's it.
             # Somewhat redundant code structure is to play nice with typing
             if temporal_context is not None: # introduce t * context_num tokens
-                assert not getattr(self.cfg, 'flat_encoder', False), "Temporal context not supported in flat encoder"
+                assert not self.cfg.flat_encoder, "Temporal context not supported in flat encoder"
                 if src_mask is None:
                     src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
                 # Since temporal context is expected to be used in a causal cases (ICMS)
@@ -431,7 +449,7 @@ class SpaceTimeTransformer(nn.Module):
                 return None
 
         if len(temporal_context) > 0:
-            assert not getattr(self.cfg, 'flat_encoder', False), "Temporal context not supported with flat encoder"
+            assert not self.cfg.flat_encoder, "Temporal context not supported with flat encoder"
             temporal_context = rearrange(temporal_context, 'tc b t h -> b t tc h')
         else:
             temporal_context = None
@@ -441,7 +459,7 @@ class SpaceTimeTransformer(nn.Module):
         else:
             trial_context = None
         # === Transform ===
-        if getattr(self.cfg, 'factorized_space_time', False):
+        if self.cfg.factorized_space_time:
             padding_mask = make_padding_mask(b, t, s, src, temporal_context, space_padding_mask)
             # space first
             space_src = [src]
@@ -512,7 +530,9 @@ class SpaceTimeTransformer(nn.Module):
             contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
             src_mask = make_src_mask(src, temporal_context, trial_context, t, s)
-            if getattr(self.cfg, 'flat_encoder', False):
+            if src_mask.ndim == 3: # expand along heads
+                src_mask = repeat(src_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
+            if self.cfg.flat_encoder:
                 if temporal_padding_mask is not None:
                     padding_mask = temporal_padding_mask
                 else:
@@ -527,10 +547,10 @@ class SpaceTimeTransformer(nn.Module):
             # print(t, s, contextualized_src.size(), src_mask.size(), padding_mask.size())
             output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
             output = output[:, : t * s]
-            if not getattr(self.cfg, 'flat_encoder', False):
+            if not self.cfg.flat_encoder:
                 output = rearrange(output, 'b (t s) h -> b t s h', t=t, s=s)
         output = self.dropout_out(output)
-        if self.cfg.pre_norm and getattr(self.cfg, 'final_norm', True):
+        if self.cfg.pre_norm and self.cfg.final_norm:
             output = self.final_norm(output)
         if self.cfg.transform_space and has_array_dim:
             output = rearrange(output, 'b t (a s_a) h -> b t a s_a h', s_a=s_a)

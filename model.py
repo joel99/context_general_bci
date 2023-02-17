@@ -59,7 +59,6 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.causal:
             assert ModelTask.infill not in self.cfg.task.tasks, "Infill not implemented for causal models. Use `next_step_prediction`"
-            assert ModelTask.shuffle_infill not in self.cfg.task.tasks, "Shuffle infill not implemented for causal models `cropped_next_step_prediction`"
 
         self.data_attrs = data_attrs
         assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"

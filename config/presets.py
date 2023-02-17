@@ -212,7 +212,7 @@ class FlatDataConfig(DatasetConfig):
     meta_keys: List[MetaKey] = field(default_factory=lambda: [
         MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session, MetaKey.task
     ])
-    odoherty_rtt: ExperimentalConfig = field(default_factory=lambda: ExperimentalConfig(
+    odoherty_rtt: RTTConfig = field(default_factory=lambda: RTTConfig(
         arrays=['Indy-M1', 'Loco-M1']
     ))
 

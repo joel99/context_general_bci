@@ -430,7 +430,7 @@ class ShuffleInfill(RatePrediction):
             comparison = repeat(torch.arange(loss.size(-1), device=loss.device), 'c -> 1 t c', t=loss.size(1)) # ! assuming flat - otherwise we need the space dimension as well.
             channel_mask = comparison < batch[f'{CHANNEL_KEY}_target'].unsqueeze(-1) # unsqueeze the channel dimension
             loss_mask = loss_mask & channel_mask
-        return loss
+        return loss_mask
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         # B T
@@ -523,33 +523,34 @@ class NextStepPrediction(RatePrediction):
 
         return batch_out
 
-class ShuffleNextStepPrediction(ShuffleInfill):
-    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
-        r"""
-            It's tricky/annoying to try to crop zero timestep or inject zero timestep,
-            in flat scenarios it's not guaranteed there's a consistent number of tokens per timestep in each sequence (due to cropping)
-            So we will just "roll" time annotation and match only on loss comparison
-            # * by nature of task there is never supervision for final timestep encoding
-        """
-        out = super().update_batch(batch, eval_mode=eval_mode)
-        roll_time = out[f'{DataKey.time}_target'] - 1
-        # Use -1 for target times, effectively these queries are shifted a step back (while still being matched to present)
-        overflow = roll_time < 0
-        roll_time = torch.maximum(roll_time, 0)
-        out.update({
-            f'{DataKey.time}_target': roll_time,
-            'overflow': overflow
-        })
-        return out
+# class ShuffleNextStepPrediction(ShuffleInfill):
+#     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
+#         r"""
+#             It's tricky/annoying to try to crop zero timestep or inject zero timestep,
+#             in flat scenarios it's not guaranteed there's a consistent number of tokens per timestep in each sequence (due to cropping)
+#             So we will just "roll" time annotation and match only on loss comparison
+#             # * by nature of task there is never supervision for final timestep encoding
+#         """
+#         out = super().update_batch(batch, eval_mode=eval_mode)
+#         # ? Why _shouldn't_ we allow attention to the current timestep? Not like we're bleeding ground truth.
+#         # roll_time = out[f'{DataKey.time}_target'] - 1
+#         # # Use -1 for target times, effectively these queries are shifted a step back (while still being matched to present)
+#         # overflow = roll_time < 0
+#         # roll_time = torch.maximum(roll_time, 0)
+#         # out.update({
+#         #     f'{DataKey.time}_target': roll_time,
+#         #     'overflow': overflow
+#         # })
+#         return out
 
-    def get_loss_mask(self, batch: Dict[str, torch.Tensor], loss: torch.Tensor) -> torch.Tensor:
-        r"""
-            In this case we want to mask out the loss for the final timestep
-            since there is no supervision for that timestep
-        """
-        loss_mask = super().get_loss_mask(batch, loss)
-        loss_mask = loss_mask & ~batch['overflow']
-        return loss_mask
+#     def get_loss_mask(self, batch: Dict[str, torch.Tensor], loss: torch.Tensor) -> torch.Tensor:
+#         r"""
+#             In this case we want to mask out the loss for the final timestep
+#             since there is no supervision for that timestep
+#         """
+#         loss_mask = super().get_loss_mask(batch, loss)
+#         loss_mask = loss_mask & ~batch['overflow']
+#         return loss_mask
 
 class ICMSNextStepPrediction(NextStepPrediction):
     does_update_root = True
@@ -824,7 +825,8 @@ task_modules = {
     ModelTask.infill: SelfSupervisedInfill,
     ModelTask.shuffle_infill: ShuffleInfill,
     ModelTask.next_step_prediction: NextStepPrediction,
-    ModelTask.shuffle_next_step_prediction: ShuffleNextStepPrediction,
+    ModelTask.shuffle_next_step_prediction: ShuffleInfill, # yeahhhhh it's the SAME TASK WTH
+    # ModelTask.shuffle_next_step_prediction: ShuffleNextStepPrediction,
     ModelTask.heldout_decoding: HeldoutPrediction,
     ModelTask.kinematic_decoding: BehaviorRegression,
 }
