@@ -79,6 +79,14 @@ class FinetuningModelConfig(ModelConfig):
 
 cs.store(group="model", name="finetune", node=FinetuningModelConfig)
 
+@dataclass
+class AcceleratedTuning(ModelConfig):
+    lr_init: float = 5e-5
+    lr_ramp_steps: int = 1000
+    lr_decay_steps: int = 10000
+    accelerate_new_params: float = 10.0
+
+cs.store(group="model", name="accel_tune", node=AcceleratedTuning)
 
 @dataclass
 class FlatEncDecTransformerConfig(TransformerConfig):
@@ -124,6 +132,38 @@ class NLBModelConfig(ModelConfig):
 cs.store(group="model", name="nlb", node=NLBModelConfig)
 
 @dataclass
+class BhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.kinematic_decoding])
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
+    decode_strategy: EmbedStrat = EmbedStrat.token
+
+cs.store(group='model/task', name='bhvr_decode_flat', node=BhvrDecodeFlatTaskConfig)
+
+@dataclass
+class JointBhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding])
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
+    decode_strategy: EmbedStrat = EmbedStrat.token
+
+cs.store(group='model/task', name='joint_bhvr_decode_flat', node=JointBhvrDecodeFlatTaskConfig)
+
+@dataclass
+class BhvrDecodeTaskConfig(InfillTaskConfig):
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.kinematic_decoding])
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
+    decode_strategy: EmbedStrat = EmbedStrat.project
+
+cs.store(group='model/task', name='bhvr_decode', node=BhvrDecodeTaskConfig)
+
+@dataclass
+class JointBhvrDecodeTaskConfig(InfillTaskConfig):
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill, ModelTask.kinematic_decoding])
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.bps, Metric.kinematic_r2])
+    decode_strategy: EmbedStrat = EmbedStrat.project
+
+cs.store(group='model/task', name='joint_bhvr_decode', node=JointBhvrDecodeTaskConfig)
+
+@dataclass
 class PretrainConfig(TrainConfig):
     epochs: int = 4000
     batch_size: int = 128
@@ -135,6 +175,7 @@ cs.store(group="train", name="pretrain", node=PretrainConfig)
 class NLBTrainConfig(TrainConfig):
     epochs: int = 50000 # epochs tend to be small
     batch_size: int = 64
+    autoscale_batch_size: bool = False
     patience: int = 2000
     # patience: int = 4000
 
@@ -148,6 +189,32 @@ class FineTuneConfig(TrainConfig):
     patience: int = 200
 
 cs.store(group="train", name="finetune", node=FineTuneConfig)
+
+@dataclass
+class BaseDataConfig(DatasetConfig):
+    """
+        Base configuration for all datasets
+    """
+    bin_size_ms: int = 20
+    data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
+    meta_keys: List[MetaKey] = field(default_factory=lambda: [
+        MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session, MetaKey.task
+    ])
+cs.store(group="dataset", name="base", node=BaseDataConfig)
+
+@dataclass
+class FlatDataConfig(DatasetConfig):
+    serve_tokenized: bool = True
+    serve_tokenized_flat: bool = True
+    bin_size_ms: int = 20 # typically 20
+    max_tokens: int = 4096
+    data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
+    meta_keys: List[MetaKey] = field(default_factory=lambda: [
+        MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session, MetaKey.task
+    ])
+
+cs.store(group="dataset", name="flat", node=FlatDataConfig)
+
 
 @dataclass
 class RTTDataConfig(DatasetConfig):

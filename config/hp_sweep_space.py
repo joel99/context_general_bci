@@ -5,6 +5,16 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "ft_reg": {
+        "model.dropout": {
+            'feasible_points': [0.1, 0.3, 0.5, 0.7]
+        },
+        "model.weight_decay": {
+            'min': 1e-3,
+            'max': 5e-2,
+            'scaling': 'log',
+        }
+    },
     "lr": {
         "model.lr_init": {
             'min': 1e-4,

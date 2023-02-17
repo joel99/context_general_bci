@@ -33,7 +33,7 @@ from components import (
     ReadinCrossAttention,
     ContextualMLP,
 )
-from task_io import task_modules, SHUFFLE_KEY
+from task_io import task_modules, SHUFFLE_KEY, create_temporal_padding_mask
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
-            Check if new cfg is different from current cfg (used when initing)
+            Check if new cfg is different from self.cfg (POV of old model)
         """
         self_copy = self.cfg.copy()
         self_copy = OmegaConf.merge(ModelConfig(), self_copy) # backport novel config
@@ -107,6 +107,9 @@ class BrainBertInterface(pl.LightningModule):
         # Things that are allowed to change on init (actually most things should be allowed to change, but just register them explicitly here as needed)
 
         for safe_attr in [
+            'dropout',
+            'weight_decay',
+            'causal',
             'task',
             'lr_init',
             'lr_schedule',
@@ -540,21 +543,11 @@ class BrainBertInterface(pl.LightningModule):
         # returns backbone features B T S H
         # import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
-        if LENGTH_KEY in batch:
-            token_position = rearrange(torch.arange(state_in.size(1), device=state_in.device), 't -> () t') # not to be confused with DataKey.time or DataKey.position
-            if SHUFFLE_KEY in batch:
-                token_position = rearrange(batch[SHUFFLE_KEY][:batch['encoder_frac']], 't -> () t')
-            temporal_padding_mask = token_position >= rearrange(batch[LENGTH_KEY], 'b -> b ()')
-            # temporal_padding refers to general length padding in `serve_tokens_flat` case
-        else:
-            temporal_padding_mask = None
+        temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
         if DataKey.extra in batch:
-            # TODO - the "extra" data that refers to padding should be masked
-            # We can determine whether this is true
             state_in = torch.cat([state_in, batch[DataKey.extra]], dim=1)
             if temporal_padding_mask is not None:
-                extra_position = rearrange(torch.arange(batch[DataKey.extra].size(1), device=state_in.device), 't -> () t')
-                extra_padding_mask = extra_position >= rearrange(batch[COVARIATE_LENGTH_KEY], 'b -> b ()')
+                extra_padding_mask = create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
                 temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
 
         # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
@@ -652,6 +645,7 @@ class BrainBertInterface(pl.LightningModule):
             DataKey.bhvr_vel: '* t h',
             MetaKey.session: '*',
             MetaKey.subject: '*',
+            MetaKey.task: '*',
             MetaKey.array: '* a',
             LENGTH_KEY: '*',
             CHANNEL_KEY: '* a',
@@ -853,8 +847,8 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
     for attr in [
         "hidden_size",
         "activation",
-        "weight_decay",
-        "dropout",
+        # "weight_decay", # new regularization moved to diff_cfg
+        # "dropout", # new regularization moved to diff cfg
         "session_embed_size",
         "session_embed_strategy",
         "subject_embed_size",
@@ -868,7 +862,6 @@ def transfer_cfg(src_cfg: ModelConfig, target_cfg: ModelConfig):
         "readout_strategy",
         "readout_dim",
         "readin_dim",
-        'causal', # TODO move to diff_cfg, this is temporary
         "transform_space",
         "encode_decode",
         "spike_embed_style",

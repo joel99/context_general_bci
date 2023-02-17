@@ -124,7 +124,7 @@ def run_exp(cfg : RootConfig) -> None:
             EarlyStopping(
                 monitor='val_loss',
                 patience=cfg.train.patience, # Learning can be fairly slow, larger patience should allow overfitting to begin (which is when we want to stop)
-                min_delta=0.00005, # we can tune this lower to squeeze a bit more..
+                min_delta=1e-5,
             )
         )
         if reset_early_stop:
@@ -194,8 +194,9 @@ def run_exp(cfg : RootConfig) -> None:
         logger.info(OmegaConf.to_yaml(cfg))
         if cfg.tag:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
+        notes = cfg.notes
         if os.environ.get('SLURM_JOB_ID'):
-            wandb.run.notes = f"SLURM_JOB_ID={os.environ['SLURM_JOB_ID']}"
+            wandb.run.notes = f"{notes}. SLURM_JOB_ID={os.environ['SLURM_JOB_ID']}"
             cfg.slurm_id = int(os.environ['SLURM_JOB_ID'])
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
         wandb.config.update({'data_attrs': dataclasses.asdict(data_attrs)})

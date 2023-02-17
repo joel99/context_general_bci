@@ -18,7 +18,6 @@ model:
 
   task:
     freeze_backbone: True
-
 dataset:
   max_length_ms: 2000 # fit
   max_arrays: 1
@@ -46,3 +45,5 @@ init_tag: val_loss
 
 sweep_cfg: ft_reg
 sweep_trials: 8
+train:
+  patience: 3000

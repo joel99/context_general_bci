@@ -1,11 +1,11 @@
 # @package _global_
-# TODO think about LR
+
 defaults:
   - /model:
     - pretrain_small
     # - accel_tune
   - /model/task:
-    - bhvr_decode
+    - joint_bhvr_decode
   - /train: small
   - /dataset: base
 model:
@@ -15,9 +15,6 @@ model:
   lr_ramp_steps: 1000
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
-
-  task:
-    freeze_backbone: True
 
 dataset:
   max_length_ms: 2000 # fit
@@ -43,6 +40,7 @@ dataset:
 
 init_from_id: rtt_indy_single-sweep-lr_and_dropout-t7avw2xi
 init_tag: val_loss
-
-sweep_cfg: ft_reg
-sweep_trials: 8
+train:
+  patience: 0
+# sweep_cfg: lr_v3
+# sweep_trials: 4

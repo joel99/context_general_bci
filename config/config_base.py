@@ -120,6 +120,7 @@ class TaskConfig:
     behavior_lag: int = 0 # in ms
     behavior_target: DataKey = DataKey.bhvr_vel
 
+    decode_separate: bool = False # for bhvr decoding, use a separate transformer decoder? (Only compat with EmbedStrat.token)
     decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
 
 @dataclass
@@ -399,6 +400,7 @@ class RootConfig:
     seed: int = 0
     tag: str = "" # i.e. experiment variant, now an optional tag (since hydra consumes file, we can't use the filename for experiment name. Specify if you want.)
     experiment_set: str = ""
+    notes: str = "" # for wandb
 
     sweep_cfg: str = "" # See `hp_sweep_space.py`
     sweep_trials: int = 8

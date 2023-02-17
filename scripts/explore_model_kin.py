@@ -23,9 +23,11 @@ query = "pitt_obs_decode_scratch"
 query = "test_overfit"
 query = "pitt_obs_decode_scratch-sweep-small_wide-7ycit09t"
 # query = "pitt_obs_decode_scratch-sweep-small_wide-t1h7knvd"
-query = 'test'
-wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
-# wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
+query = "rtt_single-35cqqwnl"
+# query = "rtt_single-sweep-ft_reg-yni1txy2"
+
+# wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
+wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
@@ -37,12 +39,11 @@ cfg.model.task.metrics = [Metric.kinematic_r2]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
-
 # cfg.dataset.datasets = ['mc_rtt']
-if 'rtt' in query:
-    cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
+# if 'rtt' in query:
+    # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
     # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
-cfg.dataset.eval_datasets = []
+# cfg.dataset.eval_datasets = []
 # print(cfg.dataset.datasets)
 dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets:
@@ -55,7 +56,8 @@ print(data_attrs)
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
-def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
+# def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,
         batch_size=batch_size,
@@ -66,7 +68,6 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
 
 dataloader = get_dataloader(dataset)
 #%%
-print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
@@ -84,7 +85,12 @@ print(heldin_outputs[Output.behavior].min())
 # sns.histplot(heldin_outputs[Output.behavior].flatten())
 # sns.histplot(heldin_outputs[Output.behavior_pred].flatten())
 ax = prep_plt()
-sns.scatterplot(x=heldin_outputs[Output.behavior].flatten(), y=heldin_outputs[Output.behavior_pred].flatten(), ax=ax)
+sns.scatterplot(
+    x=heldin_outputs[Output.behavior].flatten(),
+    y=heldin_outputs[Output.behavior_pred].flatten(),
+    s=3, alpha=0.4,
+    ax=ax
+)
 ax.set_xlabel('bhvr')
 ax.set_ylabel('pred')
 #%%
