@@ -71,17 +71,9 @@ class BrainBertInterface(pl.LightningModule):
         if self.data_attrs.serve_tokens_flat:
             assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
-        if data_attrs.serve_tokens: # no spatial dim
-            max_spatial_tokens = round(
-                data_attrs.max_channel_count / self.cfg.neurons_per_token
-            )
-        else:
-            max_spatial_tokens = round(
-                data_attrs.max_channel_count * data_attrs.max_arrays / self.cfg.neurons_per_token
-            )
         self.backbone = SpaceTimeTransformer(
             self.cfg.transformer,
-            max_spatial_tokens=max_spatial_tokens
+            max_spatial_tokens=data_attrs.max_spatial_tokens
         )
         self.bind_io()
 
@@ -91,11 +83,6 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.layer_norm_input:
             self.layer_norm_input = nn.LayerNorm(data_attrs.max_channel_count)
-
-        if ModelTask.infill in self.cfg.task.tasks:
-            assert ModelTask.next_step_prediction not in self.cfg.task.tasks, "Infill and next step prediction are mutually exclusive"
-        elif ModelTask.next_step_prediction in self.cfg.task.tasks:
-            assert ModelTask.infill not in self.cfg.task.tasks, "Infill and next step prediction are mutually exclusive"
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""

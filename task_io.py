@@ -245,6 +245,17 @@ class RatePrediction(TaskPipeline):
             return bps.mean()
         return bps
 
+    @staticmethod
+    def create_linear_poisson_head(
+        cfg: ModelConfig, in_size: int, out_size: int
+    ):
+        out_layers = [
+            nn.Linear(in_size, out_size)
+        ]
+        if not cfg.lograte:
+            out_layers.append(nn.ReLU())
+        return nn.Sequential(*out_layers)
+
 class SelfSupervisedInfill(RatePrediction):
     does_update_root = True
     unique_space = True
@@ -355,26 +366,23 @@ class ShuffleInfill(RatePrediction):
             data_attrs=data_attrs
         )
         assert self.serve_tokens and self.serve_tokens_flat, 'other paths not implemented'
-        max_spatial_tokens = round(
-            data_attrs.max_channel_count / cfg.neurons_per_token
-        )
         assert cfg.encode_decode, 'non-symmetric evaluation not implemented (since this task crops)'
         # ! Need to figure out how to wire different parameters e.g. num layers here
         self.decoder = SpaceTimeTransformer(
             cfg.transformer,
-            max_spatial_tokens=max_spatial_tokens,
+            max_spatial_tokens=data_attrs.max_spatial_tokens,
             n_layers=cfg.decoder_layers,
         )
-        out_layers = [
-            nn.Linear(backbone_out_size, cfg.neurons_per_token)
-        ]
-        if not cfg.lograte:
-            out_layers.append(nn.ReLU())
-        self.out = nn.Sequential(*out_layers)
+        self.causal = cfg.causal
+        self.out = RatePrediction.create_linear_poisson_head(cfg, cfg.hidden_size, cfg.neurons_per_token)
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
         self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
+        return self.shuffle_crop_batch(self.cfg.mask_ratio, batch, eval_mode=eval_mode)
+
+    @staticmethod
+    def shuffle_crop_batch(mask_ratio: float, batch: Dict[str, torch.Tensor], eval_mode=False):
         r"""
             Shuffle inputs, keep only what we need for evaluation
         """
@@ -389,7 +397,7 @@ class ShuffleInfill(RatePrediction):
         # spikes: B T S H or B T H (no array support)
         # TODO (low-pri) also support spacetime shuffle
         shuffle = torch.randperm(spikes.size(1), device=spikes.device)
-        encoder_frac = int((1 - self.cfg.mask_ratio) * spikes.size(1))
+        encoder_frac = int((1 - mask_ratio) * spikes.size(1))
         # shuffle_spikes = spikes.gather(1, shuffle.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, spikes.size(2), spikes.size(3)))
         for key in [DataKey.time, DataKey.position, CHANNEL_KEY]:
             if key in batch:
@@ -406,6 +414,23 @@ class ShuffleInfill(RatePrediction):
             SHUFFLE_KEY: shuffle, # seems good to keep around...
         })
         return batch
+
+    def get_loss_mask(self, batch: Dict[str, torch.Tensor], loss: torch.Tensor):
+        # get_masks
+        loss_mask = torch.ones(loss.size(), device=loss.device, dtype=torch.bool)
+        # note LENGTH_KEY and CHANNEL_KEY are for padding tracking
+        # while DataKey.time and DataKey.position are for content
+        if LENGTH_KEY in batch:
+            token_position = rearrange(batch[SHUFFLE_KEY][batch['encoder_frac']:], 't -> () t')
+            length_mask = token_position < rearrange(batch[LENGTH_KEY], 'b -> b ()')
+            loss_mask = loss_mask & length_mask.unsqueeze(-1)
+        if CHANNEL_KEY in batch:
+            # CHANNEL_KEY padding tracking has already been shuffled
+            # And within each token, we just have c channels to track, always in order
+            comparison = repeat(torch.arange(loss.size(-1), device=loss.device), 'c -> 1 t c', t=loss.size(1)) # ! assuming flat - otherwise we need the space dimension as well.
+            channel_mask = comparison < batch[f'{CHANNEL_KEY}_target'].unsqueeze(-1) # unsqueeze the channel dimension
+            loss_mask = loss_mask & channel_mask
+        return loss
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         # B T
@@ -429,7 +454,7 @@ class ShuffleInfill(RatePrediction):
                 trial_context=trial_context,
                 temporal_padding_mask=temporal_padding_mask,
                 space_padding_mask=None, # TODO implement (low pri)
-                causal=False, # TODO implement (low pri)
+                causal=self.causal,
                 times=times,
                 positions=positions
             )
@@ -442,26 +467,12 @@ class ShuffleInfill(RatePrediction):
         if not compute_metrics:
             return batch_out
         loss: torch.Tensor = self.loss(rates, target) # b t' c
-        # get_masks
-        loss_mask = torch.ones(loss.size(), device=loss.device, dtype=torch.bool)
-        # note LENGTH_KEY and CHANNEL_KEY are for padding tracking
-        # while DataKey.time and DataKey.position are for content
-        if LENGTH_KEY in batch:
-            token_position = rearrange(batch[SHUFFLE_KEY][batch['encoder_frac']:], 't -> () t')
-            length_mask = token_position < rearrange(batch[LENGTH_KEY], 'b -> b ()')
-            loss_mask = loss_mask & length_mask.unsqueeze(-1)
-        if CHANNEL_KEY in batch:
-            # CHANNEL_KEY padding tracking has already been shuffled
-            # And within each token, we just have c channels to track, always in order
-            comparison = repeat(torch.arange(loss.size(-1), device=loss.device), 'c -> 1 t c', t=loss.size(1)) # ! assuming flat - otherwise we need the space dimension as well.
-            channel_mask = comparison < batch[f'{CHANNEL_KEY}_target'].unsqueeze(-1) # unsqueeze the channel dimension
-            loss_mask = loss_mask & channel_mask
+        loss_mask = self.get_loss_mask(batch, loss)
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         return batch_out
 
 
-# todo make shuffle next step prediction
 class NextStepPrediction(RatePrediction):
     r"""
         One-step-ahead modeling prediction. Teacher-forced (we don't use force self-consistency, to save on computation)
@@ -469,9 +480,10 @@ class NextStepPrediction(RatePrediction):
         We can still use a semi-causal decoder (however much context we can afford).
     """
     does_update_root = True
-    def __init__(self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, *args, **kwargs):
-        super().__init__(backbone_out_size, channel_count, cfg, *args, **kwargs)
+    def __init__(self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs, **kwargs):
+        super().__init__(backbone_out_size, channel_count, cfg, data_attrs, **kwargs)
         self.start_token = nn.Parameter(torch.randn(cfg.hidden_size))
+        assert not data_attrs.serve_tokens_flat, "not implemented, try ShuffleNextStepPrediction"
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         spikes = batch[DataKey.spikes]
@@ -510,6 +522,34 @@ class NextStepPrediction(RatePrediction):
             )
 
         return batch_out
+
+class ShuffleNextStepPrediction(ShuffleInfill):
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
+        r"""
+            It's tricky/annoying to try to crop zero timestep or inject zero timestep,
+            in flat scenarios it's not guaranteed there's a consistent number of tokens per timestep in each sequence (due to cropping)
+            So we will just "roll" time annotation and match only on loss comparison
+            # * by nature of task there is never supervision for final timestep encoding
+        """
+        out = super().update_batch(batch, eval_mode=eval_mode)
+        roll_time = out[f'{DataKey.time}_target'] - 1
+        # Use -1 for target times, effectively these queries are shifted a step back (while still being matched to present)
+        overflow = roll_time < 0
+        roll_time = torch.maximum(roll_time, 0)
+        out.update({
+            f'{DataKey.time}_target': roll_time,
+            'overflow': overflow
+        })
+        return out
+
+    def get_loss_mask(self, batch: Dict[str, torch.Tensor], loss: torch.Tensor) -> torch.Tensor:
+        r"""
+            In this case we want to mask out the loss for the final timestep
+            since there is no supervision for that timestep
+        """
+        loss_mask = super().get_loss_mask(batch, loss)
+        loss_mask = loss_mask & ~batch['overflow']
+        return loss_mask
 
 class ICMSNextStepPrediction(NextStepPrediction):
     does_update_root = True
@@ -602,12 +642,7 @@ class HeldoutPrediction(RatePrediction):
                 self.out = nn.Sequential(*decoder_layers) # override
         elif self.cfg.decode_strategy == EmbedStrat.token:
             self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes)
-            decoder_layers = [
-                nn.Linear(cfg.hidden_size, channel_count)
-            ]
-            if not cfg.lograte:
-                decoder_layers.append(nn.ReLU())
-            self.out = nn.Sequential(*decoder_layers)
+            self.out = RatePrediction.create_linear_poisson_head(cfg, cfg.hidden_size, channel_count)
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token:
@@ -788,7 +823,8 @@ def create_temporal_padding_mask(
 task_modules = {
     ModelTask.infill: SelfSupervisedInfill,
     ModelTask.shuffle_infill: ShuffleInfill,
-    ModelTask.next_step_prediction: NextStepPrediction, # ! not implemented, above logic is infill specific
+    ModelTask.next_step_prediction: NextStepPrediction,
+    ModelTask.shuffle_next_step_prediction: ShuffleNextStepPrediction,
     ModelTask.heldout_decoding: HeldoutPrediction,
     ModelTask.kinematic_decoding: BehaviorRegression,
 }

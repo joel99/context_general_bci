@@ -3,6 +3,7 @@ import copy
 import json
 import os
 from pathlib import Path
+from math import ceil
 import re
 import itertools
 from datetime import datetime
@@ -71,6 +72,14 @@ class DataAttrs:
     serve_tokens: bool = False # if true, serves flat data tokens with additional keys for annotations (e.g. array + timestep) instead of structured data (e.g. with array dimensions)
     serve_tokens_flat: bool = False
     neurons_per_token: int = 8
+
+    @property
+    def max_spatial_tokens(self):
+        per_array = ceil(self.max_channel_count / self.neurons_per_token)
+        if self.serve_tokens:
+            return per_array
+        else:
+            return per_array * self.max_arrays
 
 class SpikingDataset(Dataset):
     r"""

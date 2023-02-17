@@ -15,6 +15,7 @@ class ModelTask(Enum):
     next_step_prediction = 'next_step'
     infill = 'infill'
 
+    shuffle_next_step_prediction = 'shuffle_next_step_prediction'
     shuffle_infill = 'shuffle_infill'
 
     # Time-varying - these tasks are currently implemented by matching time-varying input shape
@@ -147,8 +148,7 @@ class TransformerConfig:
     transform_space: bool = False # match ModelConfig.transform_space
     flat_encoder: bool = False # for serve_tokens_flat
     embed_space: bool = True
-    max_spatial_tokens: bool = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
-    # ! TODO switch this to an int...
+    max_spatial_tokens: int = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
 
     factorized_space_time: bool = False # will split layers evenly in space and time
 
@@ -356,6 +356,7 @@ class DatasetConfig:
     serve_tokenized_flat: bool = False # flatten space (serve spikes as B Token H instead of B T S H)
     neurons_per_token: int = 8 # for tokenized
     max_tokens: int = 1024 # for tokenized - note we will still respect max_length_ms (limit fills in space and then either this inferred time limit or the explicit one)
+    # This will be the # of tokens served; be generous because we will crop in any flat task.
     # ! note that the above is going to be strictly more than amount proc-ed in encoder-decoder encoder -- since things are cropped.
     pad_value: int = 0
     # pad_value: int = 20

@@ -265,8 +265,7 @@ class SpaceTimeTransformer(nn.Module):
         # if self.cfg.fixup_init:
         #     self.fixup_initialization()
         if self.cfg.transform_space and self.cfg.embed_space:
-            n_space = max_spatial_tokens if max_spatial_tokens else 0 # TODO restore max_spatial_tokens config to int, not bool
-            # n_space = max_spatial_tokens if max_spatial_tokens else self.cfg.max_spatial_tokens
+            n_space = max_spatial_tokens if max_spatial_tokens else self.cfg.max_spatial_tokens
             if allow_embed_padding:
                 self.space_encoder = nn.Embedding(n_space + 1, self.cfg.n_state, padding_idx=n_space)
             else:
