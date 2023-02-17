@@ -107,6 +107,7 @@ class BrainBertInterface(pl.LightningModule):
         # Things that are allowed to change on init (actually most things should be allowed to change, but just register them explicitly here as needed)
 
         for safe_attr in [
+            'decoder_layers', # ! assuming we're freshly initializing, this is kind of not safe
             'dropout',
             'weight_decay',
             'causal',
@@ -569,7 +570,7 @@ class BrainBertInterface(pl.LightningModule):
             temporal_context=temporal_context,
             temporal_padding_mask=temporal_padding_mask,
             space_padding_mask=space_padding_mask,
-            causal=getattr(self.cfg, 'causal', False),
+            causal=self.cfg.causal,
             times=batch.get(DataKey.time, None),
             positions=batch.get(DataKey.position, None),
         ) # B x T x S x H or B x Token x H (flat)

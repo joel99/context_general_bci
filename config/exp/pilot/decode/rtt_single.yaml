@@ -16,6 +16,7 @@ model:
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
 
+  dropout: 0.1
 dataset:
   max_length_ms: 2000 # fit
   max_arrays: 1
@@ -41,5 +42,5 @@ dataset:
 init_from_id: rtt_indy_single-sweep-lr_and_dropout-t7avw2xi
 init_tag: val_loss
 
-sweep_cfg: ft_reg
-sweep_trials: 8
+# sweep_cfg: ft_reg
+# sweep_trials: 8

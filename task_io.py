@@ -671,15 +671,14 @@ class BehaviorRegression(TaskPipeline):
                 )
         elif self.cfg.decode_strategy == EmbedStrat.token:
             self.injector = TemporalTokenInjector(cfg, data_attrs, self.cfg.behavior_target)
-            max_spatial_tokens = round(
-                data_attrs.max_channel_count / cfg.neurons_per_token
-            )
+            self.time_pad = cfg.transformer.max_trial_length
             if getattr(self.cfg, 'decode_separate', False):
-                # TODO implementing transformer decoder, injection into encoder seems to overfit
+                # This is more aesthetic flow, but both encode-only and this strategy seems to overfit.
                 self.decoder = SpaceTimeTransformer(
                     cfg.transformer,
-                    max_spatial_tokens=max_spatial_tokens,
-                    n_layers=cfg.decoder_layers
+                    max_spatial_tokens=0,
+                    n_layers=cfg.decoder_layers,
+                    allow_embed_padding=True,
                 )
             self.out = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
         self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
@@ -694,30 +693,30 @@ class BehaviorRegression(TaskPipeline):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
-        if getattr(self.cfg, 'decode_separate', False):
-            temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
-            decode_tokens, decode_time, decode_space = self.injector.inject(batch)
-            decoder_input = torch.cat([backbone_features, decode_tokens], dim=1)
-            times = torch.cat([batch[DataKey.time], decode_time], dim=1)
-            positions = torch.cat([batch[DataKey.position], decode_space], dim=1)
-            if temporal_padding_mask is not None:
-                extra_padding_mask = create_temporal_padding_mask(decode_tokens, batch, length_key=COVARIATE_LENGTH_KEY)
-                temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
-            trial_context = []
-            for key in ['session', 'subject', 'task']:
-                if getattr(batch, key, None) is not None:
-                    trial_context.append(batch[key])
-            # import pdb;pdb.set_trace()
-            backbone_features: torch.Tensor = self.decoder(
-                decoder_input,
-                temporal_padding_mask=temporal_padding_mask,
-                trial_context=trial_context,
-                times=times,
-                positions=positions,
-                space_padding_mask=None, # (low pri)
-                causal=False, # TODO (low pri)
-            )
         if self.cfg.decode_strategy == EmbedStrat.token:
+            if getattr(self.cfg, 'decode_separate', False):
+                temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
+                decode_tokens, decode_time, decode_space = self.injector.inject(batch)
+                decoder_input = torch.cat([backbone_features, decode_tokens], dim=1)
+                times = torch.cat([torch.full_like(batch[DataKey.time], self.time_pad), decode_time], dim=1)
+                positions = torch.cat([torch.zeros_like(batch[DataKey.position]), decode_space], dim=1)
+                if temporal_padding_mask is not None:
+                    extra_padding_mask = create_temporal_padding_mask(decode_tokens, batch, length_key=COVARIATE_LENGTH_KEY)
+                    temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
+                trial_context = []
+                for key in ['session', 'subject', 'task']:
+                    if getattr(batch, key, None) is not None:
+                        trial_context.append(batch[key])
+                # import pdb;pdb.set_trace()
+                backbone_features: torch.Tensor = self.decoder(
+                    decoder_input,
+                    temporal_padding_mask=temporal_padding_mask,
+                    trial_context=trial_context,
+                    times=times,
+                    positions=positions,
+                    space_padding_mask=None, # (low pri)
+                    causal=False, # TODO (low pri)
+                )
             # crop out injected tokens, -> B T H
             backbone_features = self.injector.extract(batch, backbone_features)
         bhvr = self.out(backbone_features)

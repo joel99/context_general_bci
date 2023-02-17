@@ -229,6 +229,7 @@ class SpaceTimeTransformer(nn.Module):
         config: TransformerConfig,
         max_spatial_tokens: int = 0,
         n_layers: int = 0, # override
+        allow_embed_padding=False,
     ):
         super().__init__()
         self.cfg = config
@@ -252,7 +253,10 @@ class SpaceTimeTransformer(nn.Module):
         else:
             self.transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers)
         if getattr(self.cfg, 'flat_encoder', False) or self.cfg.learnable_position:
-            self.time_encoder = nn.Embedding(self.cfg.max_trial_length, self.cfg.n_state)
+            if allow_embed_padding:
+                self.time_encoder = nn.Embedding(self.cfg.max_trial_length + 1, self.cfg.n_state, padding_idx=self.cfg.max_trial_length)
+            else:
+                self.time_encoder = nn.Embedding(self.cfg.max_trial_length, self.cfg.n_state)
         else:
             self.time_encoder = PositionalEncoding(self.cfg)
         self.dropout_in = nn.Dropout(self.cfg.dropout)
@@ -261,9 +265,12 @@ class SpaceTimeTransformer(nn.Module):
         # if self.cfg.fixup_init:
         #     self.fixup_initialization()
         if self.cfg.transform_space and self.cfg.embed_space:
-            n_space = max_spatial_tokens if max_spatial_tokens else self.cfg.max_spatial_tokens
-            # self.space_encoder = nn.Embedding(n_space+1, self.cfg.n_state, padding_idx=n_space) # TODO use
-            self.space_encoder = nn.Embedding(n_space, self.cfg.n_state)
+            n_space = max_spatial_tokens if max_spatial_tokens else 0 # TODO restore max_spatial_tokens config to int, not bool
+            # n_space = max_spatial_tokens if max_spatial_tokens else self.cfg.max_spatial_tokens
+            if allow_embed_padding:
+                self.space_encoder = nn.Embedding(n_space + 1, self.cfg.n_state, padding_idx=n_space)
+            else:
+                self.space_encoder = nn.Embedding(n_space, self.cfg.n_state)
 
     def fixup_initialization(self):
         r"""
@@ -336,13 +343,14 @@ class SpaceTimeTransformer(nn.Module):
             src = src + time_embed
             if self.cfg.transform_space and self.cfg.embed_space:
                 # likely space will soon be given as input or pre-embedded, for now assume range
-                if positions is not None:
-                    space_embed = rearrange(self.space_encoder(positions), 'b s h -> b 1 s h')
-                else:
-                    space_embed = rearrange(self.space_encoder(
-                        torch.arange(src.size(2), device=src.device)
-                    ), 's h -> 1 1 s h')
-                src = src + space_embed
+                if self.space_encoder is not None:
+                    if positions is not None:
+                        space_embed = rearrange(self.space_encoder(positions), 'b s h -> b 1 s h')
+                    else:
+                        space_embed = rearrange(self.space_encoder(
+                            torch.arange(src.size(2), device=src.device)
+                        ), 's h -> 1 1 s h')
+                    src = src + space_embed
 
         # === Masks ===
         def make_src_mask(src: torch.Tensor, temporal_context: torch.Tensor | None, trial_context: torch.Tensor | None, t: int, s: int=1):

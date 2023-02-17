@@ -148,6 +148,7 @@ class TransformerConfig:
     flat_encoder: bool = False # for serve_tokens_flat
     embed_space: bool = True
     max_spatial_tokens: bool = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
+    # ! TODO switch this to an int...
 
     factorized_space_time: bool = False # will split layers evenly in space and time
 

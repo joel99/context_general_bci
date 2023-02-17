@@ -23,8 +23,9 @@ query = "pitt_obs_decode_scratch"
 query = "test_overfit"
 query = "pitt_obs_decode_scratch-sweep-small_wide-7ycit09t"
 # query = "pitt_obs_decode_scratch-sweep-small_wide-t1h7knvd"
-query = "rtt_single-35cqqwnl"
+# query = "rtt_single-35cqqwnl"
 # query = "rtt_single-sweep-ft_reg-yni1txy2"
+query = "rtt_flat_indy-a25iab76"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]

@@ -15,7 +15,9 @@ model:
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
   task:
+    mask_ratio: 0.8 # assuming high mask ratio was what prevented overfitting in pretraining, try it again here
     decode_separate: True
+    behavior_lag: 120
 dataset:
   max_length_ms: 2000 # fit
   max_arrays: 1
