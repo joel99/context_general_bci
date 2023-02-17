@@ -339,6 +339,8 @@ class ShuffleInfill(RatePrediction):
         - However the code is pretty dirty and this may eventually change
 
     """
+    does_update_root = True
+
     def __init__(
         self,
         backbone_out_size: int,
@@ -372,7 +374,6 @@ class ShuffleInfill(RatePrediction):
         self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
         self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
 
-    does_update_root = True
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         r"""
             Shuffle inputs, keep only what we need for evaluation
@@ -463,10 +464,26 @@ class ShuffleInfill(RatePrediction):
 # todo make shuffle next step prediction
 class NextStepPrediction(RatePrediction):
     r"""
-        One-step-ahead modeling prediction.
+        One-step-ahead modeling prediction. Teacher-forced (we don't use force self-consistency, to save on computation)
         Note while pretraining necesarily should be causal (no way of preventing ctx bleed across layers)
         We can still use a semi-causal decoder (however much context we can afford).
     """
+    does_update_root = True
+    def __init__(self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, *args, **kwargs):
+        super().__init__(backbone_out_size, channel_count, cfg, *args, **kwargs)
+        self.start_token = nn.Parameter(torch.randn(cfg.hidden_size))
+
+    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
+        spikes = batch[DataKey.spikes]
+        target = spikes[..., 0]
+        batch.update({
+            DataKey.spikes: torch.cat([
+                rearrange(self.start_token, 'h -> () () () h').expand(spikes.size(0), 1, spikes.size(2), -1),
+                spikes.roll(1, dims=1)[:, 1:]
+            ], 1),
+            'spike_target': target,
+        })
+
     def forward(
         self,
         batch: Dict[str, torch.Tensor],
@@ -475,24 +492,20 @@ class NextStepPrediction(RatePrediction):
         eval_mode=False,
     ) -> torch.Tensor:
         rates: torch.Tensor = self.out(backbone_features)
-        # Match API of infill; just roll, don't use first timestep
-        rates = torch.roll(rates, 1, dims=1)
-
         batch_out = {}
         if Output.logrates in self.cfg.outputs:
             batch_out[Output.logrates] = rates
 
         if not compute_metrics:
             return batch_out
-        loss: torch.Tensor = self.loss(rates, batch[DataKey.spikes][...,0])
+        loss: torch.Tensor = self.loss(rates, batch['spike_target'])
         loss_mask, length_mask, channel_mask = self.get_masks(batch)
-        loss_mask[:, 0] = False # don't compute loss on first timestep
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.bps in self.cfg.metrics:
             batch_out[Metric.bps] = self.bps(
-                rates[:,1:], batch[DataKey.spikes][:,1:],
-                length_mask=length_mask[:,1:],
+                rates, batch['spike_target'],
+                length_mask=length_mask,
                 channel_mask=channel_mask
             )
 

@@ -51,14 +51,15 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg.session_embed_size = cfg.hidden_size
         self.cfg.subject_embed_size = cfg.hidden_size
         self.cfg.array_embed_size = cfg.hidden_size
-        if getattr(self.cfg, 'task_embed_size', None):
-            self.cfg.task_embed_size = cfg.hidden_size
+        self.cfg.task_embed_size = cfg.hidden_size
         self.cfg.readin_dim = cfg.hidden_size
         self.cfg.readout_dim = cfg.hidden_size
         self.cfg.transformer.dropout = cfg.dropout
         self.cfg.transformer.transform_space = cfg.transform_space
-        if hasattr(self.cfg, 'causal'):
-            self.cfg.causal = getattr(self.cfg, 'causal') or ModelTask.next_step_prediction in self.cfg.task.tasks
+
+        if self.cfg.causal:
+            assert ModelTask.infill not in self.cfg.task.tasks, "Infill not implemented for causal models. Use `next_step_prediction`"
+            assert ModelTask.shuffle_infill not in self.cfg.task.tasks, "Shuffle infill not implemented for causal models `cropped_next_step_prediction`"
 
         self.data_attrs = data_attrs
         assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"
@@ -68,7 +69,7 @@ class BrainBertInterface(pl.LightningModule):
             assert self.data_attrs.neurons_per_token == self.cfg.neurons_per_token, \
                 f"Neurons per token served by data ({self.data_attrs.neurons_per_token}) must match model token size {self.cfg.neurons_per_token}"
         if self.data_attrs.serve_tokens_flat:
-            assert getattr(self.cfg.transformer, 'flat_encoder', False), "Flat encoder must be true if serving flat tokens"
+            assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
         if data_attrs.serve_tokens: # no spatial dim
             max_spatial_tokens = round(
@@ -88,7 +89,7 @@ class BrainBertInterface(pl.LightningModule):
         num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
         assert num_updates <= 1, "Only one task pipeline should update the root"
 
-        if getattr(self.cfg, 'layer_norm_input', False):
+        if self.cfg.layer_norm_input:
             self.layer_norm_input = nn.LayerNorm(data_attrs.max_channel_count)
 
         if ModelTask.infill in self.cfg.task.tasks:
@@ -169,7 +170,7 @@ class BrainBertInterface(pl.LightningModule):
                     project_size += self.cfg.session_embed_size
                 elif self.cfg.session_embed_strategy == EmbedStrat.token:
                     assert self.cfg.session_embed_size == self.cfg.hidden_size
-                    if getattr(self.cfg, 'init_flags', False):
+                    if self.cfg.init_flags:
                         self.session_flag = nn.Parameter(torch.randn(self.cfg.session_embed_size) / math.sqrt(self.cfg.session_embed_size))
                     else:
                         self.session_flag = nn.Parameter(torch.zeros(self.cfg.session_embed_size))
@@ -180,7 +181,7 @@ class BrainBertInterface(pl.LightningModule):
                 project_size += self.cfg.subject_embed_size
             elif self.cfg.subject_embed_strategy == EmbedStrat.token:
                 assert self.cfg.subject_embed_size == self.cfg.hidden_size
-                if getattr(self.cfg, 'init_flags', False):
+                if self.cfg.init_flags:
                     self.subject_flag = nn.Parameter(torch.randn(self.cfg.subject_embed_size) / math.sqrt(self.cfg.subject_embed_size))
                 else:
                     self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
@@ -196,7 +197,7 @@ class BrainBertInterface(pl.LightningModule):
                 project_size += self.cfg.array_embed_size
             elif self.cfg.array_embed_strategy == EmbedStrat.token:
                 assert self.cfg.array_embed_size == self.cfg.hidden_size
-                if getattr(self.cfg, 'init_flags', False):
+                if self.cfg.init_flags:
                     self.array_flag = nn.Parameter(torch.randn(self.data_attrs.max_arrays, self.cfg.array_embed_size) / math.sqrt(self.cfg.array_embed_size))
                 else:
                     self.array_flag = nn.Parameter(torch.zeros(self.data_attrs.max_arrays, self.cfg.array_embed_size))
@@ -207,7 +208,7 @@ class BrainBertInterface(pl.LightningModule):
                 project_size += self.cfg.task_embed_size
             elif self.cfg.task_embed_strategy == EmbedStrat.token:
                 assert self.cfg.task_embed_size == self.cfg.hidden_size
-                if getattr(self.cfg, 'init_flags', False):
+                if self.cfg.init_flags:
                     self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
                 else:
                     self.task_flag = nn.Parameter(torch.zeros(self.cfg.task_embed_size))
@@ -261,10 +262,10 @@ class BrainBertInterface(pl.LightningModule):
             elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
                 self.readin = ReadinCrossAttention(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
 
-        if getattr(self.cfg, 'readout_strategy', EmbedStrat.none) == EmbedStrat.unique_project:
+        if self.cfg.readout_strategy == EmbedStrat.unique_project:
             self.readout = ReadinMatrix(
                 self.cfg.hidden_size,
-                self.cfg.readout_dim if getattr(self.cfg, 'readout_dim', 0) else 128, # ! REMOVE
+                self.cfg.readout_dim,
                 # self.cfg.readout_dim if getattr(self.cfg, 'readout_dim', 0) else channel_count,
                 self.data_attrs,
                 self.cfg
@@ -459,7 +460,7 @@ class BrainBertInterface(pl.LightningModule):
             #     'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
             #     'b t a s_a chunk h -> b t a s_a (chunk h)'
             # ) # yes, we rearrange twice... better for alternative control flows..
-            if getattr(self.cfg, 'encode_decode'):
+            if self.cfg.encode_decode: # TODO decouple
                 # cache context
                 batch['session'] = session
                 batch['subject'] = subject
