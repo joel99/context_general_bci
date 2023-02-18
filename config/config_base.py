@@ -274,9 +274,13 @@ class ExperimentalConfig:
 class RTTConfig(ExperimentalConfig):
     chop_size_ms: int = 1000
     load_covariates: bool = True
+    include_sorted: bool = False
+
+    sampling_rate: int = 1000 # static
+    covariate_sampling_rate: int = 250
 
     def reproc_dict(self):
-        return {'chop_size_ms': self.chop_size_ms}
+        return {'chop_size_ms': self.chop_size_ms, 'include_sorted': self.include_sorted}
 
 @dataclass
 class MazeConfig(ExperimentalConfig):

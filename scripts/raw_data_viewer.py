@@ -1,4 +1,6 @@
 #%%
+# Scratchpad for raw data processing
+
 from typing import List
 from pathlib import Path
 
@@ -12,7 +14,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import resample_poly
 
 from config import DataKey, DatasetConfig
-from subjects import SubjectInfo, SubjectArrayRegistry
+from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 from einops import rearrange, reduce
 
@@ -35,34 +37,118 @@ from analyze_utils import prep_plt
 ## Load dataset
 
 dataset_name = 'odoherty_rtt-Loco-20170215_02'
+dataset_name = 'odoherty_rtt-Loco-20170227_04'
 dataset_name = 'odoherty_rtt-Indy-20161005_06'
 context = context_registry.query(alias=dataset_name)
-datapath = context.datapath
 
-sampling_rate = 1000
-cfg = DatasetConfig()
-cfg.bin_size_ms = 20
-cfg.bin_size_ms = 5
-def load_bhvr_from_raw(datapath):
-    with h5py.File(datapath, 'r') as h5file:
-        orig_timestamps = np.squeeze(h5file['t'][:])
-        time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
-        if cfg.odoherty_rtt.load_covariates:
-            covariate_sampling = 250 # Hz
-            def resample(data):
-                return torch.tensor(
-                    resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
+dataset_name = 'odoherty_rtt.*'
+contexts = context_registry.query(alias=dataset_name)
+
+for context in contexts:
+    datapath = context.datapath
+
+    sampling_rate = 1000
+    cfg = DatasetConfig()
+    cfg.bin_size_ms = 20
+    # cfg.bin_size_ms = 5
+    def load_bhvr_from_raw(datapath):
+        with h5py.File(datapath, 'r') as h5file:
+            orig_timestamps = np.squeeze(h5file['t'][:])
+            time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
+            if cfg.odoherty_rtt.load_covariates:
+                covariate_sampling = 250 # Hz
+                def resample(data):
+                    return torch.tensor(
+                        resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
+                    )
+                bhvr_vars = {}
+                for bhvr in ['finger_pos']:
+                # for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
+                    bhvr_vars[bhvr] = h5file[bhvr][()].T
+                # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
+                finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
+                bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel)
+                for bhvr in bhvr_vars:
+                    bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
+        return bhvr_vars
+
+    def load_spikes_from_raw(datapath):
+        LOAD_SORTED = True
+        with h5py.File(datapath, 'r') as h5file:
+            orig_timestamps = np.squeeze(h5file['t'][:])
+            time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
+            int_arrays = [h5file[ref][()][:,0] for ref in h5file['chan_names'][0]]
+            make_chan_name = lambda array: ''.join([chr(num) for num in array])
+            chan_names = [make_chan_name(array) for array in int_arrays]
+            chan_arrays = [cn.split()[0] for cn in chan_names]
+            assert (
+                len(chan_arrays) == 96 and all([c == 'M1' for c in chan_arrays]) or \
+                len(chan_arrays) == 192 and all([c == 'M1' for c in chan_arrays[:96]]) and all([c == 'S1' for c in chan_arrays[96:]])
+            ), "Only M1 and S1 arrays in specific format are supported"
+
+            spike_refs = h5file['spikes'][()].T
+            if LOAD_SORTED:
+                spike_refs = spike_refs[:96] # only M1. Already quite a lot of units to process without, maintains consistency with other datasets. (not exploring multiarea atm)
+            channels, units = spike_refs.shape # units >= 1 are sorted, we just want MUA on unit 0
+            # print(spike_refs.shape)
+            mua_unit = 0
+
+            unit_budget = units if LOAD_SORTED else 1
+            spike_arr = torch.zeros((time_span, channels, unit_budget), dtype=torch.uint8)
+
+            min_spike_time = []
+            for c in range(channels):
+                if h5file[spike_refs[c, mua_unit]].dtype != float:
+                    continue
+                unit_range = range(units) if LOAD_SORTED else [mua_unit]
+                for unit in unit_range:
+                    spike_times = h5file[spike_refs[c, unit]][()]
+                    if spike_times.shape[0] == 2: # empty unit
+                        continue
+                    spike_times = spike_times[0]
+                    if len(spike_times) < 2: # don't bother
+                        continue
+                    spike_times = spike_times - orig_timestamps[0]
+                    ms_spike_times, ms_spike_cnt = np.unique((spike_times * sampling_rate).round(6).astype(int), return_counts=True)
+                    spike_mask = ms_spike_times < spike_arr.shape[0]
+                    ms_spike_times = ms_spike_times[spike_mask]
+                    ms_spike_cnt = torch.tensor(ms_spike_cnt[spike_mask], dtype=torch.uint8)
+                    spike_arr[ms_spike_times, c, unit] = ms_spike_cnt
+                    min_spike_time.append(ms_spike_times[0])
+                # TODO drop extraneous units
+            min_spike_time = max(min(min_spike_time), 0) # some spikes come before marked trial start
+            spike_arr: torch.Tensor = spike_arr[min_spike_time:, :]
+
+            if LOAD_SORTED:
+                # Filter out extremely low FR units, we can't afford to load everything.
+                threshold_rate_hz = 0.5 # Less than 0.5Hz (not even one spike every 2 trials)
+                threshold_count = threshold_rate_hz * (spike_arr.shape[0] / sampling_rate)
+                spike_arr = spike_arr.flatten(1, 2)
+                spike_arr = spike_arr[:, (spike_arr.sum(0) > threshold_count).numpy()]
+
+            def compress_vector(vec: torch.Tensor, compression='sum'):
+                # vec: at sampling resolution
+                full_vec = vec.unfold(0, cfg.odoherty_rtt.chop_size_ms, cfg.odoherty_rtt.chop_size_ms) # Trial x C x chop_size (time)
+                return reduce(
+                    rearrange(full_vec, 'b c (time bin) -> b time c bin', bin=cfg.bin_size_ms),
+                    'b time c bin -> b time c 1', compression
                 )
-            bhvr_vars = {}
-            for bhvr in ['finger_pos']:
-            # for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
-                bhvr_vars[bhvr] = h5file[bhvr][()].T
-            # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
-            finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
-            bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel)
-            for bhvr in bhvr_vars:
-                bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
-    return bhvr_vars
+            def chop_vector(vec: torch.Tensor):
+                # vec - already at target resolution, just needs chopping
+                chops = round(cfg.odoherty_rtt.chop_size_ms / cfg.bin_size_ms)
+                return rearrange(
+                    vec.unfold(0, chops, chops),
+                    'trial hidden time -> trial time hidden'
+                ) # Trial x C x chop_size (time)
+            full_spikes = compress_vector(spike_arr)
+            # print(SubjectArrayRegistry.query_by_array('Indy-M1_all'))
+            print(create_spike_payload(full_spikes[0], ['Indy-M1_all'])['Indy-M1_all'].size())
+            # print(full_spikes.shape)
+        return spike_arr
+    spike_arr = load_spikes_from_raw(datapath)
+#%%
+print(spike_arr.shape)
+
 #%%
 ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
 session_paths = [ctx.datapath for ctx in ctxs]

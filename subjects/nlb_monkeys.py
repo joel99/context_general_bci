@@ -29,8 +29,9 @@ class Indy(SubjectInfo):
     name = SubjectName.indy
     _arrays = {
         'main': SortedArrayInfo(_max_channels=98), # For NLB
-        'M1': GeometricArrayInfo(array=np.arange(96)),
-        'S1': GeometricArrayInfo(array=np.arange(96) + 96),
+        'M1': GeometricArrayInfo(array=np.arange(96)), # MUA hash unit
+        'M1_all': SortedArrayInfo(_max_channels=480), # MUA hash unit, 5 x 96. These are _not_ to be used in non-flat cases, wildly inefficient.
+        'S1': GeometricArrayInfo(array=np.arange(96) + 96), # MUA Hash unit (S1 not supported, too many units)
     }
 
 @SubjectArrayRegistry.register
@@ -38,6 +39,7 @@ class Loco(SubjectInfo): # RTT https://zenodo.org/record/3854034
     name = SubjectName.loco
     _arrays = {
         'M1': GeometricArrayInfo(array=np.arange(96)),
+        'M1_all': SortedArrayInfo(_max_channels=480), # MUA hash unit, 5 x 96
         'S1': GeometricArrayInfo(array=np.arange(96) + 96),
     }
 

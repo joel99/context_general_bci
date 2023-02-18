@@ -38,21 +38,19 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
-        sampling_rate: int = 1000 # Hz, true for ODohery data
     ):
         assert cfg.odoherty_rtt.chop_size_ms % cfg.bin_size_ms == 0, "Chop size must be a multiple of bin size"
         with h5py.File(datapath, 'r') as h5file:
             orig_timestamps = np.squeeze(h5file['t'][:])
-            time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * sampling_rate)
+            time_span = int((orig_timestamps[-1] - orig_timestamps[0]) * cfg.odoherty_rtt.sampling_rate)
             if cfg.odoherty_rtt.load_covariates:
-                covariate_sampling = 250 # Hz
                 def resample(data):
                     # some notebook work in `data_viewer_kinematics` suggests resample_poly isn't great for 5ms
                     # and there's edge artifacts for `resample`
                     # but neither artifact visually survives the velocity gradient
                     # so it shouldn't matter?
                     return torch.tensor(
-                        signal.resample(data, int(len(data) / covariate_sampling / (cfg.bin_size_ms / 1000)))
+                        signal.resample(data, int(len(data) / cfg.odoherty_rtt.covariate_sampling_rate / (cfg.bin_size_ms / 1000)))
                         # signal.resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
                     )
                 bhvr_vars = {}
@@ -87,7 +85,7 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                     continue
                 spike_times = np.squeeze(h5file[spike_refs[c, mua_unit]][()], axis=0)
                 spike_times = spike_times - orig_timestamps[0]
-                ms_spike_times, ms_spike_cnt = np.unique((spike_times * sampling_rate).round(6).astype(int), return_counts=True)
+                ms_spike_times, ms_spike_cnt = np.unique((spike_times * cfg.odoherty_rtt.sampling_rate).round(6).astype(int), return_counts=True)
                 spike_mask = ms_spike_times < spike_arr.shape[0]
                 ms_spike_times = ms_spike_times[spike_mask]
                 ms_spike_cnt = torch.tensor(ms_spike_cnt[spike_mask], dtype=torch.uint8)
