@@ -561,8 +561,8 @@ class BrainBertInterface(pl.LightningModule):
             times=batch.get(DataKey.time, None),
             positions=batch.get(DataKey.position, None),
         ) # B x T x S x H or B x Token x H (flat)
-        if outputs.isnan().any():
-            import pdb;pdb.set_trace()
+        # if outputs.isnan().any():
+            # import pdb;pdb.set_trace()
         return outputs
 
     def _step(self, batch: Dict[str, torch.Tensor], eval_mode=False) -> Dict[str, torch.Tensor]:

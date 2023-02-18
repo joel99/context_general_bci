@@ -730,12 +730,12 @@ class BehaviorRegression(TaskPipeline):
                     allow_embed_padding=True,
                 )
             self.out = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
+        self.causal = cfg.causal
         self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
+        assert self.bhvr_lag_bins >= 0, "behavior lag must be >= 0, code not thought through otherwise"
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
-        if self.cfg.decode_strategy != EmbedStrat.token:
-            return
-        if getattr(self.cfg, 'decode_separate', False):
+        if self.cfg.decode_strategy != EmbedStrat.token or self.cfg.decode_separate:
             return batch
         self.injector.inject(batch, in_place=True)
         return batch
@@ -743,9 +743,11 @@ class BehaviorRegression(TaskPipeline):
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
         if self.cfg.decode_strategy == EmbedStrat.token:
-            if getattr(self.cfg, 'decode_separate', False):
+            if self.cfg.decode_separate:
                 temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
                 decode_tokens, decode_time, decode_space = self.injector.inject(batch)
+                if self.causal and self.cfg.behavior_lag_lookahead:
+                    decode_time = decode_time + self.bhvr_lag_bins # allow-looking N bins of neural data into the future -- which is technically still the present
                 decoder_input = torch.cat([backbone_features, decode_tokens], dim=1)
                 times = torch.cat([torch.full_like(batch[DataKey.time], self.time_pad), decode_time], dim=1)
                 positions = torch.cat([torch.zeros_like(batch[DataKey.position]), decode_space], dim=1)
@@ -764,7 +766,7 @@ class BehaviorRegression(TaskPipeline):
                     times=times,
                     positions=positions,
                     space_padding_mask=None, # (low pri)
-                    causal=False, # TODO (low pri)
+                    causal=self.causal,
                 )
             # crop out injected tokens, -> B T H
             backbone_features = self.injector.extract(batch, backbone_features)

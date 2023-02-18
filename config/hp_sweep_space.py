@@ -5,6 +5,16 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "reg_tight": { # this may be one strategy, or, bigger models might even be better?
+        "model.dropout": {
+            'feasible_points': [0.05, 0.1, 0.2, 0.3]
+        },
+        "model.weight_decay": {
+            'min': 5e-3,
+            'max': 1e-1,
+            'scaling': 'log',
+        }
+    },
     "ft_reg": {
         "model.dropout": {
             'feasible_points': [0.1, 0.3, 0.5, 0.7]

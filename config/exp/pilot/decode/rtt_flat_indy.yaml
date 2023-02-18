@@ -41,3 +41,9 @@ dataset:
 
 init_from_id: rtt_indy_flat_shuffle-sweep-lr_and_dropout-j0twjjbo # 0.3204
 init_tag: val_loss
+
+# # ! New, testing regularization strategies
+train:
+  accumulate_batches: 4 # simulate 4x gpu
+sweep_cfg: reg_tight
+sweep_trials: 8

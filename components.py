@@ -243,16 +243,16 @@ class SpaceTimeTransformer(nn.Module):
             activation=self.cfg.activation,
             norm_first=self.cfg.pre_norm,
         )
-        if self.cfg.pre_norm and getattr(self.cfg, 'final_norm', True):
+        if self.cfg.pre_norm and self.cfg.final_norm:
             self.final_norm = nn.LayerNorm(self.cfg.n_state) # per Kaiming's MAE for vision
         n_layers = n_layers or self.cfg.n_layers
         if self.cfg.factorized_space_time:
-            assert not getattr(self.cfg, 'flat_encoder', False), "Flat encoder not supported with factorized space time"
+            assert not self.cfg.flat_encoder, "Flat encoder not supported with factorized space time"
             self.space_transformer_encoder = nn.TransformerEncoder(enc_layer, round(n_layers / 2))
             self.time_transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers - round(n_layers / 2))
         else:
             self.transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers)
-        if getattr(self.cfg, 'flat_encoder', False) or self.cfg.learnable_position:
+        if self.cfg.flat_encoder or self.cfg.learnable_position:
             if allow_embed_padding:
                 self.time_encoder = nn.Embedding(self.cfg.max_trial_length + 1, self.cfg.n_state, padding_idx=self.cfg.max_trial_length)
             else:
@@ -414,6 +414,9 @@ class SpaceTimeTransformer(nn.Module):
                     src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
                 src_mask = F.pad(src_mask, (0, 0, 0, trial_context.size(1)), value=float('-inf'))
                 src_mask = F.pad(src_mask, (0, trial_context.size(1)), value=0)
+
+            if src_mask is not None and src_mask.ndim == 3: # expand along heads
+                src_mask = repeat(src_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
             return src_mask
 
         def make_padding_mask(
@@ -530,8 +533,7 @@ class SpaceTimeTransformer(nn.Module):
             contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
             src_mask = make_src_mask(src, temporal_context, trial_context, t, s)
-            if src_mask.ndim == 3: # expand along heads
-                src_mask = repeat(src_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
+
             if self.cfg.flat_encoder:
                 if temporal_padding_mask is not None:
                     padding_mask = temporal_padding_mask
