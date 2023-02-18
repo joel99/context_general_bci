@@ -259,6 +259,7 @@ class ExperimentalConfig:
         * TODO Think more about this
     """
     arrays: List[str] = field(default_factory=lambda: []) # Empty list means don't filter
+    firing_hz_floor: float = 0.5
 
     def reproc_dict(self) -> Dict[str, List[str]]:
         r"""

@@ -594,6 +594,7 @@ class BrainBertInterface(pl.LightningModule):
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T S H
+
         if not self.cfg.transform_space:
             # no unique strategies will be tried for spatial transformer (its whole point is ctx-robustness)
             if self.cfg.readout_strategy == EmbedStrat.mirror_project:

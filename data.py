@@ -153,12 +153,10 @@ class SpikingDataset(Dataset):
         }
         task_cfg = getattr(self.cfg, task.value)
         # version.update(task_cfg.reproc_dict())
-        # Extremely hacky, but right now IDK how to get cfg class methods working,
-        # We will just track keys like _ms, or _s in this versioning
+        # Extremely hacky, IDK how to get cfg class methods working,
         task_dict = OmegaConf.to_container(task_cfg, resolve=True)
         for k, v in task_dict.items():
-            if k.endswith('_ms') or k.endswith('_s'):
-                version[k] = v
+            version[k] = v
         return version
 
     def checksum_diff(self, version_path: Path, task: ExperimentalTask):

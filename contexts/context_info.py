@@ -402,36 +402,36 @@ class BCIContextInfo(ReachingContextInfo):
 # Not all have S1 - JY would prefer registry to always be right rather than detecting this post-hoc during loading
 # So we do a pre-sweep and log down which sessions have which arrays here
 RTT_SESSION_ARRAYS = {
-    'indy_20160624_03': ['M1'],
-    'indy_20161007_02': ['M1'],
-    'indy_20160921_01': ['M1'],
-    'indy_20170123_02': ['M1'],
-    'indy_20160627_01': ['M1'],
-    'indy_20160927_06': ['M1'],
-    'indy_20161212_02': ['M1'],
-    'indy_20161011_03': ['M1'],
-    'indy_20161026_03': ['M1'],
-    'indy_20161206_02': ['M1'],
-    'indy_20161013_03': ['M1'],
-    'indy_20170131_02': ['M1'],
-    'indy_20160930_02': ['M1'],
-    'indy_20160930_05': ['M1'],
-    'indy_20161024_03': ['M1'],
-    'indy_20170124_01': ['M1'],
-    'indy_20161017_02': ['M1'],
-    'indy_20161027_03': ['M1'],
-    'indy_20160630_01': ['M1'],
-    'indy_20161025_04': ['M1'],
-    'indy_20161207_02': ['M1'],
-    'indy_20161220_02': ['M1'],
-    'indy_20161006_02': ['M1'],
-    'indy_20160915_01': ['M1'],
-    'indy_20160622_01': ['M1'],
-    'indy_20161005_06': ['M1'],
-    'indy_20161014_04': ['M1'],
-    'indy_20160927_04': ['M1'],
-    'indy_20160916_01': ['M1'],
-    'indy_20170127_03': ['M1'],
+    'indy_20160624_03': ['M1', 'M1_all'],
+    'indy_20161007_02': ['M1', 'M1_all'],
+    'indy_20160921_01': ['M1', 'M1_all'],
+    'indy_20170123_02': ['M1', 'M1_all'],
+    'indy_20160627_01': ['M1', 'M1_all'],
+    'indy_20160927_06': ['M1', 'M1_all'],
+    'indy_20161212_02': ['M1', 'M1_all'],
+    'indy_20161011_03': ['M1', 'M1_all'],
+    'indy_20161026_03': ['M1', 'M1_all'],
+    'indy_20161206_02': ['M1', 'M1_all'],
+    'indy_20161013_03': ['M1', 'M1_all'],
+    'indy_20170131_02': ['M1', 'M1_all'],
+    'indy_20160930_02': ['M1', 'M1_all'],
+    'indy_20160930_05': ['M1', 'M1_all'],
+    'indy_20161024_03': ['M1', 'M1_all'],
+    'indy_20170124_01': ['M1', 'M1_all'],
+    'indy_20161017_02': ['M1', 'M1_all'],
+    'indy_20161027_03': ['M1', 'M1_all'],
+    'indy_20160630_01': ['M1', 'M1_all'],
+    'indy_20161025_04': ['M1', 'M1_all'],
+    'indy_20161207_02': ['M1', 'M1_all'],
+    'indy_20161220_02': ['M1', 'M1_all'],
+    'indy_20161006_02': ['M1', 'M1_all'],
+    'indy_20160915_01': ['M1', 'M1_all'],
+    'indy_20160622_01': ['M1', 'M1_all'],
+    'indy_20161005_06': ['M1', 'M1_all'],
+    'indy_20161014_04': ['M1', 'M1_all'],
+    'indy_20160927_04': ['M1', 'M1_all'],
+    'indy_20160916_01': ['M1', 'M1_all'],
+    'indy_20170127_03': ['M1', 'M1_all'],
 }
 
 
@@ -446,7 +446,7 @@ class RTTContextInfo(ContextInfo):
         return f"{self.date_hash}"
 
     @classmethod
-    def build_several(cls, datapath_folder_str: str, arrays=["M1", "S1"], alias_prefix="rtt"):
+    def build_several(cls, datapath_folder_str: str, arrays=["M1", "M1_all", "S1"], alias_prefix="rtt"):
         r"""
             TODO: not obvious how we can detect whether datapath has S1 or not
         """

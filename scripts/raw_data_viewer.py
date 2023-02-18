@@ -115,7 +115,6 @@ for context in contexts:
                     ms_spike_cnt = torch.tensor(ms_spike_cnt[spike_mask], dtype=torch.uint8)
                     spike_arr[ms_spike_times, c, unit] = ms_spike_cnt
                     min_spike_time.append(ms_spike_times[0])
-                # TODO drop extraneous units
             min_spike_time = max(min(min_spike_time), 0) # some spikes come before marked trial start
             spike_arr: torch.Tensor = spike_arr[min_spike_time:, :]
 

@@ -213,7 +213,9 @@ class FlatDataConfig(DatasetConfig):
         MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session, MetaKey.task
     ])
     odoherty_rtt: RTTConfig = field(default_factory=lambda: RTTConfig(
-        arrays=['Indy-M1', 'Loco-M1']
+        arrays=['Indy-M1_all', 'Loco-M1_all'],
+        # arrays=['Indy-M1', 'Loco-M1'],
+        include_sorted=True,
     ))
 
 cs.store(group="dataset", name="flat", node=FlatDataConfig)
