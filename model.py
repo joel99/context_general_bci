@@ -1,5 +1,6 @@
 from typing import Tuple, Dict, List, Optional, Any, Mapping
 import dataclasses
+import time
 import math
 import numpy as np
 import torch
@@ -82,6 +83,9 @@ class BrainBertInterface(pl.LightningModule):
 
         if self.cfg.layer_norm_input:
             self.layer_norm_input = nn.LayerNorm(data_attrs.max_channel_count)
+
+        self.token_proc_approx = 0
+        self.token_seen_approx = 0
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
@@ -583,17 +587,22 @@ class BrainBertInterface(pl.LightningModule):
             Shapes:
                 spikes: B T A/S C H=1 (C is electrode channel) (H=1 legacy decision, hypothetically could contain other spike features)
                 - if serve_tokens: third dim is space, else it's array
-                - if serve tokens flat: Time x A/S is flattened TODO
+                - if serve tokens flat: Time x A/S is flattened
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
             batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
-        # TODO are we ok with those unstacked outputs above? We need a padding mask.. currently we just have a channel count per array...?
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T S H
+
+        if self.cfg.log_backbone_norm:
+            # expected to track sqrt N. If it's not, then we're not normalizing properly
+            self.log('backbone_norm', torch.linalg.vector_norm(
+                features.flatten(0, -2), dim=-1
+            ).mean(), on_epoch=True, batch_size=features.size(0))
 
         if not self.cfg.transform_space:
             # no unique strategies will be tried for spatial transformer (its whole point is ctx-robustness)
@@ -679,6 +688,17 @@ class BrainBertInterface(pl.LightningModule):
         return self.predict(batch, transform_logrates=transform_logrates, mask=mask)
 
 
+    # === Model state ===
+    def get_extra_state(self) -> Any:
+        return {
+            'token_proc_approx': self.token_proc_approx,
+            'token_seen_approx': self.token_seen_approx,
+        }
+
+    def set_extra_state(self, state: Any):
+        self.token_proc_approx = state['token_proc_approx']
+        self.token_seen_approx = state['token_seen_approx']
+
     # ==================== Utilities ====================
     def unpad_and_transform_rates(self, logrates: torch.Tensor, lengths: torch.Tensor | None = None, channels: torch.Tensor | None = None) -> torch.Tensor:
         r"""
@@ -743,13 +763,25 @@ class BrainBertInterface(pl.LightningModule):
                 self.log(f'{prefix}_{m.value}', metrics[m], **kwargs)
 
     def training_step(self, batch, batch_idx):
+        if [ModelTask.shuffle_infill in self.cfg.task.tasks] and (self.cfg.log_token_proc_throughput or self.cfg.log_token_seen_throughput):
+            self.token_proc_approx += batch[DataKey.spikes].size(0) * batch[DataKey.spikes].size(1)
+            self.token_seen_approx += (batch[LENGTH_KEY].sum() * (1 - self.cfg.task.mask_ratio)).item()
         metrics = self._step(batch)
+        if [ModelTask.shuffle_infill in self.cfg.task.tasks] and (self.cfg.log_token_proc_throughput or self.cfg.log_token_seen_throughput):
+            if self.trainer.is_global_zero:
+                if self.cfg.log_token_proc_throughput:
+                    token_proc_approx = self.all_gather(self.token_proc_approx).sum()
+                    self.log('token_proc', token_proc_approx, rank_zero_only=True)
+                if self.cfg.log_token_seen_throughput:
+                    token_count_approx = self.all_gather(self.token_seen_approx).sum()
+                    self.log('token_seen', token_count_approx, rank_zero_only=True)
+
         self.common_log(metrics, prefix='train')
         return metrics['loss']
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        # import pdb;pdb.set_trace()
         metrics = self._step(batch)
+
         self.common_log(metrics, prefix='val' if dataloader_idx == 0 else 'eval', sync_dist=True, add_dataloader_idx=False)
         # return None metrics['loss']
         # if dataloader_idx == 0:

@@ -238,6 +238,12 @@ class ModelConfig:
 
     causal: bool = False # Set this for fine-tuning
 
+    log_backbone_norm: int = 0 # 1 for basic, 2 or higher not implemented
+    log_token_seen_throughput: bool = False # for flat models - log post-crop non-padding tokens
+    log_token_proc_throughput: bool = False # for flat models - log tokens
+    # * ^ the above logs are actually going to be cumulative tokens processed, not throughput
+    # realized that true wall clock fair tests are likely inconsistent for our tiny heterogeneous cluster
+
 @dataclass
 class ExperimentalConfig:
     r"""

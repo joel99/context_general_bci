@@ -4,22 +4,25 @@ defaults:
   - /model: flat_enc_dec
   - /dataset: flat
 model:
+  hidden_size: 384
   subject_embed_strategy: EmbedStrat.token
   causal: true
   task:
-    mask_ratio: 0.5 # 0.25 may improve
-  neurons_per_token: 8
+    mask_ratio: 0.75 # higher mask ratios for iteration
+  neurons_per_token: 4
+  log_token_seen_throughput: true
 dataset:
-  neurons_per_token: 8
-  max_tokens: 8192 # fit
+  neurons_per_token: 4
+  max_tokens: 8192 # fit - est f4 = 3500 tokens per trial
   max_length_ms: 2000 # fit
   max_arrays: 1
-  max_channels: 280
+  max_channels: 280 # (RTT)
 
   datasets:
-  - odoherty_rtt-Indy.*
-  - odoherty_rtt-Loco.*
+  - odoherty_rtt-Indy-20161005_06
+  # - odoherty_rtt-Indy.*
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
 train:
-  batch_size: 128
+  batch_size: 6 # somehow 8 fits on 12G for hidden sizes 256 AND 384, what the.... But 8 is > 11G, too much for most nodes.
+load_from_id: test-5q8o6cba

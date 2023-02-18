@@ -23,4 +23,4 @@ dataset:
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
 train:
-  batch_size: 128
+  batch_size: 6

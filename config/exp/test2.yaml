@@ -1,55 +1,26 @@
 # @package _global_
-# RTT NLB cobps smoketest
+# Gunning for O'Doherty 0.57 R^2 with only 180 trials in day.
 defaults:
-  - /model: finetune
-  - /dataset: rtt
-  - /train: finetune
+  - /model: flat_enc_dec
+  - /dataset: flat
 model:
+  hidden_size: 384
+
   subject_embed_strategy: EmbedStrat.token
-  array_embed_strategy: EmbedStrat.none
-
-  neurons_per_token: 8
-
+  causal: true
   task:
-    tasks:
-    # - ModelTask.infill
-    - ModelTask.heldout_decoding
-    metrics:
-    # - Metric.bps
-    - Metric.co_bps
-    - Metric.block_co_bps
-    decode_strategy: EmbedStrat.token
-
-  lr_init: 5e-5
-  accelerate_new_params: 10.0
+    mask_ratio: 0.75 # higher mask ratios for iteration
+  neurons_per_token: 4
 dataset:
-  max_tokens: 2048
-  neurons_per_token: 8
+  neurons_per_token: 4
+  max_tokens: 8192 # fit - est f4 = 3500 tokens per trial
+  max_length_ms: 2000 # fit
   max_arrays: 1
-  bin_size_ms: 5
-  serve_tokenized: true
-  serve_tokenized_flat: true
-  max_channels: 104
+  max_channels: 280 # (RTT)
+
   datasets:
-  - mc_rtt
-  # eval_datasets:
-  # - mc_rtt # hits around 0.1 bps which is no diff than before
-
-  # - 'odoherty_rtt-Indy-20161005_06'
-  odoherty_rtt:
-      arrays:
-      - Indy-M1
-      - Loco-M1
-  data_keys:
-  - DataKey.spikes
-  - DataKey.heldout_spikes
-  # - DataKey.bhvr_vel
-  meta_keys:
-  - MetaKey.unique
-  - MetaKey.session
-  - MetaKey.array
-  - MetaKey.subject
-
-init_from_id: rtt_5_factor_1_multi-y44m7r1p
-# init_from_id: rtt_m75-t6ofj5ae # doesn't do > baseline
-init_tag: val_loss
+  - odoherty_rtt-Indy.*
+  eval_datasets:
+  - odoherty_rtt-Indy-20161005_06
+train:
+  batch_size: 8
