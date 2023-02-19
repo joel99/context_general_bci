@@ -5,7 +5,8 @@ defaults:
   - /dataset: flat
 model:
   hidden_size: 384
-
+  transformer:
+    n_layers: 8
   subject_embed_strategy: EmbedStrat.token
   causal: true
   task:
@@ -24,4 +25,4 @@ dataset:
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
 train:
-  batch_size: 6
+  batch_size: 4
