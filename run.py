@@ -169,8 +169,8 @@ def run_exp(cfg : RootConfig) -> None:
         logger=wandb_logger,
         max_epochs=epochs,
         max_steps=max_steps,
-        accelerator='gpu',
-        devices=torch.cuda.device_count(),
+        accelerator='gpu' if torch.cuda.is_available() else 'cpu',
+        devices=torch.cuda.device_count() if torch.cuda.is_available() else None,
         num_nodes=getattr(cfg, 'nodes', 1),
         check_val_every_n_epoch=1,
         log_every_n_steps=cfg.train.log_every_n_steps,
@@ -221,9 +221,7 @@ def run_exp(cfg : RootConfig) -> None:
         num_workers,
         train, val_datasets
     )
-    # import pdb;pdb.set_trace()
     if not is_distributed and cfg.train.autoscale_batch_size: # autoscale doesn't work for DDP
-    # if torch.cuda.device_count() <= 1 and 'test' not in cfg.tag and cfg.train.autoscale_batch_size: # don't scale test debug runs
         new_bsz = trainer.tuner.scale_batch_size(model, datamodule=data_module, mode="power", steps_per_trial=15, max_trials=20)
         data_module.batch_size = new_bsz
 

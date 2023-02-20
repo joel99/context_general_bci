@@ -158,8 +158,13 @@ class PassiveICMSContextInfo(ContextInfo):
         train_dir,
         stim_banks=None,
         stimsync_banks=None,
+        data_root=Path("/home/joelye/projects/icms_modeling/data/binned_pth"),
         stim_train_dir_root=Path("/home/joelye/projects/icms_modeling/data/stim_trains/"),
     ):
+        if not data_root.exists():
+            logger.warning(f"ICMS root not found, skipping ({data_root})")
+            return None
+
         if stim_banks is None:
             stim_banks = [cls._bank_to_array_name[sb] for sb in cls.get_stim_banks(stim_train_dir_root / train_dir)]
         if stimsync_banks is None:
@@ -230,6 +235,9 @@ class ReachingContextInfo(ContextInfo):
     @classmethod
     def build(cls, datapath_str: str, task: ExperimentalTask, alias: str="", arrays=["main"]):
         datapath = Path(datapath_str)
+        if not datapath.exists():
+            logger.warning(f"Datapath not found, skipping ({datapath})")
+            return None
         subject = SubjectArrayRegistry.query_by_subject(
             datapath.name.split('-')[-1].lower()
         )
@@ -247,6 +255,9 @@ class ReachingContextInfo(ContextInfo):
     def build_several(cls, datapath_folder_str: str, task: ExperimentalTask, alias_prefix: str = "", arrays=["PMd", "M1"]):
         # designed around churchland reaching data
         datapath_folder = Path(datapath_folder_str)
+        if not datapath_folder.exists():
+            logger.warning(f"Datapath folder not found, skipping ({datapath_folder})")
+            return []
         subject = SubjectArrayRegistry.query_by_subject(
             datapath_folder.name.split('-')[-1].lower()
         )
@@ -279,6 +290,9 @@ class GDrivePathContextInfo(ContextInfo):
     @classmethod
     def build_from_dir(cls, datapath_folder_str: str):
         datapath_folder = Path(datapath_folder_str)
+        if not datapath_folder.exists():
+            logger.warning(f"Datapath folder not found, skipping ({datapath_folder})")
+            return []
         all_info = []
         for path in datapath_folder.glob("*.mat"):
             subject = path.stem.split('-')[0]
@@ -310,6 +324,9 @@ class DyerCOContextInfo(ReachingContextInfo):
     @classmethod
     def build(cls, handle, task: ExperimentalTask, alias: str="", arrays=["main"], root='./data/dyer_co/'):
         datapath = Path(root) / f'{DYER_CO_FILENAMES[handle]}.mat'
+        if not datapath.exists():
+            logger.warning(f"Datapath not found, skipping ({datapath})")
+            return None
         subject = SubjectArrayRegistry.query_by_subject(
             datapath.name.split('-')[-2].lower()
         )
@@ -339,7 +356,10 @@ CHEWIE_ONLY_M1 = [
 @dataclass
 class GallegoCOContextInfo(ReachingContextInfo):
     @classmethod
-    def build_from_dir(cls, root, task: ExperimentalTask, arrays=["main"]):
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["main"]):
+        if not Path(root).exists():
+            logger.warning(f"Datapath not found, skipping ({root})")
+            return []
         def make_info(datapath: Path):
             alias = datapath.stem
             subject, _, date = alias.split('_') # task is CO always
@@ -377,7 +397,10 @@ with open('contexts/pitt_type.yaml') as f:
 @dataclass
 class BCIContextInfo(ReachingContextInfo):
     @classmethod
-    def build_from_dir(cls, root, task_map: Dict[str, ExperimentalTask], arrays=["main"]):
+    def build_from_dir(cls, root: str, task_map: Dict[str, ExperimentalTask], arrays=["main"]):
+        if not Path(root).exists():
+            logger.warning(f"Datapath not found, skipping ({root})")
+            return []
         def make_info(datapath: Path):
             alias = datapath.name
             subject, _, session = alias.split('.')
@@ -451,6 +474,10 @@ class RTTContextInfo(ContextInfo):
             TODO: not obvious how we can detect whether datapath has S1 or not
         """
         datapath_folder = Path(datapath_folder_str)
+        if not datapath_folder.exists():
+            logger.warning(f"Datapath folder {datapath_folder} does not exist. Skipping.")
+            return []
+
         def make_info(path: Path):
             subject, date, set = path.stem.split("_")
             subject = SubjectArrayRegistry.query_by_subject(subject)
