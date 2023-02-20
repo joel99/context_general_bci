@@ -575,7 +575,15 @@ class SpikingDataset(Dataset):
         else:
             logger.warning("No split column found, assuming all data is train.")
 
-
+    def subset_scale(self, scale, keep_index=False):
+        # Random scale-down of data
+        if scale < 1:
+            self.subset_by_key(
+                key_values=self.meta_df.sample(frac=scale).index,
+                key='index',
+                keep_index=keep_index,
+                message_prefix=f"Scale {scale}"
+            )
 class SpikingDataModule(pl.LightningDataModule):
     r"""
         A PL module mainly for autoscaling batch size, for sweeping.

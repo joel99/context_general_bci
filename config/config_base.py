@@ -328,6 +328,7 @@ class DatasetConfig:
             - lightweight regex for _aliases_ (not paths). Note this is regex, not glob.
     """
     datasets: List[str] = field(default_factory=lambda: [])
+    scale_ratio: float = 1. # ratio of dataset to use for training (For scaling experiments)
 
     # Datasets to hold a _subset_ of from training. (some exposure still required)
     # These datasets are used for evaluation (in analysis, and possibly during training), separate from validation step.
