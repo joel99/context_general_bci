@@ -1,4 +1,4 @@
-./data
+data
 tmp/
 outputs/
 wandb/
