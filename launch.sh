@@ -10,10 +10,6 @@
 echo $@
 hostname
 source ~/.bashrc # Note bashrc has been modified to allow slurm jobs
-module rm cuda-11.3
-module rm cudnn-11.3-v8.2.0.53
-module add cuda-11.6
-module add cudnn-11.6-v8.4.1.50
-conda activate py10_2
+source ~/load_env.sh
 python -u run.py $@
 

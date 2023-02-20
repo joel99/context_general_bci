@@ -34,8 +34,6 @@ echo $SLURM_NTASKS_PER_NODE
 
 hostname
 source ~/.bashrc # Note bashrc has been modified to allow slurm jobs
-module add cuda-11.6
-module add cudnn-11.6-v8.4.1.50
-conda activate py10_2
+source ~/load_env.sh
 srun python -u run.py $1
 
