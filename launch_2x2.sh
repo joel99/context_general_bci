@@ -6,9 +6,10 @@
 #SBATCH --cpus-per-task=6
 #SBATCH -p gpu
 #SBATCH -t 36:00:00
-#SBATCH --mem 45G
+#SBATCH --mem 30G
 #SBATCH --output=slurm_logs/%j.out
 
+# CPUs requested conservative, trying to slip these jobs in, unclear if cpu is limiting factor
 # Mem is
 # Multinode notes
 # From https://pytorch-lightning.readthedocs.io/en/stable/clouds/cluster.html

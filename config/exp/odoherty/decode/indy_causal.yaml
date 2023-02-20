@@ -43,4 +43,4 @@ init_tag: val_loss
 train:
   batch_size: 3
   autoscale_batch_size: false
-  accumulate_batches: 4 # simulate 4x gpu
+  accumulate_batches: 20 # simulate 4x gpu
