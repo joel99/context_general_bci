@@ -633,11 +633,11 @@ class BrainBertInterface(pl.LightningModule):
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
         """
-        if self.data_attrs.serve_tokens:
+        if self.data_attrs.serve_tokens and not self.data_attrs.serve_tokens_flat:
             raise NotImplementedError
         # there are data keys and meta keys, that might be coming in unbatched
         batch_shapes = {
-            DataKey.spikes: '* t s h' if self.data_attrs.serve_tokens else '* t a c h',
+            DataKey.spikes: '* t token_spike h' if self.data_attrs.serve_tokens else '* t a c h',
             DataKey.heldout_spikes: '* t c h',
             DataKey.stim: '* t c h', # TODO review
             DataKey.bhvr_vel: '* t h',
@@ -646,13 +646,17 @@ class BrainBertInterface(pl.LightningModule):
             MetaKey.task: '*',
             MetaKey.array: '* a',
             LENGTH_KEY: '*',
-            CHANNEL_KEY: '* a',
+            COVARIATE_LENGTH_KEY: '*',
+            CHANNEL_KEY: '* a', # or '* token'
+            DataKey.time: '* t',
+            DataKey.position: '* t',
         }
         pack_info = {}
         for k in batch:
             batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
+            assert not self.data_attrs.serve_tokens_flat, "Not implemented, needs assembling"
             batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
         if mask:
             assert ModelTask.infill in self.cfg.task.tasks

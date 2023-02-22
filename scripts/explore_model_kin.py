@@ -26,6 +26,7 @@ query = "pitt_obs_decode_scratch-sweep-small_wide-7ycit09t"
 # query = "rtt_single-35cqqwnl"
 # query = "rtt_single-sweep-ft_reg-yni1txy2"
 query = "rtt_flat_indy-a25iab76"
+query = "indy_causal-stmn13ew"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -57,8 +58,8 @@ print(data_attrs)
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
-def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
-# def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
+# def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=20, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,
         batch_size=batch_size,
@@ -103,18 +104,19 @@ ax.set_title('Distribution of velocity predictions')
 # ax.set_title('Distribution of velocity targets')
 #%%
 ax = prep_plt()
-trials = 4
+trials = 40
 colors = sns.color_palette('colorblind', trials)
 def plot_trial(trial, ax, color):
     vel_true = heldin_outputs[Output.behavior][trial]
     vel_pred = heldin_outputs[Output.behavior_pred][trial]
     pos_true = vel_true.cumsum(0)
     pos_pred = vel_pred.cumsum(0)
-    ax.plot(pos_true[:,0], pos_true[:,1], label='true', linestyle='-', color=color)
+    # ax.plot(pos_true[:,0], pos_true[:,1], label='true', linestyle='-', color=color)
     ax.plot(pos_pred[:,0], pos_pred[:,1], label='pred', linestyle='--', color=color)
 
 for i in range(trials):
     plot_trial(i, ax, colors[i])
+ax.legend()
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]

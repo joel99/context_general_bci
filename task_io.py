@@ -749,7 +749,13 @@ class BehaviorRegression(TaskPipeline):
                 if self.causal and self.cfg.behavior_lag_lookahead:
                     decode_time = decode_time + self.bhvr_lag_bins # allow-looking N bins of neural data into the future -- which is technically still the present
                 decoder_input = torch.cat([backbone_features, decode_tokens], dim=1)
-                times = torch.cat([torch.full_like(batch[DataKey.time], self.time_pad), decode_time], dim=1)
+                # Ok, this is subtle
+                # We need to pass in actual times to dictate the attention mask
+                # But we don't want to trigger position embedding (per se)
+                # This is ANNOYING!!!
+                # Simple solution is to just re-allow position embedding.
+                times = torch.cat([batch[DataKey.time], decode_time], dim=1)
+                # times = torch.cat([torch.full_like(batch[DataKey.time], self.time_pad), decode_time], dim=1)
                 positions = torch.cat([torch.zeros_like(batch[DataKey.position]), decode_space], dim=1)
                 if temporal_padding_mask is not None:
                     extra_padding_mask = create_temporal_padding_mask(decode_tokens, batch, length_key=COVARIATE_LENGTH_KEY)
@@ -759,6 +765,7 @@ class BehaviorRegression(TaskPipeline):
                     if getattr(batch, key, None) is not None:
                         trial_context.append(batch[key])
                 # import pdb;pdb.set_trace()
+                import pdb;pdb.set_trace()
                 backbone_features: torch.Tensor = self.decoder(
                     decoder_input,
                     temporal_padding_mask=temporal_padding_mask,
