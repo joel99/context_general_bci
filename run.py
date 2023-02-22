@@ -87,6 +87,8 @@ def run_exp(cfg : RootConfig) -> None:
         eval_dataset = copy.deepcopy(dataset)
         eval_dataset.subset_split(splits=['eval'], keep_index=True)
     dataset.subset_split(keep_index=True)
+    if cfg.dataset.scale_ratio:
+        dataset.subset_scale(cfg.dataset.scale_ratio, keep_index=True)
     train, val = dataset.create_tv_datasets()
     logger.info(f"Training on {len(train)} examples")
     data_attrs = dataset.get_data_attrs()
@@ -223,6 +225,8 @@ def run_exp(cfg : RootConfig) -> None:
     )
     if not is_distributed and cfg.train.autoscale_batch_size: # autoscale doesn't work for DDP
         new_bsz = trainer.tuner.scale_batch_size(model, datamodule=data_module, mode="power", steps_per_trial=15, max_trials=20)
+        if cfg.train.max_batch_size:
+            new_bsz = min(new_bsz, cfg.train.max_batch_size)
         data_module.batch_size = new_bsz
 
     trainer.fit(

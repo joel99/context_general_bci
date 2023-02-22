@@ -1,67 +1,27 @@
 # @package _global_
-
-# Really just a test of heterogeneity throughput rather than any specific win; can compare with scores in just Pitt
-
+# We would like to assess whether maze reaching - presumably simpler than RTT - has different scaling properties.
 defaults:
   - /model: flat_enc_dec
-  - /train: pretrain
+  - /dataset: flat
 model:
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
-  # array_embed_strategy: EmbedStrat.token_add
-  # causal: True
-
-  transformer:
-    n_layers: 12
-
-  neurons_per_token: 8
-  hidden_size: 256
-
   task:
-    mask_ratio: 0.8
-    tasks:
-    - ModelTask.shuffle_infill
-    # - ModelTask.kinematic_decoding
-    metrics: []
-    # - Metric.kinematic_r2
-
-  lr_init: 6e-4 # based on earlier experiments, models seem unstable beyond this.
-  lr_ramp_steps: 100
+    mask_ratio: 0.5 # 0.25 is quite costly, but we want to see long tail of improvements, so go over 0.8
+  neurons_per_token: 4
 dataset:
-  max_tokens: 2048
-  max_length_ms: 2000
-  max_arrays: 2
+  max_tokens: 4096 # fit
+  max_length_ms: 2000 # fit
+  max_arrays: 1
+  scale_ratio: 1.0
+
+  neurons_per_token: 4
+
+  max_channels: 96
   bin_size_ms: 20
-  serve_tokenized: true
-  serve_tokenized_flat: true
-  neurons_per_token: 8
-  # neurons_per_token: 4
-  max_channels: 192 # 2 x 96... this should also cover Dyer.
   datasets:
-  - churchland_maze.*
-  - churchland_misc.*
-  - CRS02bHome.data.*
-  - dyer_co.*
-
-  # - mc_rtt
+  - churchland_maze_jenkins.*
   eval_datasets:
-  - CRS02bHome.data.00437
-  # - 'mc_rtt'
-  # - 'odoherty_rtt-Indy-20161005_06'
-  odoherty_rtt:
-      arrays:
-      - Indy-M1
-      - Loco-M1
-  data_keys:
-  - DataKey.spikes
-  meta_keys:
-  - MetaKey.unique
-  - MetaKey.session
-  - MetaKey.array
-  - MetaKey.subject
-
-train:
-  batch_size: 20
-  # batch_size: 8
-  autoscale_batch_size: false # multi-gpu
-load_from_id: base_20_faster-8cfb2byv
+  - churchland_maze_jenkins-0
+  churchland_maze: # We would like to constrain simplicity
+    arrays: ['Jenkins-M1', 'Nitschke-M1']

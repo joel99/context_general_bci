@@ -44,6 +44,15 @@ class PretrainingModelConfig(ModelConfig):
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 
 @dataclass
+class BaseTransformerConfig(TransformerConfig):
+    n_state: int = 256
+    n_heads: int = 4
+    n_layers: int = 6
+    dropout: float = 0.1
+    learnable_position: bool = True
+    max_trial_length: int = 250
+
+@dataclass
 class PretrainingNewModelConfig(ModelConfig):
     # A little more informed after initial experimentation
     task: TaskConfig = field(default_factory=InfillTaskConfig)
@@ -54,6 +63,10 @@ class PretrainingNewModelConfig(ModelConfig):
     session_embed_size: int = 256
     subject_embed_size: int = 256
     array_embed_size: int = 256
+
+    lr_init: float = 5e-4
+    transformer: TransformerConfig = field(default_factory=BaseTransformerConfig)
+
     # base config: 6 layers, 256 hidden, 4 heads
 cs.store(group="model", name="pretrain_2x", node=PretrainingNewModelConfig)
 

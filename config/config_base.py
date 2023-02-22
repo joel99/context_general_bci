@@ -328,6 +328,7 @@ class DatasetConfig:
             - lightweight regex for _aliases_ (not paths). Note this is regex, not glob.
     """
     datasets: List[str] = field(default_factory=lambda: [])
+    scale_ratio: float = 1. # ratio of dataset to use for training (For scaling experiments)
 
     # Datasets to hold a _subset_ of from training. (some exposure still required)
     # These datasets are used for evaluation (in analysis, and possibly during training), separate from validation step.
@@ -405,6 +406,7 @@ class TrainConfig:
     gradient_clip_val: float = 1.0
     accumulate_batches: int = 1
     autoscale_batch_size: bool = True
+    max_batch_size: int = 4096 # if autoscale, this is the max batch size
     overfit_batches: bool = False
     profiler: str = ""
     val_check_interval: int = 100 # these are in steps, but mostly isn't used # TODO deprecate
