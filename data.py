@@ -165,7 +165,11 @@ class SpikingDataset(Dataset):
             return True
         with open(version_path, 'r') as f:
             cached_preproc_version = json.load(f)
-        return self.preproc_version(task) != cached_preproc_version
+        # ! patch - don't compare arrays
+        current = self.preproc_version(task)
+        cached_preproc_version.pop('arrays', None)
+        current.pop('arrays', None)
+        return current != cached_preproc_version
 
     def aliases_to_contexts(self, session_path_or_alias: Path | str) -> List[ContextInfo]:
         if isinstance(session_path_or_alias, str):

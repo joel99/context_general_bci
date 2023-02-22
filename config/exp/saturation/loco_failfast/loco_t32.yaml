@@ -23,6 +23,7 @@ dataset:
   max_channels: 288
   bin_size_ms: 20
   datasets:
-  - odoherty_rtt-Indy.*
+  - odoherty_rtt-Loco.*
+  - odoherty_rtt-Indy-20161005_06
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06

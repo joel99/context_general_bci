@@ -1,7 +1,6 @@
 # @package _global_
 # We would like to smoothly ablate spatial chunk size (neurons per token); we expect this to hurt performance.
 # But less for scaled data.
-# Running with 1 4 16; we don't want the batch to be too small
 
 defaults:
   - /model: flat_enc_dec
@@ -16,7 +15,7 @@ dataset:
   max_tokens: 4096 # fit
   max_length_ms: 2000 # fit
   max_arrays: 1
-  scale_ratio: 1.0
+  scale_ratio: 0.0625
 
   neurons_per_token: 32
 

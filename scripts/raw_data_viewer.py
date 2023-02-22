@@ -44,6 +44,7 @@ context = context_registry.query(alias=dataset_name)
 dataset_name = 'odoherty_rtt.*'
 contexts = context_registry.query(alias=dataset_name)
 
+dataset_name ='churchland_maze_jenkins-0'
 for context in contexts:
     datapath = context.datapath
 

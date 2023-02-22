@@ -406,6 +406,7 @@ class TrainConfig:
     gradient_clip_val: float = 1.0
     accumulate_batches: int = 1
     autoscale_batch_size: bool = True
+    max_batch_size: int = 4096 # if autoscale, this is the max batch size
     overfit_batches: bool = False
     profiler: str = ""
     val_check_interval: int = 100 # these are in steps, but mostly isn't used # TODO deprecate
