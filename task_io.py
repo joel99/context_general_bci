@@ -579,7 +579,7 @@ class TemporalTokenInjector(nn.Module):
 
     def inject(self, batch: Dict[str, torch.Tensor], in_place=False):
         # Implement injection
-        # Assumption is that behavior time == spike time (i.e. if spike is packed, so is behavior)
+        # Assumption is that behavior time == spike time (i.e. if spike is packed, so is behavior), and there's no packing
         injected_tokens = repeat(self.cls_token, 'h -> b t h',
             b=batch[self.reference].size(0),
             t=batch[self.reference].size(1), # Time (not _token_, i.e. in spite of flat serving)
@@ -765,7 +765,6 @@ class BehaviorRegression(TaskPipeline):
                     if getattr(batch, key, None) is not None:
                         trial_context.append(batch[key])
                 # import pdb;pdb.set_trace()
-                import pdb;pdb.set_trace()
                 backbone_features: torch.Tensor = self.decoder(
                     decoder_input,
                     temporal_padding_mask=temporal_padding_mask,

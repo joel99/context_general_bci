@@ -194,6 +194,8 @@ def run_exp(cfg : RootConfig) -> None:
     if trainer.global_rank == 0:
         logger.info(f"Running NDT2, dumping config:")
         logger.info(OmegaConf.to_yaml(cfg))
+        if wandb.run == None:
+            wandb.init(project=cfg.wandb_project) # for some reason wandb changed and now I need a declaration
         if cfg.tag:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
         notes = cfg.notes
