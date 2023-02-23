@@ -59,7 +59,7 @@ TARGET_DATASETS = ['odoherty_rtt-Indy-20160627_01']
 
 # PSID-RNN eval set sanity
 # TARGET_DATASETS = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
-TARGET_DATASETS = ['odoherty_rtt-Indy.*']
+# TARGET_DATASETS = ['odoherty_rtt-Indy.*']
 # TARGET_DATASETS = []
 
 TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_DATASETS]
@@ -81,16 +81,16 @@ else:
     # Mock training procedure to identify val data
     dataset.subset_split() # remove test data
     train, val = dataset.create_tv_datasets()
-    # val.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
-    # train.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
-    dataset = train
     dataset = val
+
+if query == "indy_causal_v2-3w1f6vzx": # peculiar split logic on crc cluster not yet patched, we imported the split used
+    dataset = torch.load('val_dataset.pth') # transferred from crc cluster
+if TARGET_DATASETS:
+    dataset.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
 
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
 print(f'{len(dataset)} examples')
-
-import pdb;pdb.set_trace()
 
 model = transfer_model(src_model, cfg.model, data_attrs)
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
@@ -110,6 +110,11 @@ dataloader = get_dataloader(dataset)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
 import pdb;pdb.set_trace()
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+
+# A note on fullbatch R2 calculation - in my experience by bsz 128 the minibatch R2 ~ fullbatch R2 (within 0.01); for convenience we use minibatch R2
+# from sklearn.metrics import r2_score
+# offset_bins = model.task_pipelines[ModelTask.kinematic_decoding].bhvr_lag_bins
+# print(r2_score(heldin_outputs[Output.behavior[:,offset_bins:]].flatten(0, 1), heldin_outputs[Output.behavior_pred[:,offset_bins:]].flatten(0, 1)), multioutput='raw_values')
 
 #%%
 # B T H
