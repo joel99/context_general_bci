@@ -114,7 +114,8 @@ class SpikingDataset(Dataset):
 
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
-            self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index()
+            self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
+            # self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
             if 'split' in self.meta_df.columns and len(self.meta_df['split'].unique()) > 1:
                 logger.warning("Non-train splits found in meta_df. Subsetting is expected.")
         else:
@@ -252,7 +253,7 @@ class SpikingDataset(Dataset):
                 meta[k] = context_meta.subject.name
             else:
                 meta[k] = getattr(context_meta, k.name)
-        meta[MetaKey.unique] = meta[MetaKey.session] + '-' + meta.index.astype(str) # unique per trial
+        meta[MetaKey.unique] = meta[MetaKey.session] + '-' + meta.index.astype(str) # unique per _trial_ INDEX in dataset
         self.validate_meta(meta)
 
         return meta
@@ -574,8 +575,7 @@ class SpikingDataset(Dataset):
         # Random scale-down of data
         if scale < 1:
             self.subset_by_key(
-                key_values=self.meta_df.sample(frac=scale).index,
-                key='index',
+                key_values=self.meta_df.sample(frac=scale)[MetaKey.unique],
                 keep_index=keep_index,
                 message_prefix=f"Scale {scale}"
             )

@@ -92,7 +92,6 @@ def run_exp(cfg : RootConfig) -> None:
     train, val = dataset.create_tv_datasets()
     logger.info(f"Training on {len(train)} examples")
     data_attrs = dataset.get_data_attrs()
-    # import pdb;pdb.set_trace()
     # logger.info(pformat(f"Data attributes: {data_attrs}"))
 
     if cfg.init_from_id:
