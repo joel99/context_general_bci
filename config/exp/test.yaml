@@ -40,7 +40,8 @@ dataset:
   # - odoherty_rtt-Indy-20160624_03
 
 # Testing R2 nonsense
-load_from_id: indy_causal_v2-3w1f6vzx
-init_tag: val_loss
+# init_from_id: indy_causal_v2-3w1f6vzx
+# load_from_id: indy_causal_v2-3w1f6vzx
+# init_tag: val_loss
 # train:
   # autoscale_batch_size: False

@@ -719,11 +719,14 @@ class BrainBertInterface(pl.LightningModule):
         return {
             'token_proc_approx': self.token_proc_approx,
             'token_seen_approx': self.token_seen_approx,
+            'novel_params': self.novel_params, # for continued training on fine-tuned model
         }
 
     def set_extra_state(self, state: Any):
         self.token_proc_approx = state['token_proc_approx']
         self.token_seen_approx = state['token_seen_approx']
+        if 'novel_params' in state:
+            self.novel_params = state['novel_params']
 
     # ==================== Utilities ====================
     def unpad_and_transform_rates(self, logrates: torch.Tensor, lengths: torch.Tensor | None = None, channels: torch.Tensor | None = None) -> torch.Tensor:
@@ -807,7 +810,8 @@ class BrainBertInterface(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         metrics = self._step(batch)
-
+        # if Metric.kinematic_r2 in metrics:
+            # print('Val debug: ', metrics[Metric.kinematic_r2])
         self.common_log(metrics, prefix='val' if dataloader_idx == 0 else 'eval', sync_dist=True, add_dataloader_idx=False)
         # return None metrics['loss']
         # if dataloader_idx == 0:

@@ -88,11 +88,15 @@ else:
 
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
-model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
+
+import pdb;pdb.set_trace()
+
+model = transfer_model(src_model, cfg.model, data_attrs)
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
-def get_dataloader(dataset: SpikingDataset, batch_size=200, num_workers=1, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwargs) -> DataLoader:
+# def get_dataloader(dataset: SpikingDataset, batch_size=200, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,
         batch_size=batch_size,

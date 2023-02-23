@@ -107,6 +107,22 @@ class ContextInfo:
             dataset_alias=self.alias
         )
 
+    # For sorting
+    def __eq__(self, other):
+        if not isinstance(other, ContextInfo):
+            return NotImplemented
+        return self.id == other.id
+
+    def __lt__(self, other):
+        if not isinstance(other, ContextInfo):
+            return NotImplemented
+        return self.id < other.id
+
+    def __gt__(self, other):
+        if not isinstance(other, ContextInfo):
+            return NotImplemented
+        return self.id > other.id
+
 @dataclass
 class PassiveICMSContextInfo(ContextInfo):
     session: int

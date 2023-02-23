@@ -83,7 +83,8 @@ class ContextRegistry:
         if len(queried) == 0:
             return None
         elif len(queried) > 1:
-            return [self._registry[id] for id in queried['id']]
+            out = [self._registry[id] for id in queried['id']]
+            return sorted(out)
         return self._registry[queried['id'].values[0]]
 
     def query_by_datapath(self, datapath: Path | str) -> ContextInfo:
