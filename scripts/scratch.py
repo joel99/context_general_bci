@@ -8,8 +8,12 @@ from einops import rearrange
 from config import DatasetConfig, DataKey, MetaKey
 from analyze_utils import prep_plt
 
-batch = torch.load('debug_batch.pth')
+batch = torch.load('valid.pth')
+# batch = torch.load('debug_batch.pth')
 
+#%%
+print(batch['tgt'].size())
+sns.histplot(batch['tgt'].cpu().numpy().flatten())
 #%%
 print(batch[DataKey.spikes].size())
 print(batch[DataKey.bhvr_vel].size())

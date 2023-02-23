@@ -75,16 +75,16 @@ for td in TARGET_DATASETS:
 TARGET_DATASETS = [td.id for td in FLAT_TARGET_DATASETS]
 
 dataset = SpikingDataset(cfg.dataset)
-dataset.build_context_index() # ! TODO something seems wrong when we do train/val evaluation with this posthoc
 if cfg.dataset.eval_datasets and not TARGET_DATASETS:
-    dataset.subset_split(splits=['eval'], keep_index=True)
+    dataset.subset_split(splits=['eval'])
 else:
     # Mock training procedure to identify val data
-    dataset.subset_split(keep_index=True) # remove test data
+    dataset.subset_split() # remove test data
     train, val = dataset.create_tv_datasets()
-    # val.subset_by_key(TARGET_DATASETS, key=MetaKey.session, keep_index=True)
+    # val.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
     # train.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
     dataset = train
+    dataset = val
 
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
@@ -92,7 +92,7 @@ model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
-def get_dataloader(dataset: SpikingDataset, batch_size=50, num_workers=1, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=200, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,
         batch_size=batch_size,
@@ -104,6 +104,7 @@ def get_dataloader(dataset: SpikingDataset, batch_size=50, num_workers=1, **kwar
 dataloader = get_dataloader(dataset)
 #%%
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
+import pdb;pdb.set_trace()
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 #%%

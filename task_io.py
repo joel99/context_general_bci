@@ -815,6 +815,9 @@ class BehaviorRegression(TaskPipeline):
             valid_bhvr = bhvr[length_mask]
             valid_tgt = bhvr_tgt[length_mask]
             batch_out[Metric.kinematic_r2] = r2_score(valid_tgt.detach().cpu(), valid_bhvr.detach().cpu(), multioutput='raw_values')
+            print(batch_out[Metric.kinematic_r2])
+            # if (batch_out[Metric.kinematic_r2] < 0).any():
+            #     import pdb;pdb.set_trace()
             # print(f'true: {bhvr_tgt[length_mask][:10,0]}')
             # print(f'pred: {bhvr[length_mask][:10,0]}')
             # print(f'loss: {loss[length_mask][:10,0]}')
