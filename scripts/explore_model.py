@@ -18,85 +18,12 @@ from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_quer
 from analyze_utils import prep_plt
 
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
-query = "maze_small"
-query = "maze_med"
-# query = "maze_large"
-query = "maze_nlb"
-# query = "maze_med_ft"
-# query = "maze_small_ft"
-# query = "maze_large_ft"
-# query = "maze_all_256"
-# query = "maze_all"
-
-query = "maze_jenkins_stitch"
-# query = "maze_nlb_stitch_out"
-# query = "maze_nlb"
-
-# query = 'maze_med_20'
-
-# query = "rtt_all"
-# query = "rtt_all_256"
-# query = "rtt_nlb_infill_only"
-# query = 'rtt_nlb_07'
-# query = 'rtt_nlb_pt'
-
-# query = "rtt_indy_nlb"
-# query = "rtt_indy_nlb_stitch"
-# query = "rtt_indy1"
-# query = "rtt_indy2"
-# query = "rtt_indy2_noembed"
-# query = "rtt_all_sans_add"
-# query = "rtt_indy_sans_256_d01"
-# query = "rtt_indy_stitch"
-query = "rtt_all_256"
-query = "rtt_all_parity2"
-query = "st_rtt_16"
-
-query = 'factor_maze_8'
-query = "rtt_causal"
-# query = "factor_rtt_16"
-# query = "rtt_all_512"
-# query = "rtt_token_padded_nostitch"
-
-# query = 'test'
-
-# query = 'rtt_loco_d2'
-# query = 'rtt_loco_512'
-# query = 'rtt_loco_256_stitch'
-# query = 'test'
-
-# query = 'nitschke_token'
-# query = 'nitschke'
-# query = 'nitschke_single'
-
-# query = 'gallego_token'
-# query = 'gallego'
-# query = 'gallego_chewie'
-# query = 'gallego_chewie_single'
-
-# query = 'pitt_single'
-# query = 'pitt'
-# query = 'pitt_obs'
-# query = 'pitt_20'
-# query = 'pitt_obs_20'
-# query = 'pitt_obs_causal'
-
-# query = 'ks'
-# query = 'ks_ctx'
-
-# query = 'jenkins_misc'
-# query = 'reggie_misc'
-
-query = "rtt_5_factor_1_multi"
-# query = "rtt_maze_5_factor_2"
-query = "rtt_maze_5_factor_4"
-
-query = 'test'
-query = 'pitt_20_9l'
-query = 'base_20'
+query = "indy_causal-stmn13ew"
+query = "indy_causal-4i8yc4bc"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
-wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
+# wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
+wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
@@ -106,7 +33,7 @@ src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.model.task.tasks = [ModelTask.infill]
 # cfg.model.task.metrics = [Metric.bps]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
-# cfg.model.task.outputs = [Output.logrates, Output.spikes]
+cfg.model.task.outputs = [Output.logrates, Output.spikes]
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
@@ -161,11 +88,8 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
 dataloader = get_dataloader(dataset, batch_size=4)
 
 #%%
-# print(list(model.backbone.space_transformer_encoder.layers[0].self_attn.parameters()))
-print(list(model.backbone.transformer_encoder.layers[0].self_attn.parameters()))
-#%%
 print(query)
-heldin_metrics = stack_batch(trainer.test(model, dataloader))
+# heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 #%%

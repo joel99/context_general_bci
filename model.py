@@ -346,9 +346,13 @@ class BrainBertInterface(pl.LightningModule):
                 logger.warning(f"No {embed_name} provided in new model despite old model dependency. HIGH CHANCE OF ERROR.")
                 return
             num_reassigned = 0
+            def get_param(embed):
+                if isinstance(embed, nn.Parameter):
+                    return embed
+                return getattr(embed, 'weight')
             for n_idx, target in enumerate(new_attrs):
                 if target in old_attrs:
-                    embed.weight.data[n_idx] = getattr(transfer_model, embed_name).weight.data[old_attrs.index(target)]
+                    get_param(embed).data[n_idx] = get_param(getattr(transfer_model, embed_name)).data[old_attrs.index(target)]
                     num_reassigned += 1
             logger.info(f'Reassigned {num_reassigned} of {len(new_attrs)} {embed_name} weights.')
             if num_reassigned == 0:
@@ -356,7 +360,6 @@ class BrainBertInterface(pl.LightningModule):
             if num_reassigned < len(new_attrs):
                 # There is no non-clunky granular parameter assignment (probably) but we don't need it either
                 self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
-
         try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
         try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
         try_transfer_embed('task_embed', self.data_attrs.context.task, transfer_data_attrs.context.task)
@@ -627,7 +630,7 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     @torch.inference_mode()
-    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=False) -> Dict[str, torch.Tensor]:
+    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=True) -> Dict[str, torch.Tensor]:
         r"""
             Note: kind of annoying to change keywords here manually (no args can be passed in)
             batch should provide info needed by model. (responsibility of user)
@@ -637,7 +640,7 @@ class BrainBertInterface(pl.LightningModule):
             raise NotImplementedError
         # there are data keys and meta keys, that might be coming in unbatched
         batch_shapes = {
-            DataKey.spikes: '* t token_spike h' if self.data_attrs.serve_tokens else '* t a c h',
+            DataKey.spikes: '* t token_chan h' if self.data_attrs.serve_tokens else '* t a c h',
             DataKey.heldout_spikes: '* t c h',
             DataKey.stim: '* t c h', # TODO review
             DataKey.bhvr_vel: '* t h',
@@ -656,11 +659,30 @@ class BrainBertInterface(pl.LightningModule):
             batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
-            assert not self.data_attrs.serve_tokens_flat, "Not implemented, needs assembling"
-            batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
+            assert self.data_attrs.serve_tokens_flat or not self.data_attrs.serve_tokens, "Not implemented, needs assembling"
+            if self.data_attrs.serve_tokens_flat:
+                b, _, token_chan, _ = batch[DataKey.spikes].size()
+                time_min, time_max = batch[DataKey.time].min(), batch[DataKey.time].max()
+                position_min, position_max = batch[DataKey.position].min(), batch[DataKey.position].max()
+                assembled_spikes = torch.full(
+                    (b, time_max - time_min + 1, position_max - position_min + 1, token_chan, 1),
+                    0,
+                    device=batch[DataKey.spikes].device,
+                    dtype=batch[DataKey.spikes].dtype
+                )
+                assembled_spikes[ # no scatter needed, merely need to select the specified indices
+                    torch.arange(b).unsqueeze(-1),
+                    batch[DataKey.time] - time_min,
+                    batch[DataKey.position] - position_min
+                ] = batch[DataKey.spikes]
+                assembled_spikes = assembled_spikes.flatten(-3, -1) # flatten space, token_channel, spike_hidden
+                batch_out[Output.spikes] = assembled_spikes
+            else:
+                batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
         if mask:
-            assert ModelTask.infill in self.cfg.task.tasks
-            self.task_pipelines[ModelTask.infill.value].update_batch(batch)
+            for k in self.cfg.task.tasks:
+                self.task_pipelines[k.value].update_batch(batch) # TODO need some clarity on eval_mode, mask
+                # self.task_pipelines[k.value].update_batch(batch, eval_mode=True)
         features = self(batch)
         if self.cfg.readout_strategy == EmbedStrat.mirror_project:
             unique_space_features = self.readin(features, batch, readin=False)
@@ -686,8 +708,8 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     def predict_step(
-        # self, batch, *args, transform_logrates=True, mask=True, **kwargs
-        self, batch, *args, transform_logrates=True, mask=False, **kwargs
+        self, batch, *args, transform_logrates=True, mask=True, **kwargs
+        # self, batch, *args, transform_logrates=True, mask=False, **kwargs
     ):
         return self.predict(batch, transform_logrates=transform_logrates, mask=mask)
 

@@ -318,6 +318,9 @@ class SelfSupervisedInfill(RatePrediction):
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.logrates in self.cfg.outputs:
+            # rates as B T S C, or B T C
+            # assert self.serve_tokens_flat or (not self.serve_tokens), 'non-flat token logic not implemented'
+            # TODO torch.gather the relevant rate predictions
             assert not self.serve_tokens, 'shape not updated, not too sure what to do here'
             batch_out[Output.logrates] = rates
 
@@ -462,6 +465,16 @@ class ShuffleInfill(RatePrediction):
             rates = self.out(reps)
         batch_out = {}
         assert not Metric.bps in self.cfg.metrics, 'not supported'
+        if Output.logrates in self.cfg.outputs:
+            # out is B T C, we want B T' C, and then to unshuffle
+            all_tokens = torch.cat([
+                torch.full(batch[DataKey.spikes].size()[:-1], float('-inf'), device=rates.device),
+                rates
+            ], dim=1)
+            import pdb;pdb.set_trace()
+            unshuffled = apply_shuffle(all_tokens, batch[SHUFFLE_KEY].argsort())
+            with_spatial_structure = rearrange(unshuffled, 'b t c -> b t s c')  # TODO need to deal with this, needs padding guarantees etc
+            batch_out[Output.logrates] = with_spatial_structure
         assert not Output.logrates in self.cfg.outputs, 'not implemented'
 
         if not compute_metrics:

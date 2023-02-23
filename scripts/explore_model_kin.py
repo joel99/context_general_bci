@@ -13,6 +13,7 @@ from einops import rearrange
 from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
 from data import SpikingDataset, DataAttrs
 from model import transfer_model, logger
+from contexts import context_registry
 
 from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 from analyze_utils import prep_plt
@@ -27,6 +28,8 @@ query = "pitt_obs_decode_scratch-sweep-small_wide-7ycit09t"
 # query = "rtt_single-sweep-ft_reg-yni1txy2"
 query = "rtt_flat_indy-a25iab76"
 query = "indy_causal-stmn13ew"
+query = "indy_causal-xj392pjd"
+query = "indy_causal_v2-3w1f6vzx"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -35,6 +38,7 @@ print(wandb_run.id)
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
 src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 # cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.kinematic_r2]
@@ -45,21 +49,50 @@ cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
 # if 'rtt' in query:
     # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
     # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
+
+# cfg.dataset.datasets = ['odoherty_rtt-Indy-201606.*']
+# cfg.dataset.datasets = ['odoherty_rtt-Indy-20160627_01']
 # cfg.dataset.eval_datasets = []
-# print(cfg.dataset.datasets)
+
+# Ahmadi 21 eval set sanity
+TARGET_DATASETS = ['odoherty_rtt-Indy-20160627_01']
+
+# PSID-RNN eval set sanity
+# TARGET_DATASETS = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
+TARGET_DATASETS = ['odoherty_rtt-Indy.*']
+# TARGET_DATASETS = []
+
+TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_DATASETS]
+
+FLAT_TARGET_DATASETS = []
+for td in TARGET_DATASETS:
+    if td == None:
+        continue
+    if isinstance(td, list):
+        FLAT_TARGET_DATASETS.extend(td)
+    else:
+        FLAT_TARGET_DATASETS.append(td)
+TARGET_DATASETS = [td.id for td in FLAT_TARGET_DATASETS]
+
 dataset = SpikingDataset(cfg.dataset)
-if cfg.dataset.eval_datasets:
-    dataset.subset_split(splits=['eval'])
+dataset.build_context_index() # ! TODO something seems wrong when we do train/val evaluation with this posthoc
+if cfg.dataset.eval_datasets and not TARGET_DATASETS:
+    dataset.subset_split(splits=['eval'], keep_index=True)
 else:
-    dataset.subset_split()
-dataset.build_context_index()
+    # Mock training procedure to identify val data
+    dataset.subset_split(keep_index=True) # remove test data
+    train, val = dataset.create_tv_datasets()
+    # val.subset_by_key(TARGET_DATASETS, key=MetaKey.session, keep_index=True)
+    # train.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
+    dataset = train
+
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
 model = transfer_model(src_model, cfg.model, data_attrs)
 print(f'{len(dataset)} examples')
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
-def get_dataloader(dataset: SpikingDataset, batch_size=20, num_workers=1, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=50, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,
         batch_size=batch_size,
@@ -88,13 +121,20 @@ print(heldin_outputs[Output.behavior].min())
 # sns.histplot(heldin_outputs[Output.behavior_pred].flatten())
 ax = prep_plt()
 sns.scatterplot(
-    x=heldin_outputs[Output.behavior].flatten(),
-    y=heldin_outputs[Output.behavior_pred].flatten(),
+    x=heldin_outputs[Output.behavior][:,6:].flatten(), # (with lag)
+    y=heldin_outputs[Output.behavior_pred][:, 6:].flatten(),
     s=3, alpha=0.4,
     ax=ax
 )
 ax.set_xlabel('bhvr')
 ax.set_ylabel('pred')
+#%%
+
+# import r2 score
+from sklearn.metrics import r2_score
+print(r2_score(heldin_outputs[Output.behavior][:,6:].flatten(0,1), heldin_outputs[Output.behavior_pred][:,6:].flatten(0,1), multioutput='raw_values'))
+# wut... what's wrong with my `test` report? why is it negative 65000, am I overflowing.
+
 #%%
 ax = prep_plt()
 sns.histplot(heldin_outputs[Output.behavior_pred].flatten(), ax=ax, bins=20)
@@ -104,18 +144,19 @@ ax.set_title('Distribution of velocity predictions')
 # ax.set_title('Distribution of velocity targets')
 #%%
 ax = prep_plt()
-trials = 40
-colors = sns.color_palette('colorblind', trials)
+trials = range(4)
+trials = torch.arange(10)[::2]
+colors = sns.color_palette('colorblind', len(trials))
 def plot_trial(trial, ax, color):
-    vel_true = heldin_outputs[Output.behavior][trial]
-    vel_pred = heldin_outputs[Output.behavior_pred][trial]
+    vel_true = heldin_outputs[Output.behavior][trial][6:]
+    vel_pred = heldin_outputs[Output.behavior_pred][trial][6:]
     pos_true = vel_true.cumsum(0)
     pos_pred = vel_pred.cumsum(0)
-    # ax.plot(pos_true[:,0], pos_true[:,1], label='true', linestyle='-', color=color)
+    ax.plot(pos_true[:,0], pos_true[:,1], label='true', linestyle='-', color=color)
     ax.plot(pos_pred[:,0], pos_pred[:,1], label='pred', linestyle='--', color=color)
 
-for i in range(trials):
-    plot_trial(i, ax, colors[i])
+for i, trial in enumerate(trials):
+    plot_trial(trial, ax, colors[i])
 ax.legend()
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
