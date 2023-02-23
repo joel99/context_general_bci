@@ -54,13 +54,13 @@ cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20160627_01']
 # cfg.dataset.eval_datasets = []
 
-# Ahmadi 21 eval set sanity
+# Ahmadi 21 eval set sanity ballpark
 TARGET_DATASETS = ['odoherty_rtt-Indy-20160627_01']
 
-# PSID-RNN eval set sanity
-# TARGET_DATASETS = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
-# TARGET_DATASETS = ['odoherty_rtt-Indy.*']
-# TARGET_DATASETS = []
+# PSID-RNN eval set sanity ballpark
+TARGET_DATASETS = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
+
+TARGET_DATASETS = []
 
 TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_DATASETS]
 

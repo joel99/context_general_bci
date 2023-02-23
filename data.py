@@ -112,11 +112,9 @@ class SpikingDataset(Dataset):
         if self.cfg.serve_tokenized_flat:
             assert self.cfg.serve_tokenized, 'codepaths assume serve_tokenized is true if serve_tokenized_flat is true'
 
-        meta_df = []
         if self.cfg.datasets:
-            for d in self.cfg.datasets:
-                meta_df.extend(self.load_session(d))
-            self.meta_df = pd.concat(meta_df).reset_index()
+            contexts = self.list_alias_to_contexts(self.cfg.datasets)
+            self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index()
             if 'split' in self.meta_df.columns and len(self.meta_df['split'].unique()) > 1:
                 logger.warning("Non-train splits found in meta_df. Subsetting is expected.")
         else:
@@ -171,6 +169,10 @@ class SpikingDataset(Dataset):
         current.pop('arrays', None)
         return current != cached_preproc_version
 
+    def list_alias_to_contexts(self, path_or_alias_list: List[Path | str]) -> List[ContextInfo]:
+        # sorted wrapper for more safety
+        return sorted([c for p in path_or_alias_list for c in self.aliases_to_contexts(p)])
+
     def aliases_to_contexts(self, session_path_or_alias: Path | str) -> List[ContextInfo]:
         if isinstance(session_path_or_alias, str):
             # Try alias
@@ -180,7 +182,7 @@ class SpikingDataset(Dataset):
                 context_meta = [context_registry.query_by_datapath(session_path)]
             elif not isinstance(context_meta, list):
                 context_meta = [context_meta]
-            return context_meta
+            return sorted(context_meta)
         else:
             return [context_registry.query_by_datapath(session_path_or_alias)]
 
@@ -192,9 +194,7 @@ class SpikingDataset(Dataset):
             self.meta_df['split'] = 'train'
         else:
             self.meta_df['split'] = self.meta_df['split'].fillna('train')
-        eval_metas = []
-        for d in self.cfg.eval_datasets:
-            eval_metas.extend(self.aliases_to_contexts(d))
+        eval_metas = self.list_alias_to_contexts(self.cfg.eval_datasets)
         eval_ids = [m.id for m in eval_metas]
         eval_pool = self.meta_df[(self.meta_df[MetaKey.session].isin(eval_ids)) & (self.meta_df['split'] == 'train')]
         if sorted(eval_ids) != sorted(eval_pool[MetaKey.session].unique()):
@@ -202,16 +202,7 @@ class SpikingDataset(Dataset):
         eval_subset = eval_pool.sample(frac=self.cfg.eval_ratio, random_state=self.cfg.eval_seed)
         self.meta_df['split'] = self.meta_df['split'].mask(self.meta_df.index.isin(eval_subset.index), 'eval')
 
-
-    def load_session(self, session_path_or_alias: Path | str) -> List[pd.DataFrame]:
-        r"""
-            Data will be pre-cached, typically in a flexible format, so we don't need to regenerate too often.
-            That is, the data and metadata will not adopt specific task configuration at time of cache, but rather try to store down all info available.
-            The exception to this is the crop length.
-        """
-        return [self.load_single_session(c) for c in self.aliases_to_contexts(session_path_or_alias)]
-
-    def load_single_session(self, context_meta: ContextInfo):
+    def load_single_session(self, context_meta: ContextInfo) -> pd.DataFrame:
         session_path = context_meta.datapath
         if not (hash_dir := self.preprocess_path(self.cfg, session_path)).exists() or \
             self.checksum_diff(hash_dir / 'preprocess_version.json', context_meta.task):
