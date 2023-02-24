@@ -17,7 +17,7 @@ from omegaconf import OmegaConf
 from analyze_utils import prep_plt, wandb_query_latest, load_wandb_run
 
 mode = 'rtt'
-mode = 'pitt'
+# mode = 'pitt'
 if mode == 'rtt':
     ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
 else:
@@ -28,7 +28,8 @@ print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 
-sample_query = mode # just pull the latest run
+sample_query = 'indy' # just pull the latest run
+# sample_query = mode # just pull the latest run
 wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 _, cfg, _ = load_wandb_run(wandb_run, tag='val_loss')
 default_cfg = cfg.dataset

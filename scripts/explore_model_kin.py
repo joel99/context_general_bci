@@ -108,42 +108,41 @@ def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwa
 dataloader = get_dataloader(dataset)
 #%%
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
-import pdb;pdb.set_trace()
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 # A note on fullbatch R2 calculation - in my experience by bsz 128 the minibatch R2 ~ fullbatch R2 (within 0.01); for convenience we use minibatch R2
 # from sklearn.metrics import r2_score
-# offset_bins = model.task_pipelines[ModelTask.kinematic_decoding].bhvr_lag_bins
 # print(r2_score(heldin_outputs[Output.behavior[:,offset_bins:]].flatten(0, 1), heldin_outputs[Output.behavior_pred[:,offset_bins:]].flatten(0, 1)), multioutput='raw_values')
 
 #%%
+import pandas as pd
+offset_bins = model.task_pipelines[ModelTask.kinematic_decoding.value].bhvr_lag_bins
 # B T H
 # The predictions here are definitely not correct...
 # So why do we have low error?
 # ?
 trials = 1
-print(heldin_outputs[Output.behavior][0,:10,0])
-print(heldin_outputs[Output.behavior_pred][0,:10,0])
-print(heldin_outputs[Output.behavior].mean())
-print(heldin_outputs[Output.behavior].max())
-print(heldin_outputs[Output.behavior].min())
+# print(heldin_outputs[Output.behavior][0,:10,0])
+# print(heldin_outputs[Output.behavior_pred][0,:10,0])
+# print(heldin_outputs[Output.behavior].mean())
+# print(heldin_outputs[Output.behavior].max())
+# print(heldin_outputs[Output.behavior].min())
 # sns.histplot(heldin_outputs[Output.behavior].flatten())
 # sns.histplot(heldin_outputs[Output.behavior_pred].flatten())
-ax = prep_plt()
-sns.scatterplot(
-    x=heldin_outputs[Output.behavior][:,6:].flatten(), # (with lag)
-    y=heldin_outputs[Output.behavior_pred][:, 6:].flatten(),
-    s=3, alpha=0.4,
-    ax=ax
-)
-ax.set_xlabel('bhvr')
-ax.set_ylabel('pred')
-#%%
+pred = heldin_outputs[Output.behavior_pred][:,offset_bins:]
+true = heldin_outputs[Output.behavior][:,offset_bins:]
+df = pd.DataFrame({
+    'pred': pred.flatten(),
+    'true': true.flatten(),
+    'coord': (pred.shape[0] * pred.shape[1]) * ['x'] + (pred.shape[0] * pred.shape[1]) * ['y'],
+})
+# ax = prep_plt()
+# sns.scatterplot(x='true', y='pred', hue='coord', data=df, ax=ax, s=3, alpha=0.4)
 
-# import r2 score
-from sklearn.metrics import r2_score
-print(r2_score(heldin_outputs[Output.behavior][:,6:].flatten(0,1), heldin_outputs[Output.behavior_pred][:,6:].flatten(0,1), multioutput='raw_values'))
-# wut... what's wrong with my `test` report? why is it negative 65000, am I overflowing.
+# plot marginals
+sns.jointplot(x='true', y='pred', hue='coord', data=df, s=3, alpha=0.4)
+# sns.jointplot(x='true', y='pred', hue='coord', data=df, kind='hist') # Too slow
+
 
 #%%
 ax = prep_plt()
@@ -155,19 +154,21 @@ ax.set_title('Distribution of velocity predictions')
 #%%
 ax = prep_plt()
 trials = range(4)
-trials = torch.arange(10)[::2]
+trials = torch.arange(10)
+
 colors = sns.color_palette('colorblind', len(trials))
-def plot_trial(trial, ax, color):
+def plot_trial(trial, ax, color, label=False):
     vel_true = heldin_outputs[Output.behavior][trial][6:]
     vel_pred = heldin_outputs[Output.behavior_pred][trial][6:]
     pos_true = vel_true.cumsum(0)
     pos_pred = vel_pred.cumsum(0)
-    ax.plot(pos_true[:,0], pos_true[:,1], label='true', linestyle='-', color=color)
-    ax.plot(pos_pred[:,0], pos_pred[:,1], label='pred', linestyle='--', color=color)
+    ax.plot(pos_true[:,0], pos_true[:,1], label='true' if label else '', linestyle='-', color=color)
+    ax.plot(pos_pred[:,0], pos_pred[:,1], label='pred' if label else '', linestyle='--', color=color)
 
 for i, trial in enumerate(trials):
-    plot_trial(trial, ax, colors[i])
+    plot_trial(trial, ax, colors[i], label=i == 0)
 ax.legend()
+
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]

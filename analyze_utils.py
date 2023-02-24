@@ -57,6 +57,11 @@ def create_typed_cfg(cfg: Dict) -> RootConfig:
 
 
 WandbRun = Any
+def get_run_config(run: WandbRun, tag="val_loss"):
+    run_data_attrs = from_dict(data_class=DataAttrs, data=run.config['data_attrs'])
+    del run.config['data_attrs']
+    cfg: RootConfig = OmegaConf.create(create_typed_cfg(run.config)) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
+    return cfg
 
 def load_wandb_run(run: WandbRun, tag="val_loss") -> Tuple[BrainBertInterface, RootConfig, DataAttrs]:
     run_data_attrs = from_dict(data_class=DataAttrs, data=run.config['data_attrs'])
