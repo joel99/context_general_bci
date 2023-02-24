@@ -67,7 +67,7 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                 # unit for finger is m/bin, adjust to m/s
                 finger_vel = finger_vel * (1000 / cfg.bin_size_ms)
                 bhvr_vars = {}
-                bhvr_vars[DataKey.bhvr_vel] = finger_vel.float()
+                bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel).float()
 
             int_arrays = [h5file[ref][()][:,0] for ref in h5file['chan_names'][0]]
             make_chan_name = lambda array: ''.join([chr(num) for num in array])
