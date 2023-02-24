@@ -623,7 +623,7 @@ class BrainBertInterface(pl.LightningModule):
 
         # Create outputs for configured task
         running_loss = 0
-        for task in self.cfg.task.tasks:
+        for i, task in enumerate(self.cfg.task.tasks):
             pipeline_features = unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features
             update = self.task_pipelines[task.value](
                 batch,
@@ -631,7 +631,8 @@ class BrainBertInterface(pl.LightningModule):
                 eval_mode=eval_mode
             )
             if 'loss' in update:
-                running_loss = running_loss + update['loss'] # uniform weight
+                batch_out[f'{task.value}_loss'] = update['loss']
+                running_loss = running_loss + self.cfg.task.task_weights[i] * update['loss']
             batch_out.update(update)
         batch_out['loss'] = running_loss
         return batch_out
@@ -788,7 +789,9 @@ class BrainBertInterface(pl.LightningModule):
 
     # ==================== Optimization ====================
     def common_log(self, metrics, prefix='', **kwargs):
-        self.log(f'{prefix}_loss', metrics['loss'], **kwargs)
+        for m in metrics:
+            if not isinstance(m, Metric): # log misc, mostly task losses
+                self.log(f'{prefix}_{m}', metrics[m], **kwargs)
         for m in self.cfg.task.metrics:
             if m == Metric.kinematic_r2:
                 labels = ['x', 'y', 'z']

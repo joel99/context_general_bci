@@ -149,6 +149,7 @@ class BhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.kinematic_decoding])
     metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
     decode_strategy: EmbedStrat = EmbedStrat.token
+    decode_separate: bool = True
 
 cs.store(group='model/task', name='bhvr_decode_flat', node=BhvrDecodeFlatTaskConfig)
 
@@ -156,7 +157,9 @@ cs.store(group='model/task', name='bhvr_decode_flat', node=BhvrDecodeFlatTaskCon
 class JointBhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding])
     metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
+    task_weights: List[float] = field(default_factory=lambda: [1.0, 0.5]) # so they're both on order of 0.3 (for bin size 20ms)
     decode_strategy: EmbedStrat = EmbedStrat.token
+    decode_separate: bool = True
 
 cs.store(group='model/task', name='joint_bhvr_decode_flat', node=JointBhvrDecodeFlatTaskConfig)
 

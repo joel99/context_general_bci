@@ -65,6 +65,9 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                     bhvr_vars[bhvr] = h5file[bhvr][()].T
                 # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
                 finger_vel = np.gradient(bhvr_vars['finger_pos'][..., 1:3], axis=0) # ignore orientation if present
+                # unit for finger is cm/bin, adjust to cm/s
+                finger_vel = finger_vel * (1000 / cfg.bin_size_ms)
+
                 # order is z, -x, -y. We just want x and y.
                 bhvr_vars[DataKey.bhvr_vel] = finger_vel
                 for bhvr in bhvr_vars:

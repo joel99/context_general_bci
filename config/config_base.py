@@ -101,6 +101,7 @@ class TaskConfig:
         Beginning experiments will be pretrain -> fine-tune, but we will try to make migrating to multi-task easy.
     """
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill])
+    task_weights: List[float] = field(default_factory=lambda: [1.])
 
     # infill
     mask_ratio: float = 0.25 # we don't have any schedule right now - the smaller this is, the higher the ceiling (probably), the slower the training

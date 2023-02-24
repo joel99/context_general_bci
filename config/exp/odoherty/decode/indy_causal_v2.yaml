@@ -18,7 +18,6 @@ model:
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
   task:
-    decode_separate: True
     behavior_lag: 120
 dataset:
   max_tokens: 8192

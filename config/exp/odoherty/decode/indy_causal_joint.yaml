@@ -4,8 +4,8 @@ defaults:
     - flat_enc_dec
     # - accel_tune
   - /model/task:
-    - bhvr_decode_flat
-  - /train: finetune
+    - joint_bhvr_decode_flat
+  - /train: pretrain
   - /dataset: flat
 model:
   session_embed_token_count: 8
@@ -13,15 +13,7 @@ model:
   neurons_per_token: 16
   causal: true
 
-  lr_init: 5e-5
-  lr_ramp_steps: 1000
-  lr_decay_steps: 10000
-  accelerate_new_params: 10.0
   task:
-    tasks:
-    - ModelTask.shuffle_infill
-    - ModelTask.kinematic_decoding
-    decode_separate: True
     behavior_lag: 120
 dataset:
   max_tokens: 8192
@@ -41,9 +33,6 @@ dataset:
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
   # - odoherty_rtt-Indy-20160624_03
-
-init_from_id: indy_causal_v2-g3srw3uf
-init_tag: val_loss
 
 train:
   autoscale_batch_size: false
