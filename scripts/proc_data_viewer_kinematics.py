@@ -24,12 +24,13 @@ else:
     ctxs = context_registry.query(task=ExperimentalTask.observation)
 
 context = ctxs[0]
-context = context_registry.query(alias='mc_rtt')
+# context = context_registry.query(alias='mc_rtt')
 print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 
-sample_query = 'mc_rtt' # just pull the latest run
+sample_query = 'test' # just pull the latest run
+sample_query = 'indy_causal_joint'
 # sample_query = mode # just pull the latest run
 wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 print(wandb_run)
@@ -46,6 +47,7 @@ default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 # default_cfg.max_channels = 250
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
+dataset.subset_split()
 
 # import torch
 # lengths = []
@@ -55,6 +57,8 @@ dataset.build_context_index()
 print(len(dataset))
 #%%
 trial = 0
+trial = 10
+# trial = 30
 # trial = 10
 trial_vel = dataset[trial][DataKey.bhvr_vel]
 
@@ -68,6 +72,16 @@ ax[0].plot(trial_vel)
 ax[0].set_title('Velocity')
 ax[1].plot(trial_pos)
 ax[1].set_title('Position')
+
+#%%
+# iterate through trials and print min and max bhvr_vel
+min_vel = 0
+max_vel = 0
+for trial in range(len(dataset)):
+    trial_vel = dataset[trial][DataKey.bhvr_vel]
+    min_vel = min(min_vel, trial_vel.min())
+    max_vel = max(max_vel, trial_vel.max())
+print(min_vel, max_vel)
 
 #%%
 trial = 10

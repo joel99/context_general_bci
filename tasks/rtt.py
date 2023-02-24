@@ -59,20 +59,15 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                         signal.resample(data, int(len(data) / cfg.odoherty_rtt.covariate_sampling_rate / (cfg.bin_size_ms / 1000)))
                         # signal.resample_poly(data, sampling_rate / covariate_sampling, cfg.bin_size_ms, padtype='line')
                     )
-                bhvr_vars = {}
-                for bhvr in ['finger_pos']:
-                # for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
-                    bhvr_vars[bhvr] = h5file[bhvr][()].T
-                # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
-                finger_vel = np.gradient(bhvr_vars['finger_pos'][..., 1:3], axis=0) # ignore orientation if present
-                # unit for finger is cm/bin, adjust to cm/s
-                finger_vel = finger_vel * (1000 / cfg.bin_size_ms)
-
+                finger_pos = h5file['finger_pos'][()].T / 100 # into meters
+                finger_pos = resample(finger_pos[..., 1:3])
+                # ignore orientation if present
                 # order is z, -x, -y. We just want x and y.
-                bhvr_vars[DataKey.bhvr_vel] = finger_vel
-                for bhvr in bhvr_vars:
-                    bhvr_vars[bhvr] = resample(bhvr_vars[bhvr]).float()
-                    # If we resample and then diff, we get aliasing
+                finger_vel = np.gradient(finger_pos, axis=0)
+                # unit for finger is m/bin, adjust to m/s
+                finger_vel = finger_vel * (1000 / cfg.bin_size_ms)
+                bhvr_vars = {}
+                bhvr_vars[DataKey.bhvr_vel] = finger_vel.float()
 
             int_arrays = [h5file[ref][()][:,0] for ref in h5file['chan_names'][0]]
             make_chan_name = lambda array: ''.join([chr(num) for num in array])

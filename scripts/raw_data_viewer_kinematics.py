@@ -37,7 +37,7 @@ context = context_registry.query(alias=dataset_name)
 datapath = context.datapath
 # Use modes to alternate through a few different codepaths
 mode = 'rtt'
-mode = 'pitt'
+# mode = 'pitt'
 if mode == 'rtt':
     ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
 else:
@@ -77,6 +77,7 @@ def load_bhvr_from_rtt(datapath, sample_strat=None):
             for bhvr in ['finger_pos']:
             # for bhvr in ['finger_pos', 'cursor_pos', 'target_pos']:
                 bhvr_vars[bhvr] = h5file[bhvr][()].T
+                # bhvr_vars[bhvr] = resample(bhvr_vars[bhvr])
             # cursor_vel = np.gradient(cursor_pos[~np.isnan(cursor_pos[:, 0])], axis=0)
             finger_vel = np.gradient(bhvr_vars['finger_pos'], axis=0)
             bhvr_vars[DataKey.bhvr_vel] = torch.tensor(finger_vel)
@@ -142,8 +143,8 @@ strat = None
 # strat = 'resample'
 # strat = 'resample_poly'
 # strat = 'decimate'
-# key = DataKey.bhvr_vel
-key = 'position'
+key = DataKey.bhvr_vel
+# key = 'position'
 
 if mode == 'pitt':
     bhvr_payload = load_bhvr_from_pitt(tgt_session, sample_strat=strat)
@@ -158,6 +159,7 @@ if mode == 'pitt':
 if mode == 'rtt':
     # take 1st 10% of signal
     bhvr_payload = load_bhvr_from_rtt(tgt_session, sample_strat=strat)
+    print(bhvr_payload[DataKey.bhvr_vel].max(), bhvr_payload[DataKey.bhvr_vel].min())
     length = int(bhvr_payload['finger_pos'].shape[0] * 0.01)
     plot_trace_rtt(
         ax, bhvr_payload, title=session_paths[0], length=length,
