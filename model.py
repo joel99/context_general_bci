@@ -110,6 +110,7 @@ class BrainBertInterface(pl.LightningModule):
             'lr_decay_steps',
             'lr_min',
             'accelerate_new_params',
+            'tune_decay',
         ]:
             setattr(self_copy, safe_attr, getattr(cfg, safe_attr))
         recursive_diff_log(self_copy, cfg)
@@ -322,10 +323,10 @@ class BrainBertInterface(pl.LightningModule):
                             module.load_state_dict(transfer_module.state_dict())
                     logger.info(f'Transferred {module_name} weights.')
                 else:
-                    if isinstance(module, nn.Parameter):
-                        self.novel_params.append(self._wrap_key(module_name, module_name))
-                    else:
-                        self.novel_params.extend(self._wrap_keys(module_name, module.named_parameters()))
+                    # if isinstance(module, nn.Parameter):
+                    #     self.novel_params.append(self._wrap_key(module_name, module_name))
+                    # else:
+                    #     self.novel_params.extend(self._wrap_keys(module_name, module.named_parameters()))
                     logger.info(f'New {module_name} weights.')
         def try_transfer_embed(
             embed_name: str, # Used for looking up possibly existing attribute
@@ -339,10 +340,10 @@ class BrainBertInterface(pl.LightningModule):
                 return
             embed = getattr(self, embed_name)
             if not old_attrs:
-                if isinstance(embed, nn.Parameter):
-                    self.novel_params.append(self._wrap_key(embed_name, embed_name))
-                else:
-                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
+                # if isinstance(embed, nn.Parameter):
+                #     self.novel_params.append(self._wrap_key(embed_name, embed_name))
+                # else:
+                #     self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
                 logger.info(f'New {embed_name} weights.')
                 return
             if not new_attrs:
@@ -363,10 +364,10 @@ class BrainBertInterface(pl.LightningModule):
             if num_reassigned < len(new_attrs):
                 # There is no non-clunky granular grouping assignment (probably) but we don't need it either
                 logger.warning(f'Incomplete {embed_name} weights reassignment, accelerating learning of all.')
-                if isinstance(embed, nn.Parameter):
-                    self.novel_params.append(self._wrap_key(embed_name, embed_name))
-                else:
-                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
+                # if isinstance(embed, nn.Parameter):
+                #     self.novel_params.append(self._wrap_key(embed_name, embed_name))
+                # else:
+                #     self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
         try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
         try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
         try_transfer_embed('task_embed', self.data_attrs.context.task, transfer_data_attrs.context.task)
@@ -833,13 +834,65 @@ class BrainBertInterface(pl.LightningModule):
         self.common_log(metrics, prefix='test')
         return metrics
 
+    # def get_context_parameters(self):
+    # what the heck, this api is called wrong, IDK
+    #     # for use in layer-wise LR decay
+    #     params = []
+    #     for embed in ['session_embed', 'subject_embed', 'task_embed', 'array_embed']:
+    #         if hasattr(self, embed):
+    #             if isinstance(getattr(self, embed), nn.Parameter):
+    #                 params.append(getattr(self, embed))
+    #             else:
+    #                 params.extend(*getattr(self, embed).parameters())
+    #     return params
+
     def configure_optimizers(self):
         scheduler = None
-        if self.cfg.accelerate_new_params > 1.0:
-            params = list(self.named_parameters())
+        if getattr(self.cfg, 'tune_decay', 0.0) > 0.0: # layer-wise LR decay
+            assert self.cfg.transform_space and not self.cfg.transformer.factorized_space_time, 'not implemented (only flat implemented rn)'
+            # fix readin
+            # accelerate context
+            # decay decoder, encoder (Kaiming MAE strategy https://arxiv.org/abs/2111.06377)
+            # Position embeddings are fixed (for simplicity)
+            # for simplicity
             grouped_params = [
-                {"params": [p for n, p in params if n in self.novel_params], 'lr': self.cfg.lr_init * self.cfg.accelerate_new_params},
-                {"params": [p for n, p in params if n not in self.novel_params], 'lr': self.cfg.lr_init},
+                # {"params": self.readin.parameters(), 'lr': 0}, # don't tune
+                {
+                    "params": [p for n, p in self.named_parameters() if ('session_embed' in n or 'subject_embed' in n or 'task_embed' in n or 'array_embed' in n)],
+                    'lr': self.cfg.lr_init * self.cfg.accelerate_new_params
+                },
+            ]
+            decayed_lr = self.cfg.lr_init * self.cfg.accelerate_new_params
+            assert self.cfg.task.decode_strategy == EmbedStrat.token, 'decay without transformer decoder not implemented'
+            # Decoder
+            for k in self.task_pipelines:
+                if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                    raise NotImplementedError
+                # Supported pipelines use "out" and "decoder" terminology for final readout and transformer decoder, respectively
+                pipeline = self.task_pipelines[k]
+                grouped_params.append({"params": pipeline.out.parameters(), 'lr': decayed_lr})
+                if hasattr(pipeline.decoder, 'final_norm'):
+                    grouped_params.append({"params": pipeline.decoder.final_norm.parameters(), 'lr': decayed_lr})
+            for i in reversed(range(self.cfg.decoder_layers)):
+                for k in self.task_pipelines:
+                    if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                        raise NotImplementedError
+                    pipeline = self.task_pipelines[k]
+                    decayed_lr *= self.cfg.tune_decay
+                    # Supported pipelines use "out" and "decoder" terminology for final readout and transformer decoder, respectively
+                    grouped_params.append({"params": pipeline.decoder.transformer_encoder.layers[i].parameters(), 'lr': decayed_lr})
+            # Encoder
+            if hasattr(self.backbone, 'final_norm'):
+                grouped_params.append({"params": self.backbone.final_norm.parameters(), 'lr': decayed_lr})
+            for i in reversed(range(self.cfg.transformer.n_layers)):
+                decayed_lr *= self.cfg.tune_decay
+                grouped_params.append({"params": self.backbone.transformer_encoder.layers[i].parameters(), 'lr': decayed_lr})
+        elif self.cfg.accelerate_new_params > 1.0:
+            params = list(self.named_parameters()) # As of 2/24/23 all my parameters are named, this better stay the case
+            accel_flag = lambda name: name in self.novel_params or ('session_embed' in name or 'subject_embed' in name or 'task_embed' in name or 'array_embed' in name)
+            grouped_params = [
+                {"params": [p for n, p in params if accel_flag(n)], 'lr': self.cfg.lr_init * self.cfg.accelerate_new_params},
+                {"params": [p for n, p in params if not accel_flag(n)], 'lr': self.cfg.lr_init},
             ]
         else:
             grouped_params = self.parameters()

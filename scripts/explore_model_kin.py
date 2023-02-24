@@ -30,7 +30,7 @@ query = "rtt_flat_indy-a25iab76"
 query = "indy_causal-stmn13ew"
 query = "indy_causal-xj392pjd"
 query = "indy_causal_v2-3w1f6vzx"
-query = "loco_causal-rppp73zx"
+# query = "loco_causal-rppp73zx"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -63,8 +63,8 @@ TARGET_DATASETS = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*',
 TARGET_DATASETS = ['odoherty_rtt-Indy.*']
 
 # TARGET_DATASETS = ['odoherty_rtt-Loco-20170215_02']
-TARGET_DATASETS = ['odoherty_rtt-Loco.*']
-# TARGET_DATASETS = []
+# TARGET_DATASETS = ['odoherty_rtt-Loco.*']
+TARGET_DATASETS = []
 
 TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_DATASETS]
 

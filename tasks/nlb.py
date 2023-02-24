@@ -85,6 +85,7 @@ class NLBLoader(ExperimentalTaskLoader):
                 save_file=False,
                 include_psth=False,
             )[f'{dataset_alias}{suffix}']['train_behavior'] # B T H=2
+            train_bhvr = train_bhvr / (1000 / cfg.bin_size_ms) / 10 # # felix prepared these to be mm/s, convert to cm / bin to match raws briefly
             train_bhvr = torch.tensor(train_bhvr, dtype=torch.float32)
 
         # Show fields of returned dict

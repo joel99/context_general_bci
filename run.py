@@ -21,6 +21,7 @@ from pytorch_lightning.callbacks import (
 
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.strategies import DDPStrategy
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
 import wandb
 
 from config import RootConfig, Metric, hp_sweep_space
@@ -49,6 +50,12 @@ r"""
     (As opposed to +exp=subdir/test)
 """
 reset_early_stop = True # todo move into config
+
+@rank_zero_only
+def init_wandb(cfg, wandb_logger):
+    # if wandb.run == None:
+    #     wandb.init(project=cfg.wandb_project) # for some reason wandb changed and now I need a declaration
+    _ = wandb_logger.experiment # force experiment recognition so that id is initialized
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
@@ -108,7 +115,6 @@ def run_exp(cfg : RootConfig) -> None:
     if cfg.model.task.freeze_all:
         model.freeze_non_embed()
 
-    epochs = cfg.train.epochs
     callbacks=[
         ModelCheckpoint(
             monitor='val_loss',
@@ -159,11 +165,14 @@ def run_exp(cfg : RootConfig) -> None:
         epochs = None
     else:
         max_steps = -1
+        epochs = cfg.train.epochs
 
     wandb_logger = WandbLogger(
         project=cfg.wandb_project,
         save_dir=cfg.default_root_dir,
     )
+
+    init_wandb(cfg, wandb_logger) # needed for checkpoint to save under wandb dir, for some reason wandb api changed.
 
     is_distributed = (torch.cuda.device_count() > 1) or getattr(cfg, 'nodes', 1) > 1
 
@@ -194,8 +203,6 @@ def run_exp(cfg : RootConfig) -> None:
     if trainer.global_rank == 0:
         logger.info(f"Running NDT2, dumping config:")
         logger.info(OmegaConf.to_yaml(cfg))
-        if wandb.run == None:
-            wandb.init(project=cfg.wandb_project) # for some reason wandb changed and now I need a declaration
         if cfg.tag:
             wandb.run.name = f'{cfg.tag}-{wandb.run.id}'
         notes = cfg.notes
