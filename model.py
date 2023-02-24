@@ -339,7 +339,10 @@ class BrainBertInterface(pl.LightningModule):
                 return
             embed = getattr(self, embed_name)
             if not old_attrs:
-                self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
+                if isinstance(embed, nn.Parameter):
+                    self.novel_params.append(self._wrap_key(embed_name, embed_name))
+                else:
+                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
                 logger.info(f'New {embed_name} weights.')
                 return
             if not new_attrs:
@@ -358,8 +361,12 @@ class BrainBertInterface(pl.LightningModule):
             if num_reassigned == 0:
                 logger.warning(f'No {embed_name} weights reassigned. HIGH CHANCE OF ERROR.')
             if num_reassigned < len(new_attrs):
-                # There is no non-clunky granular parameter assignment (probably) but we don't need it either
-                self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
+                # There is no non-clunky granular grouping assignment (probably) but we don't need it either
+                logger.warning(f'Incomplete {embed_name} weights reassignment, accelerating learning of all.')
+                if isinstance(embed, nn.Parameter):
+                    self.novel_params.append(self._wrap_key(embed_name, embed_name))
+                else:
+                    self.novel_params.extend(self._wrap_keys(embed_name, embed.named_parameters()))
         try_transfer_embed('session_embed', self.data_attrs.context.session, transfer_data_attrs.context.session)
         try_transfer_embed('subject_embed', self.data_attrs.context.subject, transfer_data_attrs.context.subject)
         try_transfer_embed('task_embed', self.data_attrs.context.task, transfer_data_attrs.context.task)
@@ -536,7 +543,6 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
-        # import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
         if DataKey.extra in batch:

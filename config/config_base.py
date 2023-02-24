@@ -183,6 +183,7 @@ class ModelConfig:
 
     # Speed the learning rates of parameters that are freshly initialized (intended for fine-tuning)
     accelerate_new_params: float = 1.0
+    tune_decay: float = 0.0 # if > 0; employ decay on the learning rate of the fine-tuned parameters per layer
 
     # Spike prediction tasks
     lograte: bool = True

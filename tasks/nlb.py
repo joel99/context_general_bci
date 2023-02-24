@@ -10,6 +10,8 @@ from nlb_tools.nwb_interface import NWBDataset
 from nlb_tools.make_tensors import (
     make_train_input_tensors,
     make_eval_input_tensors,
+    make_eval_target_tensors,
+
     PARAMS,
     _prep_mask,
     make_stacked_array
@@ -55,7 +57,7 @@ class NLBLoader(ExperimentalTaskLoader):
         dataset.resample(cfg.bin_size_ms)
 
         # Create suffix for group naming later
-        # suffix = '' if (cfg.bin_size_ms == 5) else f'_{int(cfg.bin_size_ms)}'
+        suffix = '' if (cfg.bin_size_ms == 5) else f'_{int(cfg.bin_size_ms)}'
         train_split = 'train' if (phase == 'val') else ['train', 'val']
         train_dict = make_tensor_fn(
             dataset,
@@ -70,6 +72,20 @@ class NLBLoader(ExperimentalTaskLoader):
             trial_split='test',
             save_file=False,
         )
+
+        if DataKey.bhvr_vel in cfg.data_keys:
+            train_bhvr = make_eval_target_tensors(
+                dataset,
+                dataset_name=dataset_alias,
+                train_trial_split=train_split,
+                eval_trial_split=['val'], # we ignore this in return; function breaks with no split
+                update_params={
+                    'lag': 0 # we do our own lag processing
+                },
+                save_file=False,
+                include_psth=False,
+            )[f'{dataset_alias}{suffix}']['train_behavior'] # B T H=2
+            train_bhvr = torch.tensor(train_bhvr, dtype=torch.float32)
 
         # Show fields of returned dict
         # print(train_dict.keys())
@@ -96,6 +112,8 @@ class NLBLoader(ExperimentalTaskLoader):
                 DataKey.spikes: create_spike_payload(spikes, arrays_to_use),
                 DataKey.heldout_spikes: heldout_spikes.clone()
             }
+            if DataKey.bhvr_vel in cfg.data_keys:
+                single_payload[DataKey.bhvr_vel] = train_bhvr[trial].clone()
             single_path = cache_root / f"{trial}.pth"
             meta_payload['path'].append(single_path)
             meta_payload['split'].append('train')
