@@ -18,13 +18,16 @@ model:
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
   task:
+    tasks:
+    - ModelTask.shuffle_infill
+    - ModelTask.kinematic_decoding
     decode_separate: True
     behavior_lag: 120
 dataset:
   max_tokens: 8192
   max_length_ms: 2000 # fit
   max_arrays: 1
-  scale_ratio: 0.125
+
   neurons_per_token: 16
   max_channels: 288
 
@@ -39,9 +42,9 @@ dataset:
   - odoherty_rtt-Indy-20161005_06
   # - odoherty_rtt-Indy-20160624_03
 
-# Testing R2 nonsense
-# init_from_id: indy_causal_v2-3w1f6vzx
-# load_from_id: indy_causal_v2-3w1f6vzx
-# init_tag: val_loss
-# train:
-  # autoscale_batch_size: False
+init_from_id: indy_causal_v2-3w1f6vzx
+init_tag: val_loss
+
+train:
+  autoscale_batch_size: false
+  batch_size: 32 # mind 12G nodes

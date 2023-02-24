@@ -55,7 +55,7 @@ dataset_name = 'odoherty_rtt-Indy-20160627_01'
 # dataset_name = 'churchland_misc_nitschke-.*'
 # dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
 # dataset_name = 'churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG'
-
+dataset_name = 'mc_rtt'
 
 context = context_registry.query(alias=dataset_name)
 # context = context[0]
@@ -65,8 +65,8 @@ print(context)
 
 default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 default_cfg.data_keys = [DataKey.spikes]
-# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
-default_cfg.bin_size_ms = 5
+default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+default_cfg.bin_size_ms = 20
 # default_cfg.bin_size_ms = 30
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 # default_cfg.max_channels = 250

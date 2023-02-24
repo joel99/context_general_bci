@@ -6,7 +6,8 @@
 #SBATCH --cpus-per-task=6
 #SBATCH -p gpu
 #SBATCH -t 36:00:00
-#SBATCH --mem 50G
+#SBATCH --mem 80G
+#SBATCH -w mind-1-32
 #SBATCH --output=slurm_logs/%j.out
 
 echo 'tasks'

@@ -18,6 +18,9 @@ model:
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
   task:
+    tasks:
+    - ModelTask.shuffle_infill
+    - ModelTask.kinematic_decoding
     decode_separate: True
     behavior_lag: 120
 dataset:
@@ -38,8 +41,10 @@ dataset:
   eval_datasets:
   - odoherty_rtt-Indy-20161005_06
   # - odoherty_rtt-Indy-20160624_03
+
+init_from_id: indy_causal_v2-g3srw3uf
+init_tag: val_loss
+
 train:
   autoscale_batch_size: false
-  batch_size: 64 # mind-1-32, 24G
-# init_from_id: indy_causal_v2-g3srw3uf
-# init_tag: val_loss
+  batch_size: 32 # mind 12G nodes
