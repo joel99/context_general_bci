@@ -630,7 +630,7 @@ class BrainBertInterface(pl.LightningModule):
                 pipeline_features,
                 eval_mode=eval_mode
             )
-            if 'loss' in update:
+            if 'loss' in update and self.cfg.task.task_weights[i] > 0:
                 batch_out[f'{task.value}_loss'] = update['loss']
                 running_loss = running_loss + self.cfg.task.task_weights[i] * update['loss']
             batch_out.update(update)

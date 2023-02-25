@@ -20,8 +20,8 @@ model:
   tune_decay: 0.75 # per Kaiming MAE
 
   task:
-    decode_separate: True
     behavior_lag: 120
+    task_weights: [1.0, 0.0] # don't update kinematic decoder
 
     freeze_backbone: false
     freeze_all: false
@@ -44,8 +44,6 @@ dataset:
   # Has ~1K trials, use 800 trials as a "super high regime" fine tuning and then TODO tweak scale ratio
   eval_ratio: 0.2
   scale_ratio: 1.0
-train:
-  autoscale_batch_size: false
-  batch_size: 128 # dataset size is too small, full batch can fit in memory, restrict.
-init_from_id: indy_causal_v2-j26aei5g
+
+init_from_id: indy_causal_joint-66optips
 init_tag: val_loss
