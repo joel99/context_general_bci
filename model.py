@@ -890,7 +890,7 @@ class BrainBertInterface(pl.LightningModule):
             for i in reversed(range(self.cfg.transformer.n_layers)):
                 decayed_lr *= self.cfg.tune_decay
                 grouped_params.append({"params": self.backbone.transformer_encoder.layers[i].parameters(), 'lr': decayed_lr})
-        elif self.cfg.accelerate_new_params > 1.0:
+        elif self.novel_params and self.cfg.accelerate_new_params > 1.0:
             params = list(self.named_parameters()) # As of 2/24/23 all my parameters are named, this better stay the case
             accel_flag = lambda name: name in self.novel_params or ('session_embed' in name or 'subject_embed' in name or 'task_embed' in name or 'array_embed' in name)
             grouped_params = [
