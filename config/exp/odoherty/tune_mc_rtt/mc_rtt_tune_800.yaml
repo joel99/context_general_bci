@@ -46,6 +46,6 @@ dataset:
   scale_ratio: 1.0
 train:
   autoscale_batch_size: false
-  batch_size: 128 # dataset size is too small, full batch can fit in memory, restrict.
+  batch_size: 256 # dataset size is too small, full batch can fit in 40G, restrict to what fits in about 10G.
 init_from_id: indy_causal_v2-j26aei5g
 init_tag: val_loss

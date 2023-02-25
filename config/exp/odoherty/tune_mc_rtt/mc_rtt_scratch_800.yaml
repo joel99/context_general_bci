@@ -14,7 +14,7 @@ model:
   causal: true
 
   # Stable small dataset tuning
-  lr_init: 5e-5
+  lr_init: 5e-4
   lr_ramp_steps: 1000
   lr_decay_steps: 10000
   accelerate_new_params: 10.0

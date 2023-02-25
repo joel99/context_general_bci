@@ -14,10 +14,11 @@ model:
   causal: true
 
   # Stable small dataset tuning
-  lr_init: 5e-5
+  lr_init: 5e-4
   lr_ramp_steps: 1000
   lr_decay_steps: 10000
-  accelerate_new_params: 10.0
+  # accelerate_new_params: 10.0
+  # Since this is from scratch; acceleration logic will not kick in, we manually 10x the lr to standard.
 
   task:
     behavior_lag: 120
