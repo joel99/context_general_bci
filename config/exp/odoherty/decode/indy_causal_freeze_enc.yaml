@@ -13,17 +13,13 @@ model:
   neurons_per_token: 16
   causal: true
 
-  # Stable small dataset tuning
   lr_init: 5e-5
   lr_ramp_steps: 1000
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
-
   task:
     behavior_lag: 120
-
-    freeze_backbone: false
-    freeze_all: false
+    freeze_backbone: true
 
 dataset:
   max_tokens: 8192
@@ -38,11 +34,11 @@ dataset:
   - DataKey.bhvr_vel
 
   datasets:
-  - mc_rtt
+  # - odoherty_rtt-Indy-20160624_03
+  - odoherty_rtt-Indy.*
   eval_datasets:
-  - mc_rtt
-  # Has ~1K trials, use 800 trials as a "super high regime" fine tuning and then TODO tweak scale ratio
-  eval_ratio: 0.2
-  scale_ratio: 1.0
-# init_from_id: indy_causal_v2-3w1f6vzx
-# init_tag: val_loss
+  - odoherty_rtt-Indy-20161005_06
+  # - odoherty_rtt-Indy-20160624_03
+
+init_from_id: indy_causal_v2-g3srw3uf
+init_tag: val_loss

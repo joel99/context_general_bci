@@ -1,6 +1,6 @@
-# to be called FROM your data root
+# to be called from project root
 # ln -s ~/share/ndt2/ data # your share dir here, i.e. call from ./data
-
+cd data
 # RTT
 # zenodo_get 3854034
 

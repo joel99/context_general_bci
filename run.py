@@ -216,6 +216,8 @@ def run_exp(cfg : RootConfig) -> None:
         wandb.define_metric("eval_loss", summary="min")
         wandb.define_metric(f"val_{Metric.bps.value}", summary="max")
         wandb.define_metric(f"eval_{Metric.bps.value}", summary="max")
+        wandb.define_metric(f"val_{Metric.kinematic_r2.value}", summary="max")
+        wandb.define_metric(f"eval_{Metric.kinematic_r2.value}", summary="max")
 
     # === Train ===
     num_workers = len(os.sched_getaffinity(0)) # If this is set too high, the dataloader may crash.
