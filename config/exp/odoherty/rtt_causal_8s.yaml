@@ -8,7 +8,7 @@ defaults:
   - /dataset: flat
 model:
   hidden_size: 384
-  session_embed_strategy: EmbedStrat.none
+  session_embed_token_count: 8
   subject_embed_strategy: EmbedStrat.none
   causal: true
   task:
