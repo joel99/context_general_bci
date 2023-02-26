@@ -48,3 +48,7 @@ dataset:
 
 init_from_id: indy_causal_joint-66optips
 init_tag: val_loss
+train:
+  patience: 1000 # give kinematics its time
+  autoscale_batch_size: false
+  batch_size: 32

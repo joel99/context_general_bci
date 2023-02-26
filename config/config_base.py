@@ -102,6 +102,8 @@ class TaskConfig:
     """
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill])
     task_weights: List[float] = field(default_factory=lambda: [1.])
+    # List of session IDs to ignore supervised loss for. Using for mc_rtt pilot
+    blacklist_session_supervision: List[str] = field(default_factory=lambda: [])
 
     # infill
     mask_ratio: float = 0.25 # we don't have any schedule right now - the smaller this is, the higher the ceiling (probably), the slower the training

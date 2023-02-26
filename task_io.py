@@ -15,6 +15,7 @@ from config import (
 )
 
 from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY, COVARIATE_LENGTH_KEY
+from contexts import context_registry, ContextInfo
 from subjects import subject_array_registry, SortedArrayInfo
 
 from components import SpaceTimeTransformer
@@ -747,6 +748,19 @@ class BehaviorRegression(TaskPipeline):
         self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
         assert self.bhvr_lag_bins >= 0, "behavior lag must be >= 0, code not thought through otherwise"
 
+        self.session_blacklist = []
+        if getattr(self.cfg, 'blacklist_session_supervision', []):
+            ctxs: List[ContextInfo] = []
+            for sess in self.cfg.blacklist_session_supervision:
+                sess = context_registry.query(alias=sess)
+                if isinstance(sess, list):
+                    ctxs.extend(sess)
+                else:
+                    ctxs.append(sess)
+            for ctx in ctxs:
+                if ctx.id in data_attrs.context.session:
+                    self.session_blacklist.append(data_attrs.context.session.index(ctx.id))
+
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token or self.cfg.decode_separate:
             return batch
@@ -809,11 +823,25 @@ class BehaviorRegression(TaskPipeline):
             compute_channel=False
         )
         length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
-        batch_out['loss'] = loss[length_mask].mean()
+        r2_mask = length_mask
+        # blacklist
+        if self.session_blacklist:
+            session_mask = batch[MetaKey.session] != self.session_blacklist[0]
+            for sess in self.session_blacklist[1:]:
+                session_mask = session_mask & (batch[MetaKey.session] != sess)
+            length_mask = length_mask & session_mask[:, None]
+            if not session_mask.any(): # no valid sessions
+                loss = 0 # don't fail
+            else:
+                loss = loss[length_mask].mean()
+        else:
+            loss = loss[length_mask].mean()
+
+        batch_out['loss'] = loss
         if Metric.kinematic_r2 in self.cfg.metrics:
             # import pdb;pdb.set_trace()
-            valid_bhvr = bhvr[length_mask]
-            valid_tgt = bhvr_tgt[length_mask]
+            valid_bhvr = bhvr[r2_mask]
+            valid_tgt = bhvr_tgt[r2_mask]
             batch_out[Metric.kinematic_r2] = r2_score(valid_tgt.detach().cpu(), valid_bhvr.detach().cpu(), multioutput='raw_values')
             # print(batch_out[Metric.kinematic_r2])
             # if (batch_out[Metric.kinematic_r2] < 0).any():
