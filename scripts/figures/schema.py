@@ -1,8 +1,9 @@
 #%%
 import numpy as np
 import pandas as pd
-import h5py
 import torch
+from pytorch_lightning import seed_everything
+from einops import repeat, rearrange
 
 import logging
 
@@ -158,26 +159,74 @@ def plot_spikes(spikes, ax=None, vert_space=1):
 plot_spikes(pop_spikes)
 
 #%%
-sample_neurons_per_token = 16
+# Make schema...
+pop_spikes = dataset[trial][DataKey.spikes][..., 0] # T x patch x neuron
+pop_spikes = pop_spikes[:, :10]
+pop_spikes = pop_spikes.flatten(1, 2)
+pop_spikes = pop_spikes.T # C x T
+sample_times_per_token = 5
+npt = dataset.cfg.neurons_per_token
+
+seed_everything(42)
+
+grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token]
+grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token] * 0
+print(grid_mask.size())
+
 def heatmap_plot(spikes, ax=None):
-    # spikes - Time x neurons
-    spikes = torch.tensor(spikes)
-    spikes = spikes.T # -> neurons x time
+    # spikes - Neurons x Time
+    # spikes = torch.tensor(spikes)
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 8))
-    ax = prep_plt(ax)
-    sns.despine(ax=ax, left=True, bottom=False)
-    sns.heatmap(spikes, ax=ax, cbar=True, cmap='Greys', yticklabels=False, linewidths=10)
-    # for i in range(0, spikes.shape[0] + 1, sample_neurons_per_token):
-        # ax.axhline(i, color='black', lw=10)
-    # for i in range(spikes.shape[1] + 1):
-        # ax.axvline(i, color='white', lw=1)
+    # ax = prep_plt(ax)
+    # sns.despine(ax=ax, left=True, bottom=False)
+    sns.heatmap(
+        spikes,
+        ax=ax,
+        cbar=True,
+        cmap='Greys',
+        # cmap='crest',
+        yticklabels=False,
+    )
 
-    ax.set_xticks(np.linspace(0, spikes.shape[1], 5))
-    ax.set_xticklabels(np.linspace(0, spikes.shape[1] * dataset.cfg.bin_size_ms, 5).astype(int))
-    ax.set_xlabel('Time (ms)')
+    for neuron in range(grid_mask.size(0)):
+        ax.axhline(neuron * npt, color='white', lw=1.0)
+        for time in range(grid_mask.size(1)):
+            if neuron == 0:
+                ax.axvline(time * sample_times_per_token, color='white', lw=1.0)
+            if grid_mask[neuron, time]:
+                ax.axvspan(
+                    time * sample_times_per_token,
+                    (time + 1) * sample_times_per_token,
+                    (neuron) / grid_mask.size(0), # for some reason this is fractional, not pixel
+                    (neuron+1) / grid_mask.size(0),
+                    color='grey'
+                )
+
+    ax.set_xticks([])
+    # ax.set_xticks(np.linspace(0, spikes.shape[1], 5))
+    # ax.set_xticklabels(np.linspace(0, spikes.shape[1] * dataset.cfg.bin_size_ms, 5).astype(int))
+
+    ax.set_xlabel('Time')
+    # add rightwards arrow
+    ax.annotate(
+        '', xy=(0.65, -0.035), xytext=(0.55, -0.035),
+        xycoords='axes fraction', textcoords='axes fraction',
+        arrowprops=dict(arrowstyle="->", color='black')
+    )
+
     ax.set_ylabel('Neuron')
-    ax.set_title("RTT Binned (Indy, 2016/06/27)")
+    # add upwards arrow
+    ax.annotate(
+        '', xy=(-0.035, 0.7), xytext=(-0.035, 0.6),
+        xycoords='axes fraction', textcoords='axes fraction',
+        arrowprops=dict(arrowstyle="->", color='black')
+    )
+
+
+    # ax.set_title("RTT Binned (Indy, 2016/06/27)")
+    ax.set_title("Input (Single-trial spiking activity)", fontsize=16)
+    ax.set_title("Target", fontsize=16)
     # ax.set_title(context.alias)
 
     # Rescale cbar to only use 0, 1, 2, 3 for labels
@@ -186,6 +235,27 @@ def heatmap_plot(spikes, ax=None):
     # label cbar as "spike count"
     cbar.set_label("Spike Count")
 
+    # remove cbar
+    cbar.remove()
 
     return ax
 heatmap_plot(pop_spikes)
+
+def extract_grid(spikes, grid_mask):
+    # Nope
+    # spikes - Neurons x Time
+    # grid_mask - Neurons x Time
+    # spikes = torch.tensor(spikes)
+    # grid_mask = torch.tensor(grid_mask)
+    grid_spikes = rearrange(spikes, '(patch neurons) (pt time) -> patch pt neurons time', patch=grid_mask.size(0), pt=grid_mask.size(1))
+    grid_spikes = grid_spikes[grid_mask]
+
+    num_plots = 5
+    f, axes = plt.subplots(min(num_plots, len(grid_spikes)), 1, figsize=(2, 2))
+    for i in range(num_plots):
+        sns.heatmap(grid_spikes[i], cbar=False, cmap='Greys', yticklabels=False, ax=axes[i])
+
+
+
+
+# print(extract_grid(pop_spikes, grid_mask))
