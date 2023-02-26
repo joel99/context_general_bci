@@ -8,8 +8,8 @@ defaults:
   - /train: finetune
   - /dataset: flat
 model:
-  session_embed_token_count: 8
-  subject_embed_strategy: EmbedStrat.token
+  session_embed_strategy: EmbedStrat.none
+  subject_embed_strategy: EmbedStrat.none
   neurons_per_token: 16
   causal: true
 
@@ -17,14 +17,8 @@ model:
   lr_ramp_steps: 1000
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
-  tune_decay: 0.75 # per Kaiming MAE
-
   task:
-    decode_separate: True
     behavior_lag: 120
-
-    freeze_backbone: false
-    freeze_all: false
 dataset:
   max_tokens: 8192
   max_length_ms: 2000 # fit
@@ -38,12 +32,8 @@ dataset:
   - DataKey.bhvr_vel
 
   datasets:
-  - mc_rtt
+  # - odoherty_rtt-Indy-20160624_03
+  - odoherty_rtt-Indy.*
   eval_datasets:
-  - mc_rtt
-  # Has ~1K trials, use 800 trials as a "super high regime" fine tuning and then TODO tweak scale ratio
-  eval_ratio: 0.2
-  scale_ratio: 0.1
-
-init_from_id: indy_causal_v2-j26aei5g
-init_tag: val_loss
+  - odoherty_rtt-Indy-20161005_06
+  # - odoherty_rtt-Indy-20160624_03
