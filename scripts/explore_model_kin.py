@@ -31,6 +31,7 @@ query = "indy_causal-stmn13ew"
 query = "indy_causal-xj392pjd"
 query = "indy_causal_v2-3w1f6vzx"
 # query = "loco_causal-rppp73zx"
+query = "mc_rtt_joint_tune_800-162hvyl4"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -111,8 +112,8 @@ def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwa
 
 dataloader = get_dataloader(dataset)
 #%%
-# heldin_metrics = stack_batch(trainer.test(model, dataloader))
-heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+heldin_metrics = stack_batch(trainer.test(model, dataloader))
+# heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 # A note on fullbatch R2 calculation - in my experience by bsz 128 the minibatch R2 ~ fullbatch R2 (within 0.01); for convenience we use minibatch R2
 # from sklearn.metrics import r2_score

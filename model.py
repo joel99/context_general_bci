@@ -545,6 +545,10 @@ class BrainBertInterface(pl.LightningModule):
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
+        # interfere
+        # trial_context = [t + torch.randn_like(t) for t in trial_context] # this is huge perturb but actually minror effect...?
+        # trial_context = [torch.zeros_like(t) for t in trial_context]
+
         temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
         if DataKey.extra in batch:
             state_in = torch.cat([state_in, batch[DataKey.extra]], dim=1)
@@ -790,7 +794,7 @@ class BrainBertInterface(pl.LightningModule):
     # ==================== Optimization ====================
     def common_log(self, metrics, prefix='', **kwargs):
         for m in metrics:
-            if not isinstance(m, Metric): # log misc, mostly task losses
+            if not isinstance(m, Metric) and not isinstance(m, Output): # log misc, mostly task losses
                 self.log(f'{prefix}_{m}', metrics[m], **kwargs)
         for m in self.cfg.task.metrics:
             if m == Metric.kinematic_r2:
