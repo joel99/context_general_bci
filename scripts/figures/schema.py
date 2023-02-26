@@ -170,7 +170,7 @@ npt = dataset.cfg.neurons_per_token
 seed_everything(42)
 
 grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token]
-grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token] * 0
+# grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token] * 0
 print(grid_mask.size())
 
 def heatmap_plot(spikes, ax=None):
@@ -200,7 +200,8 @@ def heatmap_plot(spikes, ax=None):
                     (time + 1) * sample_times_per_token,
                     (neuron) / grid_mask.size(0), # for some reason this is fractional, not pixel
                     (neuron+1) / grid_mask.size(0),
-                    color='grey'
+                    color='grey',
+                    # alpha=0.8
                 )
 
     ax.set_xticks([])

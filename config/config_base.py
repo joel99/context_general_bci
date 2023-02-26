@@ -126,6 +126,7 @@ class TaskConfig:
     behavior_lag_lookahead: bool = True # if true, allow lookahead up to `lag`. Only applied in causal path
 
     decode_separate: bool = False # for bhvr decoding, use a separate transformer decoder? (Only compat with EmbedStrat.token)
+    decode_time_pool: str = "" # none or 'mean'
     decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
 
 @dataclass

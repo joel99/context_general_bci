@@ -32,6 +32,8 @@ query = "indy_causal-xj392pjd"
 query = "indy_causal_v2-3w1f6vzx"
 # query = "loco_causal-rppp73zx"
 query = "mc_rtt_joint_tune_800-162hvyl4"
+query = "indy_causal_joint_0s-tne69igz"
+query = "robust_joint_unsup_tune_800-gm7nv27q"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -47,14 +49,14 @@ cfg.model.task.metrics = [Metric.kinematic_r2]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
-# cfg.dataset.datasets = ['mc_rtt']
-# if 'rtt' in query:
-    # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
-    # cfg.dataset.datasets = ['odoherty_rtt-Indy-20161014_04']
 
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-201606.*']
 # cfg.dataset.datasets = ['odoherty_rtt-Indy-20160627_01']
 # cfg.dataset.eval_datasets = []
+
+# Joint transfer exp
+# cfg.model.task.tasks = [ModelTask.shuffle_infill, ModelTask.kinematic_decoding]
+# cfg.model.task.task_weights = [1.0, 0.5]
 
 # Ahmadi 21 eval set sanity ballpark
 TARGET_DATASETS = ['odoherty_rtt-Indy-20160627_01']
@@ -70,6 +72,10 @@ TARGET_DATASETS = []
 TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_DATASETS]
 
 FLAT_TARGET_DATASETS = []
+
+cfg.dataset.datasets = ['mc_rtt']
+cfg.dataset.eval_datasets = ['mc_rtt']
+
 for td in TARGET_DATASETS:
     if td == None:
         continue
@@ -98,6 +104,16 @@ print(data_attrs)
 print(f'{len(dataset)} examples')
 
 model = transfer_model(src_model, cfg.model, data_attrs)
+
+# pipeline_model = ""
+# pipeline_model = "indy_causal_joint_0s-tne69igz"
+# import pdb;pdb.set_trace()
+# if pipeline_model:
+#     pipeline_model = load_wandb_run(wandb_query_latest(pipeline_model, allow_running=True, use_display=True)[0], tag='val_loss')[0]
+#     pipeline_model = transfer_model(pipeline_model, cfg.model, data_attrs)
+#     model.transfer_io(pipeline_model)
+
+
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
 def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwargs) -> DataLoader:
@@ -113,7 +129,7 @@ def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwa
 dataloader = get_dataloader(dataset)
 #%%
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
-# heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 # A note on fullbatch R2 calculation - in my experience by bsz 128 the minibatch R2 ~ fullbatch R2 (within 0.01); for convenience we use minibatch R2
 # from sklearn.metrics import r2_score
@@ -159,7 +175,7 @@ ax.set_title('Distribution of velocity targets')
 ax.set_yscale('log')
 #%%
 ax = prep_plt()
-trials = range(4)
+# trials = range(4)
 trials = torch.arange(10)
 
 colors = sns.color_palette('colorblind', len(trials))

@@ -395,7 +395,8 @@ class ShuffleInfill(RatePrediction):
         if eval_mode:
             batch.update({
                 SHUFFLE_KEY: torch.arange(spikes.size(1), device=spikes.device),
-                'spike_target': target
+                'spike_target': target,
+                'encoder_frac': spikes.size(1)
             })
             return batch
         # spikes: B T S H or B T H (no array support)
@@ -438,6 +439,8 @@ class ShuffleInfill(RatePrediction):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         # B T
+        if eval_mode:
+            return {} # not implemented
         target = batch['spike_target']
         if target.ndim == 5:
             raise NotImplementedError("cannot even remember what this should look like")
@@ -772,6 +775,8 @@ class BehaviorRegression(TaskPipeline):
         if self.cfg.decode_strategy == EmbedStrat.token:
             if self.cfg.decode_separate:
                 temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
+                # if getattr(self.cfg, 'decode_time_pool', ""):
+                #     backbone_features = self.t
                 decode_tokens, decode_time, decode_space = self.injector.inject(batch)
                 if self.causal and self.cfg.behavior_lag_lookahead:
                     decode_time = decode_time + self.bhvr_lag_bins # allow-looking N bins of neural data into the future -- which is technically still the present
