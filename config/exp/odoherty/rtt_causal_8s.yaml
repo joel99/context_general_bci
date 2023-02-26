@@ -7,6 +7,7 @@ defaults:
   - /model: flat_enc_dec
   - /dataset: flat
 model:
+  hidden_size: 384
   session_embed_strategy: EmbedStrat.none
   subject_embed_strategy: EmbedStrat.none
   causal: true
