@@ -46,5 +46,5 @@ train:
   autoscale_batch_size: false
   batch_size: 32
 
-init_from_id: indy_causal_v2-g3srw3uf
+init_from_id: indy_causal_v2-q5t78ldq
 init_tag: val_loss

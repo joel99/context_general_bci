@@ -18,6 +18,8 @@ model:
   tune_decay: 0.75 # per Kaiming MAE
 
   task:
+    tasks: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding]
+    task_weights: [1.0, 0.0]
     decode_separate: True
     decode_strategy: EmbedStrat.token
     behavior_lag: 120

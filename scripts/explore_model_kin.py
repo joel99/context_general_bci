@@ -33,8 +33,8 @@ query = "indy_causal_v2-3w1f6vzx"
 # query = "loco_causal-rppp73zx"
 query = "mc_rtt_joint_tune_800-162hvyl4"
 query = "indy_causal_joint_0s-tne69igz"
-query = "robust_joint_unsup_tune_800-gm7nv27q"
-query = "mc_rtt_unsup_800-k0m5uklu"
+query = "robust_joint_unsup_tune_800-t1dtvj2p"
+# query = "mc_rtt_unsup_800-k0m5uklu"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -57,30 +57,31 @@ cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
 
 # Joint transfer exp
 pipeline_model = ""
-pipeline_model = "indy_causal_joint_0s-tne69igz"
-pipeline_model = "indy_causal_freeze_enc-j2lxcf6a"
+# pipeline_model = "indy_causal_joint_0s-tne69igz"
+# pipeline_model = "indy_causal_freeze_enc-j2lxcf6a"
 
 if pipeline_model:
     pipeline_model = load_wandb_run(wandb_query_latest(pipeline_model, allow_running=True, use_display=True)[0], tag='val_loss')[0]
     cfg.model.task = pipeline_model.cfg.task
 
 # Ahmadi 21 eval set sanity ballpark
-TARGET_DATASETS = ['odoherty_rtt-Indy-20160627_01']
+# TARGET_ALIASES = ['odoherty_rtt-Indy-20161005_06']
+# TARGET_ALIASES = ['odoherty_rtt-Indy-20160627_01']
 
 # PSID-RNN eval set sanity ballpark
-TARGET_DATASETS = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
-TARGET_DATASETS = ['odoherty_rtt-Indy.*']
+# TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
+# TARGET_ALIASES = ['odoherty_rtt-Indy.*']
 
-# TARGET_DATASETS = ['odoherty_rtt-Loco-20170215_02']
-# TARGET_DATASETS = ['odoherty_rtt-Loco.*']
-TARGET_DATASETS = []
+# TARGET_ALIASES = ['odoherty_rtt-Loco-20170215_02']
+# TARGET_ALIASES = ['odoherty_rtt-Loco.*']
+TARGET_ALIASES = []
 
-TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_DATASETS]
+TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_ALIASES]
 
 FLAT_TARGET_DATASETS = []
 
-cfg.dataset.datasets = ['mc_rtt']
-cfg.dataset.eval_datasets = ['mc_rtt']
+# cfg.dataset.datasets = ['mc_rtt']
+# cfg.dataset.eval_datasets = ['mc_rtt']
 
 for td in TARGET_DATASETS:
     if td == None:
@@ -90,6 +91,10 @@ for td in TARGET_DATASETS:
     else:
         FLAT_TARGET_DATASETS.append(td)
 TARGET_DATASETS = [td.id for td in FLAT_TARGET_DATASETS]
+
+if cfg.dataset.datasets == ['mc_rtt']:
+    cfg.dataset.datasets = TARGET_ALIASES
+    cfg.dataset.eval_datasets = []
 
 dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets and not TARGET_DATASETS:
@@ -112,8 +117,6 @@ print(f'{len(dataset)} examples')
 model = transfer_model(src_model, cfg.model, data_attrs)
 
 if pipeline_model:
-    # pipeline_model = load_wandb_run(wandb_query_latest(pipeline_model, allow_running=True, use_display=True)[0], tag='val_loss')[0]
-    import pdb;pdb.set_trace()
     pipeline_model = transfer_model(pipeline_model, cfg.model, data_attrs)
     model.task_pipelines[ModelTask.kinematic_decoding.value] = pipeline_model.task_pipelines[ModelTask.kinematic_decoding.value]
     # model.transfer_io(pipeline_model)
