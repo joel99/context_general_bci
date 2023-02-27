@@ -20,9 +20,9 @@ model:
   tune_decay: 0.75 # per Kaiming MAE
 
   task:
-    decode_strategy: EmbedStrat.project
     decode_separate: True
     decode_time_pool: "mean"
+    decode_strategy: EmbedStrat.project
     behavior_lag: 120
 
     freeze_backbone: false

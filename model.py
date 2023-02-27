@@ -870,7 +870,6 @@ class BrainBertInterface(pl.LightningModule):
                 },
             ]
             decayed_lr = self.cfg.lr_init * self.cfg.accelerate_new_params
-            assert self.cfg.task.decode_strategy == EmbedStrat.token, 'decay without transformer decoder not implemented'
             # Decoder
             for k in self.task_pipelines:
                 if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
@@ -878,12 +877,16 @@ class BrainBertInterface(pl.LightningModule):
                 # Supported pipelines use "out" and "decoder" terminology for final readout and transformer decoder, respectively
                 pipeline = self.task_pipelines[k]
                 grouped_params.append({"params": pipeline.out.parameters(), 'lr': decayed_lr})
+                if not hasattr(pipeline, 'decoder'):
+                    continue
                 if hasattr(pipeline.decoder, 'final_norm'):
                     grouped_params.append({"params": pipeline.decoder.final_norm.parameters(), 'lr': decayed_lr})
             for i in reversed(range(self.cfg.decoder_layers)):
                 for k in self.task_pipelines:
                     if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
                         raise NotImplementedError
+                    if not hasattr(pipeline, 'decoder'):
+                        continue
                     pipeline = self.task_pipelines[k]
                     decayed_lr *= self.cfg.tune_decay
                     # Supported pipelines use "out" and "decoder" terminology for final readout and transformer decoder, respectively
