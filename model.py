@@ -688,6 +688,11 @@ class BrainBertInterface(pl.LightningModule):
         for k in batch:
             batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
         batch_out: Dict[str, torch.Tensor] = {}
+        # auto-debug
+        batch_out[MetaKey.session] = batch[MetaKey.session]
+        batch_out[MetaKey.subject] = batch[MetaKey.subject]
+        batch_out[MetaKey.task] = batch[MetaKey.task]
+
         if Output.spikes in self.cfg.task.outputs:
             assert self.data_attrs.serve_tokens_flat or not self.data_attrs.serve_tokens, "Not implemented, needs assembling"
             if self.data_attrs.serve_tokens_flat:

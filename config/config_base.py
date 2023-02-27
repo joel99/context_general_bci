@@ -47,6 +47,9 @@ class Output(Enum):
     behavior = 'behavior'
     behavior_pred = 'behavior_pred'
 
+    # Debug
+    pooled_features = 'pooled_features'
+
 class DataKey(Enum):
     # DataKey are time-varying and typically served with spikes
     # TODO need more thinking about this. Data is heterogenuous, can we maintain a single interface

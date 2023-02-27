@@ -809,6 +809,8 @@ class BehaviorRegression(TaskPipeline):
                 temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
                 if getattr(self.cfg, 'decode_time_pool', ""): # B T H -> B T H
                     backbone_features, temporal_padding_mask = self.temporal_pool(batch, backbone_features, temporal_padding_mask)
+                    if Output.pooled_features in self.cfg.outputs:
+                        batch_out[Output.pooled_features] = backbone_features.detach()
                 decode_tokens, decode_time, decode_space = self.injector.inject(batch)
                 if getattr(self.cfg, 'decode_time_pool', ""):
                     src_time = decode_time
