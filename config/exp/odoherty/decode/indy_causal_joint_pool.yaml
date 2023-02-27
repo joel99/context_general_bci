@@ -4,7 +4,7 @@ defaults:
     - flat_enc_dec
     # - accel_tune
   - /model/task:
-    - bhvr_decode_flat
+    - joint_bhvr_decode_flat
   - /train: finetune
   - /dataset: flat
 model:
@@ -13,16 +13,10 @@ model:
   neurons_per_token: 16
   causal: true
 
-  lr_init: 5e-5
-  lr_ramp_steps: 1000
-  lr_decay_steps: 10000
-  accelerate_new_params: 10.0
   task:
     behavior_lag: 120
-    freeze_embed: true
-    freeze_backbone: true
+    task_weights: [1.0, 20.0] # decode goes to ~0.06-0.12 with 20x weight, vs infill at ~0.25-0.3.
     decode_time_pool: "mean"
-
 dataset:
   max_tokens: 8192
   max_length_ms: 2000 # fit
@@ -44,7 +38,6 @@ dataset:
 
 train:
   autoscale_batch_size: false
-  batch_size: 32
-
+  batch_size: 64 # mind 24G nodes
 init_from_id: indy_causal_v2-g3srw3uf
 init_tag: val_loss

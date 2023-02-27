@@ -2,9 +2,6 @@
 defaults:
   - /model:
     - flat_enc_dec
-    # - accel_tune
-  - /model/task:
-    - joint_bhvr_decode_flat
   - /train: finetune
   - /dataset: flat
 model:
@@ -21,9 +18,6 @@ model:
 
   task:
     behavior_lag: 120
-    task_weights: [1.0, 0.0] # don't update kinematic decoder
-    decode_time_pool: "mean"
-
     freeze_backbone: false
     freeze_all: false
 dataset:
@@ -48,8 +42,5 @@ dataset:
 train:
   autoscale_batch_size: false
   batch_size: 256 # dataset size is too small, full batch can fit in 40G, restrict to what fits in about 10G.
-
-# init_from_id: indy_causal_joint-66optips
-init_from_id: indy_causal_joint_pool-hnh6nmje
+init_from_id: indy_causal_v2-g3srw3uf
 init_tag: val_loss
-notes: "Trying with simpler and detached decoder"

@@ -115,6 +115,7 @@ class TaskConfig:
     outputs: List[Output] = field(default_factory=lambda: [])
 
     freeze_backbone: bool = False
+    freeze_embed: bool = False
     freeze_all: bool = False # stricter than above, only allows embedding
 
     linear_head: bool = False

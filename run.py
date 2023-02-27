@@ -110,6 +110,8 @@ def run_exp(cfg : RootConfig) -> None:
         model = load_from_checkpoint(init_ckpt, cfg=cfg.model, data_attrs=data_attrs)
     else:
         model = BrainBertInterface(cfg.model, data_attrs)
+    if cfg.model.task.freeze_embed:
+        model.freeze_embed()
     if cfg.model.task.freeze_backbone:
         model.freeze_backbone()
     if cfg.model.task.freeze_all:

@@ -453,7 +453,7 @@ class ShuffleInfill(RatePrediction):
 
             trial_context = []
             for key in ['session', 'subject', 'task']:
-                if getattr(batch, key, None) is not None:
+                if key in batch:
                     trial_context.append(batch[key])
             temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
             reps: torch.Tensor = self.decoder(
@@ -805,6 +805,7 @@ class BehaviorRegression(TaskPipeline):
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
         if self.cfg.decode_strategy == EmbedStrat.token:
+            import pdb;pdb.set_trace()
             if self.cfg.decode_separate:
                 temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
                 if getattr(self.cfg, 'decode_time_pool', ""): # B T H -> B T H
@@ -832,8 +833,8 @@ class BehaviorRegression(TaskPipeline):
                     temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
                 trial_context = []
                 for key in ['session', 'subject', 'task']:
-                    if getattr(batch, key, None) is not None:
-                        trial_context.append(batch[key])
+                    if key in batch:
+                        trial_context.append(batch[key].detach()) # Provide context, but hey, let's not make it easier for the model to steer the unsupervised-calibrated context
                 # import pdb;pdb.set_trace()
                 backbone_features: torch.Tensor = self.decoder(
                     decoder_input,

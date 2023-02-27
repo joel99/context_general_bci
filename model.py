@@ -390,6 +390,24 @@ class BrainBertInterface(pl.LightningModule):
                 logger.info(f"New task pipeline {k}.")
                 self.novel_params.extend(self._wrap_keys(f'task_pipelines.{k}', self.task_pipelines[k].named_parameters()))
 
+    def freeze_embed(self):
+        logger.info("Freezing embed.")
+        def freeze_if_exists(attr: str):
+            if hasattr(self, attr):
+                if isinstance(getattr(self, attr), nn.Parameter):
+                    getattr(self, attr).requires_grad = False
+                else:
+                    for p in getattr(self, attr).parameters():
+                        p.requires_grad = False
+        freeze_if_exists('session_embed')
+        freeze_if_exists('subject_embed')
+        freeze_if_exists('task_embed')
+        freeze_if_exists('array_embed')
+        freeze_if_exists('session_flag')
+        freeze_if_exists('subject_flag')
+        freeze_if_exists('task_flag')
+        freeze_if_exists('array_flag')
+
     def freeze_backbone(self):
         logger.info("Freezing backbone.")
         for p in self.backbone.parameters():
