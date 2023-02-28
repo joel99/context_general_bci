@@ -39,7 +39,8 @@ cfg.model.task.outputs = [Output.behavior, Output.behavior_pred, Output.pooled_f
 # PSID-RNN eval set sanity ballpark
 # TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
 # TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*']
-TARGET_ALIASES = ['odoherty_rtt-Indy.*']
+# TARGET_ALIASES = ['odoherty_rtt-Indy.*']
+TARGET_ALIASES = ['odoherty_rtt-Indy-20170131_02']
 
 # TARGET_ALIASES = ['odoherty_rtt-Loco-20170215_02']
 # TARGET_ALIASES = ['odoherty_rtt-Loco.*']
@@ -61,9 +62,10 @@ for td in TARGET_DATASETS:
         FLAT_TARGET_DATASETS.append(td)
 TARGET_DATASETS = [td.id for td in FLAT_TARGET_DATASETS]
 
-if cfg.dataset.datasets == ['mc_rtt']:
-    cfg.dataset.datasets = TARGET_ALIASES
-    cfg.dataset.eval_datasets = ['mc_rtt']
+cfg.dataset.datasets = TARGET_ALIASES
+cfg.dataset.eval_datasets = []
+# cfg.dataset.eval_datasets = ['mc_rtt']
+# if cfg.dataset.datasets == ['mc_rtt']:
 
 dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets and not TARGET_DATASETS:
@@ -153,22 +155,21 @@ import os
 os.makedirs('data/priors', exist_ok=True)
 all_feats = heldin_outputs[Output.pooled_features].flatten(0, 1)
 mean = all_feats.mean(0)
-cov = torch.matmul((all_feats - mean).T, (all_feats - mean)) / all_feats.shape[0]
-# Interestingly if we divide by N-1 matrix loses PD property...
+# cov = torch.matmul((all_feats - mean).T, (all_feats - mean)) / all_feats.shape[0]
+cov = torch.cov(all_feats.T)
+# Note: Not numerically stable enough to always produce a positive definite matrix
 payload = {
     'mean': all_feats.mean(0),
     'cov': cov,
-    # 'cov': torch.cov(all_feats.T), # unstable for some reason...
 }
 
 torch.save(payload, f'data/priors/{query}.pt')
-#%%
 # test making multivariate normal
 import torch.distributions as dist
 
 normal = dist.MultivariateNormal(
     loc=payload['mean'],
-    covariance_matrix=cov,
+    covariance_matrix=cov, # not that stable...
     # covariance_matrix=payload['cov'],
 )
 

@@ -773,11 +773,18 @@ class BehaviorRegression(TaskPipeline):
                 nn.ReLU(),
                 nn.Linear(cfg.hidden_size, cfg.hidden_size),
             )
-            self.alignment_dec = nn.Sequential(
-                nn.Linear(cfg.hidden_size, cfg.hidden_size),
-                nn.ReLU(),
-                nn.Linear(cfg.hidden_size, cfg.hidden_size),
-            )
+            # self.alignment_dec = nn.Sequential(
+            #     nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            #     nn.ReLU(),
+            #     nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            # ) # cycle-gan path, 2x the adversarial pain..
+
+            # It doesn't quite make sense to build out our own reconstruction in here when the infill modules exist and can be transferred
+            # self.reconstruct = nn.Sequential(
+            #     nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            #     nn.ReLU(),
+            #     nn.Linear(cfg.hidden_size, data_attrs.max_spatial_tokens * cfg.hidden_size)
+            # )
         if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
             self.blacklist_classifier = nn.Sequential(
                 nn.Linear(cfg.hidden_size, cfg.hidden_size),
@@ -836,9 +843,12 @@ class BehaviorRegression(TaskPipeline):
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
         if getattr(self.cfg, 'kl_lambda', 0.0):
+            # Note: We want to _align_ at pool/population level
+            # Since it doesn't make sense to try to align individual spatial tokens, many to many map?
+            # But for reconstruction purposes it is _much_ more convenient to learn the alignment pre-pool
+            # We are still _not_ trying a many to many map; it is a many to one.
             backbone_features = self.alignment_enc(backbone_features)
-            cycle_features = self.alignment_dec(backbone_features)
-            batch_out['cycle_features'] = cycle_features
+            batch_out['cycle_features'] = backbone_features # pipe back out for reconstruction
         if self.cfg.decode_strategy == EmbedStrat.token:
             if self.cfg.decode_separate:
                 temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
@@ -846,7 +856,6 @@ class BehaviorRegression(TaskPipeline):
                     backbone_features, temporal_padding_mask = self.temporal_pool(batch, backbone_features, temporal_padding_mask)
                     if Output.pooled_features in self.cfg.outputs:
                         batch_out[Output.pooled_features] = backbone_features.detach()
-
                 if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
                     raise NotImplementedError("didn't think about how to separate the alignment mapping for just blacklisted")
                     logits = self.blacklist_classifier(backbone_features)[..., 0]
@@ -862,8 +871,7 @@ class BehaviorRegression(TaskPipeline):
                         loc=self.alignment_dist.loc.to(emp_dist.device),
                         covariance_matrix=self.alignment_dist.covariance_matrix.to(emp_dist.device)
                     )
-                    kl = torch.distributions.kl.kl_divergence(alignment_dist, emp_normal)
-                    batch_out['alignment_kl_loss'] = kl * self.cfg.kl_lambda
+                    batch_out['alignment_kl'] = torch.distributions.kl.kl_divergence(alignment_dist, emp_normal)
                     # forward KL - optimize empirical to fit reference
                     # Hm, this fails if the empirical distribution is not full rank
                     # switch to MLE
@@ -955,7 +963,7 @@ class BehaviorRegression(TaskPipeline):
             loss = loss[length_mask].mean()
 
         if getattr(self.cfg, 'kl_lambda', 0.0):
-            loss = loss + self.cfg.kl_lambda * batch_out['alignment_kl_loss']
+            loss = loss + self.cfg.kl_lambda * batch_out['alignment_kl']
         batch_out['loss'] = loss
         if Metric.kinematic_r2 in self.cfg.metrics:
             # import pdb;pdb.set_trace()

@@ -15,7 +15,7 @@ model:
 
   task:
     behavior_lag: 120
-    task_weights: [1.0, 20.0] # decode goes to ~0.06-0.12 with 20x weight, vs infill at ~0.25-0.3.
+    task_weights: [1.0, 1.0] # decode goes to ~0.06-0.12 with 20x weight, vs infill at ~0.25-0.3.
     decode_time_pool: "mean"
 
     blacklist_session_supervision: ['mc_rtt'] # no actual kinematic labels
