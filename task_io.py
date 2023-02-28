@@ -824,18 +824,15 @@ class BehaviorRegression(TaskPipeline):
             device=backbone_features.device,
             dtype=backbone_features.dtype
         )
-        # batch[DataKey.time][temporal_padding_mask] = batch[DataKey.time].max() + 1
-        # change the above to an out of place operation
-        batch[DataKey.time] = torch.where(
+        time_with_pad_marked = torch.where(
             temporal_padding_mask,
             batch[DataKey.time].max() + 1,
             batch[DataKey.time]
         )
-
         pooled_features = pooled_features.scatter_reduce(
             src=backbone_features,
             dim=1,
-            index=repeat(batch[DataKey.time], 'b t -> b t h', h=backbone_features.shape[-1]),
+            index=repeat(time_with_pad_marked, 'b t -> b t h', h=backbone_features.shape[-1]),
             reduce=self.cfg.decode_time_pool,
             include_self=False
         )

@@ -36,6 +36,9 @@ query = "indy_causal_joint_0s-tne69igz"
 query = "robust_joint_unsup_tune_800-t1dtvj2p"
 # query = "mc_rtt_unsup_800-k0m5uklu"
 
+query = "rtt_stable-z4kfo8kx"
+query = "rtt_less_stable-j08z0tli"
+
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
@@ -71,10 +74,11 @@ if pipeline_model:
 # PSID-RNN eval set sanity ballpark
 # TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
 # TARGET_ALIASES = ['odoherty_rtt-Indy.*']
+TARGET_ALIASES = ['odoherty_rtt-Indy-20160426_01']
 
 # TARGET_ALIASES = ['odoherty_rtt-Loco-20170215_02']
 # TARGET_ALIASES = ['odoherty_rtt-Loco.*']
-TARGET_ALIASES = []
+# TARGET_ALIASES = []
 
 TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_ALIASES]
 
@@ -92,9 +96,9 @@ for td in TARGET_DATASETS:
         FLAT_TARGET_DATASETS.append(td)
 TARGET_DATASETS = [td.id for td in FLAT_TARGET_DATASETS]
 
-if cfg.dataset.datasets == ['mc_rtt']:
-    cfg.dataset.datasets = TARGET_ALIASES
-    cfg.dataset.eval_datasets = []
+# if cfg.dataset.datasets == ['mc_rtt']:
+cfg.dataset.datasets = TARGET_ALIASES
+cfg.dataset.eval_datasets = []
 
 dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets and not TARGET_DATASETS:

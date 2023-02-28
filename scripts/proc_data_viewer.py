@@ -49,6 +49,7 @@ dataset_name = 'odoherty_rtt-Indy-20160627_01'
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
 # dataset_name = 'odoherty_rtt-Indy-20160916_01'
 # dataset_name = 'odoherty_rtt-Indy-20160921_01'
+dataset_name = 'odoherty_rtt-Indy-20160426_01'
 
 # dataset_name = 'dyer_co_mihi_2'
 # dataset_name = 'dyer_co_chewie_2'
@@ -96,6 +97,9 @@ fig, ax = plt.subplots(2, 1, sharex=True)
 ax[0].plot(trial_vel)
 ax[1].plot(trial_pos)
 
+#%%
+# 262...
+print(dataset[trial]['channel_counts'].sum(1))
 #%%
 trial = 10
 
