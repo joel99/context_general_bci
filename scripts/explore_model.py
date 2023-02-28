@@ -151,7 +151,7 @@ ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
 ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
 ax.set_xlabel('Time (ms)')
 # plt.plot(test[0,:,0])
-ax.set_title(f'FR Inference: {query} {"(Masked included)" if data_attrs.serve_tokens_flat else ""}')
+ax.set_title(f'FR Inference: {query} {"(All encoded)" if data_attrs.serve_tokens_flat else ""}')
 
 #%%
 # Debugging (for mc_maze dataset)

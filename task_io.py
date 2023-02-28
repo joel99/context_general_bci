@@ -393,10 +393,13 @@ class ShuffleInfill(RatePrediction):
         spikes = batch[DataKey.spikes]
         target = spikes[..., 0]
         if eval_mode:
+            # manipulate keys so that we predict for all steps regardless of masking status (definitely hacky)
             batch.update({
                 SHUFFLE_KEY: torch.arange(spikes.size(1), device=spikes.device),
                 'spike_target': target,
-                'encoder_frac': spikes.size(1)
+                'encoder_frac': spikes.size(1),
+                f'{DataKey.time}_target': batch[DataKey.time],
+                f'{DataKey.position}_target': batch[DataKey.position],
             })
             return batch
         # spikes: B T S H or B T H (no array support)
@@ -439,8 +442,6 @@ class ShuffleInfill(RatePrediction):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         # B T
-        if eval_mode:
-            return {} # not implemented
         target = batch['spike_target']
         if target.ndim == 5:
             raise NotImplementedError("cannot even remember what this should look like")
@@ -455,7 +456,11 @@ class ShuffleInfill(RatePrediction):
             for key in ['session', 'subject', 'task']:
                 if key in batch and batch[key] is not None:
                     trial_context.append(batch[key])
-            temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
+            if eval_mode:
+                # we're doing a full query for qualitative eval
+                temporal_padding_mask = None
+            else:
+                temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
             reps: torch.Tensor = self.decoder(
                 decoder_input,
                 trial_context=trial_context,
@@ -471,11 +476,15 @@ class ShuffleInfill(RatePrediction):
         assert not Metric.bps in self.cfg.metrics, 'not supported'
         if Output.logrates in self.cfg.outputs:
             # out is B T C, we want B T' C, and then to unshuffle
-            all_tokens = torch.cat([
-                torch.full(batch[DataKey.spikes].size()[:-1], float('-inf'), device=rates.device),
-                rates
-            ], dim=1)
-            unshuffled = apply_shuffle(all_tokens, batch[SHUFFLE_KEY].argsort())
+            if eval_mode:
+                # we're doing a full query for qualitative eval
+                unshuffled = rates
+            else:
+                all_tokens = torch.cat([
+                    torch.full(batch[DataKey.spikes].size()[:-1], float('-inf'), device=rates.device),
+                    rates
+                ], dim=1)
+                unshuffled = apply_shuffle(all_tokens, batch[SHUFFLE_KEY].argsort())
             batch_out[Output.logrates] = unshuffled  # unflattening occurs outside
         if not compute_metrics:
             return batch_out

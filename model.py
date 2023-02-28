@@ -711,8 +711,7 @@ class BrainBertInterface(pl.LightningModule):
                 batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
         if mask:
             for k in self.cfg.task.tasks:
-                self.task_pipelines[k.value].update_batch(batch) # TODO need some clarity on eval_mode, mask
-                # self.task_pipelines[k.value].update_batch(batch, eval_mode=True)
+                self.task_pipelines[k.value].update_batch(batch, eval_mode=True)
         features = self(batch)
         if self.cfg.readout_strategy == EmbedStrat.mirror_project:
             unique_space_features = self.readin(features, batch, readin=False)
@@ -729,7 +728,8 @@ class BrainBertInterface(pl.LightningModule):
                 self.task_pipelines[task.value](
                     batch,
                     unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none  else features,
-                    compute_metrics=False
+                    compute_metrics=False,
+                    eval_mode=True
                 )
             )
             if 'cycle_features' in batch_out:
