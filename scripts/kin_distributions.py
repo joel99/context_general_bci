@@ -38,8 +38,8 @@ cfg.model.task.outputs = [Output.behavior, Output.behavior_pred, Output.pooled_f
 
 # PSID-RNN eval set sanity ballpark
 # TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
-TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*']
-# TARGET_ALIASES = ['odoherty_rtt-Indy.*']
+# TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*']
+TARGET_ALIASES = ['odoherty_rtt-Indy.*']
 
 # TARGET_ALIASES = ['odoherty_rtt-Loco-20170215_02']
 # TARGET_ALIASES = ['odoherty_rtt-Loco.*']
@@ -94,7 +94,7 @@ def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwa
 
 dataloader = get_dataloader(dataset)
 #%%
-heldin_metrics = stack_batch(trainer.test(model, dataloader))
+# heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 # A note on fullbatch R2 calculation - in my experience by bsz 128 the minibatch R2 ~ fullbatch R2 (within 0.01); for convenience we use minibatch R2
@@ -104,6 +104,7 @@ heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 #%%
 # B T H
 print(heldin_outputs.keys())
+
 #%%
 import torch
 import pandas as pd
@@ -127,7 +128,8 @@ feature_df = pd.DataFrame({
 
 # plot a facet grid histplot
 sns.set_theme(style="whitegrid")
-g = sns.FacetGrid(feature_df, col="dim", hue="session", col_wrap=4, height=2.5, aspect=1.5)
+g = sns.FacetGrid(feature_df, col="dim", col_wrap=4, height=2.5, aspect=1.5)
+# g = sns.FacetGrid(feature_df, col="dim", hue="session", col_wrap=4, height=2.5, aspect=1.5)
 g.map(sns.histplot, "feature", bins=50, element="step", stat='density', common_norm=False, fill=False)
 g.add_legend()
 
@@ -143,7 +145,17 @@ g.add_legend()
 #     multiple='dodge',
 # )
 
-
+#%%
+# Dump multivariate gaussian parameters from heldin_outputs[Output.pooled_features]
+print(len(heldin_outputs[Output.pooled_features]))
+#%%
+import os
+os.makedirs('data/priors', exist_ok=True)
+all_feats = heldin_outputs[Output.pooled_features].flatten(0, 1)
+torch.save({
+    'mean': all_feats.mean(0),
+    'cov': torch.cov(all_feats.T),
+}, f'data/priors/{query}.pt')
 
 #%%
 import pandas as pd

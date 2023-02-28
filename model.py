@@ -385,7 +385,7 @@ class BrainBertInterface(pl.LightningModule):
         for k in self.task_pipelines:
             if k in transfer_model.task_pipelines:
                 logger.info(f"Transferred task pipeline {k}.")
-                self.task_pipelines[k].load_state_dict(transfer_model.task_pipelines[k].state_dict())
+                self.task_pipelines[k].load_state_dict(transfer_model.task_pipelines[k].state_dict(), strict=False)
             else:
                 logger.info(f"New task pipeline {k}.")
                 self.novel_params.extend(self._wrap_keys(f'task_pipelines.{k}', self.task_pipelines[k].named_parameters()))

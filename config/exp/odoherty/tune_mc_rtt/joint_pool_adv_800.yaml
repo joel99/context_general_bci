@@ -19,7 +19,7 @@ model:
     decode_time_pool: "mean"
 
     blacklist_session_supervision: ['mc_rtt']
-    adversarial_classify_lambda: 0.1
+    adversarial_classify_lambda: 0.01
 
 
 dataset:
@@ -46,6 +46,5 @@ dataset:
 train:
   autoscale_batch_size: false
   batch_size: 32 # mind 24G nodes
-  # batch_size: 64 # mind 24G nodes
-init_from_id: indy_causal_v2-g3srw3uf
+init_from_id: indy_causal_joint_pool-ghu9iaw9
 init_tag: val_loss

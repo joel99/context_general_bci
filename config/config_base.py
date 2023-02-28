@@ -108,6 +108,10 @@ class TaskConfig:
     # List of session IDs to ignore supervised loss for. Using for mc_rtt pilot
     blacklist_session_supervision: List[str] = field(default_factory=lambda: [])
 
+    # Alignment can be done either with an adversarial loss (not really made working...) or KL on the multivariate KL.
+    adversarial_classify_lambda: float = 0.0
+    kl_lambda: float = 0.0
+
     # infill
     mask_ratio: float = 0.25 # we don't have any schedule right now - the smaller this is, the higher the ceiling (probably), the slower the training
     mask_token_ratio: float = 0.8

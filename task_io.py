@@ -766,6 +766,23 @@ class BehaviorRegression(TaskPipeline):
                 if ctx.id in data_attrs.context.session:
                     self.session_blacklist.append(data_attrs.context.session.index(ctx.id))
 
+        if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
+            assert self.cfg.decode_time_pool == 'mean', 'adversarial path assumes mean pool'
+            self.alignment = nn.Sequential(
+                nn.Linear(cfg.hidden_size, cfg.hidden_size),
+                nn.ReLU(),
+                nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            )
+            self.blacklist_classifier = nn.Sequential(
+                nn.Linear(cfg.hidden_size, cfg.hidden_size),
+                nn.ReLU(),
+                nn.Linear(cfg.hidden_size, 1)
+            )
+            self.blacklist_loss = nn.BCEWithLogitsLoss(
+                reduction='none',
+                pos_weight=torch.tensor(len(self.session_blacklist) / (len(data_attrs.context.session) - len(self.session_blacklist)))
+            )
+
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token or self.cfg.decode_separate:
             return batch
@@ -878,11 +895,19 @@ class BehaviorRegression(TaskPipeline):
             session_mask = batch[MetaKey.session] != self.session_blacklist[0]
             for sess in self.session_blacklist[1:]:
                 session_mask = session_mask & (batch[MetaKey.session] != sess)
+            if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
+                logits = self.blacklist_classifier(backbone_features)[..., 0]
+                blacklist_loss = self.blacklist_loss(logits, repeat((~session_mask).float(), 'b -> b t', t=backbone_features.shape[1]))
+                blacklist_loss = blacklist_loss[length_mask].mean()
+                batch_out['adversarial_loss'] = blacklist_loss
             length_mask = length_mask & session_mask[:, None]
             if not session_mask.any(): # no valid sessions
                 loss = 0 # don't fail
             else:
                 loss = loss[length_mask].mean()
+            if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
+                # print(f'loss: {loss:.3f}, blacklist loss: {blacklist_loss:.3f}, total = {(loss - (blacklist_loss) * self.cfg.adversarial_classify_lambda):.3f}')
+                loss += (-1 * blacklist_loss) * self.cfg.adversarial_classify_lambda # adversarial
         else:
             loss = loss[length_mask].mean()
 
