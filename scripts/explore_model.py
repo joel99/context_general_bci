@@ -20,6 +20,7 @@ from analyze_utils import prep_plt
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
 query = "indy_causal-stmn13ew"
 query = "indy_causal-4i8yc4bc"
+query = "loco_causal-ctkuwqpl"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -85,19 +86,19 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
     )
 
 # dataloader = get_dataloader(dataset)
-dataloader = get_dataloader(dataset, batch_size=4)
+dataloader = get_dataloader(dataset, batch_size=16)
+# dataloader = get_dataloader(dataset, batch_size=4)
 
-#%%
 print(query)
 # heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
-
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]
 rates = heldin_outputs[Output.rates] # b t c
 
-spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
+if not data_attrs.serve_tokens_flat:
+    spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
 ax = prep_plt()
 
 num = 20
@@ -150,7 +151,7 @@ ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
 ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
 ax.set_xlabel('Time (ms)')
 # plt.plot(test[0,:,0])
-ax.set_title(f'FR Inference: {query}')
+ax.set_title(f'FR Inference: {query} {"(Masked included)" if data_attrs.serve_tokens_flat else ""}')
 
 #%%
 # Debugging (for mc_maze dataset)

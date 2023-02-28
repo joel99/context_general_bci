@@ -701,26 +701,12 @@ class BrainBertInterface(pl.LightningModule):
         batch_out[MetaKey.session] = batch[MetaKey.session]
         batch_out[MetaKey.subject] = batch[MetaKey.subject]
         batch_out[MetaKey.task] = batch[MetaKey.task]
-
         if Output.spikes in self.cfg.task.outputs:
             assert self.data_attrs.serve_tokens_flat or not self.data_attrs.serve_tokens, "Not implemented, needs assembling"
             if self.data_attrs.serve_tokens_flat:
-                b, _, token_chan, _ = batch[DataKey.spikes].size()
-                time_min, time_max = batch[DataKey.time].min(), batch[DataKey.time].max()
-                position_min, position_max = batch[DataKey.position].min(), batch[DataKey.position].max()
-                assembled_spikes = torch.full(
-                    (b, time_max - time_min + 1, position_max - position_min + 1, token_chan, 1),
-                    0,
-                    device=batch[DataKey.spikes].device,
-                    dtype=batch[DataKey.spikes].dtype
-                )
-                assembled_spikes[ # no scatter needed, merely need to select the specified indices
-                    torch.arange(b).unsqueeze(-1),
-                    batch[DataKey.time] - time_min,
-                    batch[DataKey.position] - position_min
-                ] = batch[DataKey.spikes]
-                assembled_spikes = assembled_spikes.flatten(-3, -1) # flatten space, token_channel, spike_hidden
-                batch_out[Output.spikes] = assembled_spikes
+                batch_out[Output.spikes] = unflatten(batch[DataKey.spikes], batch[DataKey.time], batch[DataKey.position])
+                batch_out['time'] = batch[DataKey.time].clone() # pre mask
+                batch_out['position'] = batch[DataKey.position].clone() # pre mask
             else:
                 batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
         if mask:
@@ -749,15 +735,25 @@ class BrainBertInterface(pl.LightningModule):
             if 'cycle_features' in batch_out:
                 features = batch_out['cycle_features']
                 del batch_out['cycle_features']
+        if self.data_attrs.serve_tokens_flat and Output.logrates in batch_out:
+            batch_out[Output.logrates] = unflatten(batch_out[Output.logrates], batch_out['time'], batch_out['position'])
         if transform_logrates:
             if Output.logrates in batch_out:
-                batch_out[Output.rates] = self.unpad_and_transform_rates(
-                    batch_out[Output.logrates], batch[LENGTH_KEY], batch[CHANNEL_KEY] if CHANNEL_KEY in batch else None
-                )
+                if self.data_attrs.serve_tokens_flat:
+                    logger.warning('Assuming square data for rate transform')
+                    batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates])
+                else:
+                    batch_out[Output.rates] = self.unpad_and_transform_rates(
+                        batch_out[Output.logrates], batch[LENGTH_KEY], batch[CHANNEL_KEY] if CHANNEL_KEY in batch else None
+                    )
             if Output.heldout_logrates in batch_out:
-                batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(
-                    batch_out[Output.heldout_logrates], batch[LENGTH_KEY]
-                )
+                if self.data_attrs.serve_tokens_flat:
+                    logger.warning('Assuming square data for rate transform')
+                    batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates])
+                else:
+                    batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(
+                        batch_out[Output.heldout_logrates], batch[LENGTH_KEY]
+                    )
         return batch_out
 
     def predict_step(
@@ -1084,6 +1080,8 @@ def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data
     new_cls.transfer_io(old_model)
     return new_cls
 
+# Utilities
+
 def recursive_diff_log(cfg1: DictConfig | ListConfig, cfg2: DictConfig | ListConfig, prefix=""):
     # cfg intended as new, semantically
     if not isinstance(cfg1, DictConfig): # Don't step into ListConfigs
@@ -1099,3 +1097,36 @@ def recursive_diff_log(cfg1: DictConfig | ListConfig, cfg2: DictConfig | ListCon
         for attr in cfg2:
             if attr not in cfg1:
                 logger.info(f"cfg2 has {attr} but cfg1 does not")
+
+
+def unflatten(
+    flat_data: torch.Tensor,
+    time: torch.Tensor,
+    position: torch.Tensor,
+    default_value=-100,
+):
+    r"""
+        Unflatten data into (time, position) space
+        Args:
+            flat_data: (batch, flat ~= time*position, token_chan, ...)
+            time: (batch, flat_time (len time*position))
+            position: (batch, flat_position (len time * position))
+        Returns:
+            assembled: (batch, time, channel)
+    """
+    b, _, token_chan, *rest = flat_data.size()
+    time_min, time_max = time.min(), time.max()
+    position_min, position_max = position.min(), position.max()
+    assembled = torch.full(
+        (b, time_max - time_min + 1, position_max - position_min + 1, token_chan, *rest),
+        default_value,
+        device=flat_data.device,
+        dtype=flat_data.dtype,
+    )
+    assembled[ # no scatter needed, merely need to select the specified indices
+        torch.arange(b, device=flat_data.device)[:, None],
+        time - time_min,
+        position - position_min,
+    ] = flat_data
+    assembled = assembled.flatten(start_dim=2)
+    return assembled

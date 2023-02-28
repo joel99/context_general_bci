@@ -475,12 +475,8 @@ class ShuffleInfill(RatePrediction):
                 torch.full(batch[DataKey.spikes].size()[:-1], float('-inf'), device=rates.device),
                 rates
             ], dim=1)
-            import pdb;pdb.set_trace()
             unshuffled = apply_shuffle(all_tokens, batch[SHUFFLE_KEY].argsort())
-            with_spatial_structure = rearrange(unshuffled, 'b t c -> b t s c')  # TODO need to deal with this, needs padding guarantees etc
-            batch_out[Output.logrates] = with_spatial_structure
-        assert not Output.logrates in self.cfg.outputs, 'not implemented'
-
+            batch_out[Output.logrates] = unshuffled  # unflattening occurs outside
         if not compute_metrics:
             return batch_out
         loss: torch.Tensor = self.loss(rates, target) # b t' c
