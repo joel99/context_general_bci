@@ -766,13 +766,19 @@ class BehaviorRegression(TaskPipeline):
                 if ctx.id in data_attrs.context.session:
                     self.session_blacklist.append(data_attrs.context.session.index(ctx.id))
 
-        if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
-            assert self.cfg.decode_time_pool == 'mean', 'adversarial path assumes mean pool'
-            self.alignment = nn.Sequential(
+        if getattr(self.cfg, 'adversarial_classify_lambda', 0.0) or getattr(self.cfg, 'kl_lambda', 0.0):
+            assert self.cfg.decode_time_pool == 'mean', 'alignment path assumes mean pool'
+            self.alignment_enc = nn.Sequential(
                 nn.Linear(cfg.hidden_size, cfg.hidden_size),
                 nn.ReLU(),
                 nn.Linear(cfg.hidden_size, cfg.hidden_size),
             )
+            self.alignment_dec = nn.Sequential(
+                nn.Linear(cfg.hidden_size, cfg.hidden_size),
+                nn.ReLU(),
+                nn.Linear(cfg.hidden_size, cfg.hidden_size),
+            )
+        if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
             self.blacklist_classifier = nn.Sequential(
                 nn.Linear(cfg.hidden_size, cfg.hidden_size),
                 nn.ReLU(),
@@ -781,6 +787,13 @@ class BehaviorRegression(TaskPipeline):
             self.blacklist_loss = nn.BCEWithLogitsLoss(
                 reduction='none',
                 pos_weight=torch.tensor(len(self.session_blacklist) / (len(data_attrs.context.session) - len(self.session_blacklist)))
+            )
+        elif getattr(self.cfg, 'kl_lambda', 0.0):
+            normal_params = torch.load(self.cfg.alignment_distribution_path)
+            self.alignment_dist = torch.distributions.MultivariateNormal(
+                # Generate in `kin_distributions.py`
+                loc=normal_params['mean'],
+                covariance_matrix=torch.diag(torch.diag(normal_params['cov'])) # covariance is unstable
             )
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
@@ -796,7 +809,8 @@ class BehaviorRegression(TaskPipeline):
             backbone_features.shape[0],
             batch[DataKey.time].max() + 1 + 1, # 1 extra for padding
             backbone_features.shape[-1],
-            device=backbone_features.device
+            device=backbone_features.device,
+            dtype=backbone_features.dtype
         )
         # batch[DataKey.time][temporal_padding_mask] = batch[DataKey.time].max() + 1
         # change the above to an out of place operation
@@ -821,6 +835,10 @@ class BehaviorRegression(TaskPipeline):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
+        if getattr(self.cfg, 'kl_lambda', 0.0):
+            backbone_features = self.alignment_enc(backbone_features)
+            cycle_features = self.alignment_dec(backbone_features)
+            batch_out['cycle_features'] = cycle_features
         if self.cfg.decode_strategy == EmbedStrat.token:
             if self.cfg.decode_separate:
                 temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
@@ -828,6 +846,31 @@ class BehaviorRegression(TaskPipeline):
                     backbone_features, temporal_padding_mask = self.temporal_pool(batch, backbone_features, temporal_padding_mask)
                     if Output.pooled_features in self.cfg.outputs:
                         batch_out[Output.pooled_features] = backbone_features.detach()
+
+                if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
+                    raise NotImplementedError("didn't think about how to separate the alignment mapping for just blacklisted")
+                    logits = self.blacklist_classifier(backbone_features)[..., 0]
+                elif getattr(self.cfg, 'kl_lambda', 0.0):
+                    emp_dist = backbone_features[~temporal_padding_mask]
+                    emp_mu = emp_dist.mean(0)
+                    emp_cov = torch.matmul((emp_dist - emp_mu).T, (emp_dist - emp_mu)) / (emp_dist.shape[0])
+                    emp_cov = torch.diag(torch.diag(
+                        torch.cov(backbone_features[~temporal_padding_mask].T)
+                    )) # covariance is unstable
+                    emp_normal = torch.distributions.MultivariateNormal(emp_mu.float(), emp_cov.float())
+                    alignment_dist = torch.distributions.MultivariateNormal(
+                        loc=self.alignment_dist.loc.to(emp_dist.device),
+                        covariance_matrix=self.alignment_dist.covariance_matrix.to(emp_dist.device)
+                    )
+                    kl = torch.distributions.kl.kl_divergence(alignment_dist, emp_normal)
+                    batch_out['alignment_kl_loss'] = kl * self.cfg.kl_lambda
+                    # forward KL - optimize empirical to fit reference
+                    # Hm, this fails if the empirical distribution is not full rank
+                    # switch to MLE
+                    # ll = alignment_dist.to(emp_dist.device).log_prob(emp_dist)
+                    # ll = self.alignment_dist.to(emp_dist.device).log_prob(emp_dist)
+                    # batch_out['alignment_kl_loss'] = -ll.mean() * self.cfg.kl_lambda
+
                 decode_tokens, decode_time, decode_space = self.injector.inject(batch)
                 if getattr(self.cfg, 'decode_time_pool', ""):
                     src_time = decode_time
@@ -911,6 +954,8 @@ class BehaviorRegression(TaskPipeline):
         else:
             loss = loss[length_mask].mean()
 
+        if getattr(self.cfg, 'kl_lambda', 0.0):
+            loss = loss + self.cfg.kl_lambda * batch_out['alignment_kl_loss']
         batch_out['loss'] = loss
         if Metric.kinematic_r2 in self.cfg.metrics:
             # import pdb;pdb.set_trace()

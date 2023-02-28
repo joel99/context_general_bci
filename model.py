@@ -645,13 +645,22 @@ class BrainBertInterface(pl.LightningModule):
 
         # Create outputs for configured task
         running_loss = 0
-        for i, task in enumerate(self.cfg.task.tasks):
+        task_order = self.cfg.task.tasks
+        if self.cfg.task.kl_lambda > 0 and ModelTask.kinematic_decoding in self.cfg.task.tasks:
+            task_order = [ModelTask.kinematic_decoding]
+            for t in self.cfg.task.tasks:
+                if t != ModelTask.kinematic_decoding:
+                    task_order.append(t)
+        for i, task in enumerate(task_order):
             pipeline_features = unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features
             update = self.task_pipelines[task.value](
                 batch,
                 pipeline_features,
                 eval_mode=eval_mode
             )
+            if 'cycle_features' in batch_out:
+                features = batch_out['cycle_features']
+                del batch_out['cycle_features']
             if 'loss' in update and self.cfg.task.task_weights[i] > 0:
                 batch_out[f'{task.value}_loss'] = update['loss']
                 running_loss = running_loss + self.cfg.task.task_weights[i] * update['loss']
@@ -723,7 +732,13 @@ class BrainBertInterface(pl.LightningModule):
             unique_space_features = self.readin(features, batch, readin=False)
         elif self.cfg.readout_strategy in [EmbedStrat.unique_project, EmbedStrat.contextual_mlp]:
             unique_space_features = self.readout(features, batch)
-        for task in self.cfg.task.tasks:
+        task_order = self.cfg.task.tasks
+        if self.cfg.task.kl_lambda > 0 and ModelTask.kinematic_decoding in self.cfg.task.tasks:
+            task_order = [ModelTask.kinematic_decoding]
+            for t in self.cfg.task.tasks:
+                if t != ModelTask.kinematic_decoding:
+                    task_order.append(t)
+        for task in task_order:
             batch_out.update(
                 self.task_pipelines[task.value](
                     batch,
@@ -731,6 +746,9 @@ class BrainBertInterface(pl.LightningModule):
                     compute_metrics=False
                 )
             )
+            if 'cycle_features' in batch_out:
+                features = batch_out['cycle_features']
+                del batch_out['cycle_features']
         if transform_logrates:
             if Output.logrates in batch_out:
                 batch_out[Output.rates] = self.unpad_and_transform_rates(

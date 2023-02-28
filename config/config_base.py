@@ -111,6 +111,7 @@ class TaskConfig:
     # Alignment can be done either with an adversarial loss (not really made working...) or KL on the multivariate KL.
     adversarial_classify_lambda: float = 0.0
     kl_lambda: float = 0.0
+    alignment_distribution_path: str = ""
 
     # infill
     mask_ratio: float = 0.25 # we don't have any schedule right now - the smaller this is, the higher the ceiling (probably), the slower the training

@@ -18,8 +18,10 @@ model:
     task_weights: [1.0, 20.0] # decode goes to ~0.06-0.12 with 20x weight, vs infill at ~0.25-0.3.
     decode_time_pool: "mean"
 
-    blacklist_session_supervision: ['mc_rtt']
-    adversarial_classify_lambda: 0.1
+    blacklist_session_supervision: ['mc_rtt'] # no actual kinematic labels
+    kl_lambda: 1e-4
+    alignment_distribution_path: data/priors/indy_causal_joint_pool-ghu9iaw9.pt
+    # adversarial_classify_lambda: 0.1
 
 
 dataset:
@@ -36,7 +38,7 @@ dataset:
 
   datasets:
   # - odoherty_rtt-Indy-20160624_03
-  - odoherty_rtt-Indy.*
+  # - odoherty_rtt-Indy.*
   - mc_rtt
   eval_datasets:
   # - odoherty_rtt-Indy-20161005_06

@@ -152,10 +152,32 @@ print(len(heldin_outputs[Output.pooled_features]))
 import os
 os.makedirs('data/priors', exist_ok=True)
 all_feats = heldin_outputs[Output.pooled_features].flatten(0, 1)
-torch.save({
+mean = all_feats.mean(0)
+cov = torch.matmul((all_feats - mean).T, (all_feats - mean)) / all_feats.shape[0]
+# Interestingly if we divide by N-1 matrix loses PD property...
+payload = {
     'mean': all_feats.mean(0),
-    'cov': torch.cov(all_feats.T),
-}, f'data/priors/{query}.pt')
+    'cov': cov,
+    # 'cov': torch.cov(all_feats.T), # unstable for some reason...
+}
+
+torch.save(payload, f'data/priors/{query}.pt')
+#%%
+# test making multivariate normal
+import torch.distributions as dist
+
+normal = dist.MultivariateNormal(
+    loc=payload['mean'],
+    covariance_matrix=cov,
+    # covariance_matrix=payload['cov'],
+)
+
+#%%
+# print(payload['cov'])
+print(torch.allclose(payload['cov'], cov, atol=1e-4))
+# print(cov.shape)
+# print(payload['cov'] == cov)
+
 
 #%%
 import pandas as pd
