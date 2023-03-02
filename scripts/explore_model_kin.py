@@ -38,6 +38,8 @@ query = "robust_joint_unsup_tune_800-t1dtvj2p"
 
 query = "rtt_stable-z4kfo8kx"
 query = "rtt_less_stable-j08z0tli"
+query = "rtt_less_stable_channel_uniform-3nwalkv6"
+query = "rtt_less_stable_channel_more_uniform-tyunypzj"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -75,6 +77,7 @@ if pipeline_model:
 # TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
 # TARGET_ALIASES = ['odoherty_rtt-Indy.*']
 TARGET_ALIASES = ['odoherty_rtt-Indy-20160426_01']
+# TARGET_ALIASES = ['odoherty_rtt-Indy-20160420_01']
 
 # TARGET_ALIASES = ['odoherty_rtt-Loco-20170215_02']
 # TARGET_ALIASES = ['odoherty_rtt-Loco.*']
@@ -109,8 +112,6 @@ else:
     train, val = dataset.create_tv_datasets()
     dataset = val
 
-if query == "indy_causal_v2-3w1f6vzx": # peculiar split logic on crc cluster not yet patched, we imported the split used
-    dataset = torch.load('val_dataset.pth') # transferred from crc cluster
 if TARGET_DATASETS:
     dataset.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
 
@@ -128,7 +129,8 @@ if pipeline_model:
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
-def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=1, **kwargs) -> DataLoader:
+# def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwargs) -> DataLoader:
 # def get_dataloader(dataset: SpikingDataset, batch_size=200, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
     return DataLoader(dataset,

@@ -11,7 +11,7 @@ defaults:
 model:
   session_embed_strategy: EmbedStrat.none
   subject_embed_strategy: EmbedStrat.none
-  neurons_per_token: 16
+  neurons_per_token: 2
   causal: true
 
   task:
@@ -23,8 +23,8 @@ dataset:
   max_length_ms: 2000 # fit
   max_arrays: 1
 
-  neurons_per_token: 16
-  max_channels: 192
+  neurons_per_token: 2
+  max_channels: 96 # we missed one that had 203
 
   data_keys:
   - DataKey.spikes
@@ -42,6 +42,6 @@ dataset:
   # odoherty_rtt:
     # arrays: ["Indy-M1_all", "Loco-M1_all"]
     # include_sorted: True
-# train:
-#   autoscale_batch_size: false
-#   batch_size: 32
+train:
+  autoscale_batch_size: false
+  batch_size: 6

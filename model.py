@@ -562,6 +562,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
+        # import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         # interfere
         # trial_context = [t + torch.randn_like(t) for t in trial_context] # this is huge perturb but actually minror effect...?

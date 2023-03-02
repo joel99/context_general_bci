@@ -21,6 +21,7 @@ from analyze_utils import prep_plt
 query = "indy_causal-stmn13ew"
 query = "indy_causal-4i8yc4bc"
 query = "loco_causal-ctkuwqpl"
+query = "indy_single-bw25v0ci"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]

@@ -407,7 +407,7 @@ class DatasetConfig:
     fbc: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
     delay_reach: ExperimentalConfig = ExperimentalConfig()
 
-
+    permute_channels: bool = False # test flag, permute channels randomly per session
 
 @dataclass
 class TrainConfig:

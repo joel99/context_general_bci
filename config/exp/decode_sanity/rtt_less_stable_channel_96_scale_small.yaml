@@ -24,18 +24,20 @@ dataset:
   max_arrays: 1
 
   neurons_per_token: 16
-  max_channels: 192
+  max_channels: 96 # we missed one that had 203
 
   data_keys:
   - DataKey.spikes
   - DataKey.bhvr_vel
 
   datasets:
-  - odoherty_rtt-Indy-20160407_02
+  # - odoherty_rtt-Indy-20160407_02
   - odoherty_rtt-Indy-20160411_01
-  - odoherty_rtt-Indy-20160411_02
+  # - odoherty_rtt-Indy-20160411_02
   - odoherty_rtt-Indy-20160418_01
-  - odoherty_rtt-Indy-20160419_01
+  # - odoherty_rtt-Indy-20160419_01
+  - odoherty_rtt-Indy-20160420_01
+  eval_datasets:
   - odoherty_rtt-Indy-20160420_01
   # Test 0426 for zero shot
   # Swap to full unsorted arrays

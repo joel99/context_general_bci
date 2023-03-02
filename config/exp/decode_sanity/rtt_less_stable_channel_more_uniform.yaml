@@ -24,7 +24,7 @@ dataset:
   max_arrays: 1
 
   neurons_per_token: 16
-  max_channels: 192
+  max_channels: 192 # we missed one that had 203
 
   data_keys:
   - DataKey.spikes

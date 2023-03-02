@@ -315,6 +315,8 @@ class SpikingDataset(Dataset):
                         alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
                         array_group = torch.cat([payload[k][a] for a in alias_arrays], dim=-2) # T C' H
                         array_group = array_group[:,:self.cfg.max_channels] # crop
+                        if getattr(self.cfg, 'permute_channels', False):
+                            array_group = array_group[:,self.channel_perms[trial[MetaKey.session]]]
                         if not self.cfg.serve_tokenized_flat:
                             channel_counts.append(array_group.shape[-2])
                         # * Note to get array tokenization to respect array boundaries, use non-alias full array references
@@ -476,6 +478,10 @@ class SpikingDataset(Dataset):
                 assert k in self.meta_df.columns, f"Key {k} not in metadata"
                 context[k.name] = sorted(self.meta_df[k].unique()) # convert key from enum so we can build contextattrs
         self.context_index: Dict[str, List] = context
+        if getattr(self.cfg, 'permute_channels'):
+            self.channel_perms = {
+                s: torch.randperm(self.cfg.max_channels) for s in self.meta_df[MetaKey.session].unique()
+            }
 
     def get_data_attrs(self):
         r"""
