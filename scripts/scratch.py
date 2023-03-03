@@ -8,6 +8,21 @@ from einops import rearrange
 from config import DatasetConfig, DataKey, MetaKey
 from analyze_utils import prep_plt
 
+#%%
+
+# Temperature stuff
+palette = sns.color_palette('colorblind', 2)
+from torch.distributions import poisson
+
+lambdas = torch.arange(0, 30, 2)
+def change_temp(probs, temperature):
+    return (probs / temperature).exp()  / (probs / temperature).exp().sum()
+for l in lambdas:
+    dist = poisson.Poisson(l)
+    plt.plot(dist.log_prob(torch.arange(0, 20)).exp(), color=palette[0])
+    plt.plot(change_temp(dist.log_prob(torch.arange(0, 20)).exp(), 0.01), color=palette[1])
+
+#%%
 batch = torch.load('valid.pth')
 # batch = torch.load('debug_batch.pth')
 

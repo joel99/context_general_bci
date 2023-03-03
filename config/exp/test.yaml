@@ -1,35 +1,51 @@
 # @package _global_
-# Best way to test scaling would probably be
-# take subsets of train, specifically 1, 1/2, 1/4, 1/8, 1/16, 1/32
-# each of these trials are _large_, run on A100s (which fits ~bsz 16, Indy has ~1.8K x 16 trials)
+# Controlled evaluation
 defaults:
-  - /model: flat_enc_dec
+  - /model:
+    - flat_enc_dec
+    # - accel_tune
+  # - /model/task:
+    # - bhvr_decode_flat
+  # - /train: finetune
   - /dataset: flat
 model:
+  # Well we already know from early scaling experiments that embed strategies promotes faster convergence
+  # And doesn't hurt peak performance; and it must be explicitly through transfer mxsms, so I don't see why we shouldn't allow it.
+
+  session_embed_token_count: 8
   subject_embed_strategy: EmbedStrat.token
-  array_embed_strategy: EmbedStrat.none
+  neurons_per_token: 16
+  causal: true
+
   task:
-    mask_ratio: 0.5 # 0.25 is quite costly, but we want to see long tail of improvements, so go over 0.8
-  neurons_per_token: 4
+    behavior_lag: 120
+    decode_time_pool: "mean"
+
+    spike_loss: 'poisson'
 dataset:
-  max_tokens: 4096 # fit
+  max_tokens: 8192
   max_length_ms: 2000 # fit
   max_arrays: 1
-  scale_ratio: 1.0
 
-  neurons_per_token: 4
+  scale_limit_per_session: 100 # no limit
 
-  max_channels: 280
-  bin_size_ms: 20
+  neurons_per_token: 16
+  max_channels: 96
+
+  data_keys:
+  - DataKey.spikes
+  # - DataKey.bhvr_vel
   datasets:
-  - odoherty_rtt-Indy.*
+  # This data was select for being the "biggest" and having a substantial number of nearby sessions (16 in +- 2 months)
+  # This let's us evaluate scaling in-session and out-session 1:1
+  # We would like to see how much out-session degrades, where the baseline is still single session performance.
+  - odoherty_rtt-Indy-20160627_01
   eval_datasets:
-  - odoherty_rtt-Indy-20161005_06
-
+  - odoherty_rtt-Indy-20160627_01
   odoherty_rtt:
     arrays: ["Indy-M1", "Loco-M1"]
     include_sorted: False
 train:
-  patience: 500
-  autoscale_batch_size: False
-  batch_size:  32
+  autoscale_batch_size: false
+  batch_size: 16 # train size is 80
+  patience: 200

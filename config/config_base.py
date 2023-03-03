@@ -119,6 +119,8 @@ class TaskConfig:
     mask_random_ratio: float = 0.2 # It's really important to keep this quite high (in fact, anything lower than full seems to break)
     mask_random_shuffle: bool = False # doesn't actually seem more helpful
 
+    spike_loss: str = 'poisson' # poisson or cross_entropy
+
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps])
     outputs: List[Output] = field(default_factory=lambda: [])
 

@@ -29,6 +29,35 @@ def apply_shuffle(item: torch.Tensor, shuffle: torch.Tensor):
     # shuffle: T
     return item.transpose(1, 0)[shuffle].transpose(1, 0)
 
+class PoissonCrossEntropyLoss(nn.CrossEntropyLoss):
+    r"""
+        Poisson-softened multi-class cross entropy loss
+        JY suspects multi-context spike counts may be multimodal and only classification can support this?
+    """
+    def __init__(self, max_count=20, **kwargs):
+        super().__init__(**kwargs)
+        # spikes can range from 0 to max count.
+        poisson_map = torch.zeros(max_count+1, max_count+1)
+        for i in range(max_count):
+            probs = torch.distributions.poisson.Poisson(i).log_prob(torch.arange(max_count+1)).exp()
+            poisson_map[i] = probs / probs.sum()
+        # register buffer
+        self.register_buffer("poisson_map", poisson_map)
+
+    def forward(self, logits, target, *args, **kwargs):
+        # logits B C *
+        # target B *
+        class_second = [0, -1, *range(1, target.ndim)]
+        og_size = target.size()
+        soft_target = self.poisson_map[target.long().flatten()].view(*og_size, -1)
+        soft_target = soft_target.permute(class_second)
+        return super().forward(
+            logits,
+            soft_target,
+            *args,
+            **kwargs,
+        )
+
 class TaskPipeline(nn.Module):
     r"""
         Task IO - manages decoder layers, loss functions
@@ -166,9 +195,9 @@ class RatePrediction(TaskPipeline):
             self.out = decoder
         else:
             readout_size = cfg.neurons_per_token if cfg.transform_space else channel_count
-            if getattr(self.cfg, 'unique_no_head', False):
+            if self.cfg.unique_no_head:
                 decoder_layers = []
-            elif getattr(self.cfg, 'linear_head', False):
+            elif self.cfg.linear_head:
                 decoder_layers = [nn.Linear(backbone_out_size, readout_size)]
             else:
                 decoder_layers = [
@@ -184,7 +213,11 @@ class RatePrediction(TaskPipeline):
                 # after projecting, concatenate along the group dimension to get back into channel space
                 decoder_layers.append(Rearrange('b t a s_a c -> b t a (s_a c)'))
             self.out = nn.Sequential(*decoder_layers)
-        self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
+
+        if getattr(self.cfg, 'spike_loss', 'poisson') == 'poisson':
+            self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
+        elif self.cfg.spike_loss == 'cross_entropy':
+            self.loss = PoissonCrossEntropyLoss(reduction='none')
 
     @torch.no_grad()
     def bps(
@@ -247,14 +280,24 @@ class RatePrediction(TaskPipeline):
         return bps
 
     @staticmethod
-    def create_linear_poisson_head(
+    def create_linear_head(
         cfg: ModelConfig, in_size: int, out_size: int
     ):
+        assert cfg.transform_space, 'Classification heads only supported for transformed space'
+        if getattr(cfg.task, 'spike_loss', 'poisson') == 'poisson':
+            classes = 1
+        elif cfg.task.spike_loss == 'cross_entropy':
+            classes = cfg.max_neuron_count
         out_layers = [
-            nn.Linear(in_size, out_size)
+            nn.Linear(in_size, out_size * classes)
         ]
-        if not cfg.lograte:
-            out_layers.append(nn.ReLU())
+        if getattr(cfg.task, 'spike_loss', 'poisson') == 'poisson':
+            if not cfg.lograte:
+                out_layers.append(nn.ReLU())
+        else:
+            out_layers.append(
+                Rearrange('b t (s c) -> b c t s', c=classes)
+            )
         return nn.Sequential(*out_layers)
 
 class SelfSupervisedInfill(RatePrediction):
@@ -378,8 +421,7 @@ class ShuffleInfill(RatePrediction):
             n_layers=cfg.decoder_layers,
         )
         self.causal = cfg.causal
-        self.out = RatePrediction.create_linear_poisson_head(cfg, cfg.hidden_size, cfg.neurons_per_token)
-        self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
+        self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.neurons_per_token)
         self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
@@ -665,7 +707,7 @@ class HeldoutPrediction(RatePrediction):
                 self.out = nn.Sequential(*decoder_layers) # override
         elif self.cfg.decode_strategy == EmbedStrat.token:
             self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes)
-            self.out = RatePrediction.create_linear_poisson_head(cfg, cfg.hidden_size, channel_count)
+            self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, channel_count)
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token:
