@@ -578,14 +578,39 @@ class SpikingDataset(Dataset):
         else:
             logger.warning("No split column found, assuming all data is train.")
 
-    def subset_scale(self, scale, keep_index=False):
+    def subset_scale(self, limit_per_session=0, limit_per_eval_session=0, ratio=1.0, keep_index=False):
         # Random scale-down of data
-        if scale < 1:
+        if limit_per_session > 0 or limit_per_eval_session > 0:
+            keys = None
+            eval_keys = []
+            train_keys = []
+            eval_datasets = [ctx.id for ctx in self.list_alias_to_contexts(self.cfg.eval_datasets)]
+
+            eval_session_df = self.meta_df[self.meta_df[MetaKey.session].isin(eval_datasets)]
+            if limit_per_eval_session:
+                eval_keys = eval_session_df.groupby([MetaKey.session]).apply(lambda x: x.sample(limit_per_eval_session))[MetaKey.unique]
+            else: # default is to obey regular limit
+                eval_keys = eval_session_df.groupby([MetaKey.session]).apply(lambda x: x.sample(limit_per_session))[MetaKey.unique]
+
+            train_session_df = self.meta_df[~self.meta_df[MetaKey.session].isin(eval_datasets)]
+            if limit_per_session:
+                train_keys = train_session_df.groupby([MetaKey.session]).apply(lambda x: x.sample(limit_per_session))[MetaKey.unique]
+            else: # default is to assume no limit
+                train_keys = train_session_df[MetaKey.unique]
+
+            keys = pd.concat([eval_keys, train_keys])
             self.subset_by_key(
-                key_values=self.meta_df.sample(frac=scale)[MetaKey.unique],
+                key_values=keys,
                 keep_index=keep_index,
-                message_prefix=f"Scale {scale}"
+                message_prefix=f"Scale {limit_per_session} per session"
             )
+        if ratio < 1:
+            self.subset_by_key(
+                key_values=self.meta_df.sample(frac=ratio)[MetaKey.unique],
+                keep_index=keep_index,
+                message_prefix=f"Scale {ratio}"
+            )
+
 class SpikingDataModule(pl.LightningDataModule):
     r"""
         A PL module mainly for autoscaling batch size, for sweeping.

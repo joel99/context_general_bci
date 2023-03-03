@@ -32,4 +32,4 @@ dataset:
 train:
   patience: 500
   autoscale_batch_size: False
-  batch_size:  32
+  batch_size: 32

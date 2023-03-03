@@ -14,7 +14,7 @@ model:
   session_embed_token_count: 8
   subject_embed_strategy: EmbedStrat.token
   neurons_per_token: 16
-  causal: true
+  causal: false
 
   task:
     behavior_lag: 120
@@ -37,7 +37,20 @@ dataset:
   # This data was select for being the "biggest" and having a substantial number of nearby sessions (16 in +- 2 months)
   # This let's us evaluate scaling in-session and out-session 1:1
   # We would like to see how much out-session degrades, where the baseline is still single session performance.
-  - odoherty_rtt-Indy.*
+  - odoherty_rtt-Indy-20160627_01
+
+  - odoherty_rtt-Loco-20170210_03
+
+  - odoherty_rtt-Loco-20170213_02
+  - odoherty_rtt-Loco-20170214_02
+
+  - odoherty_rtt-Loco-20170215_02
+  - odoherty_rtt-Loco-20170216_02
+  - odoherty_rtt-Loco-20170217_02
+  - odoherty_rtt-Loco-20170227_04
+
+
+  # Other multi datasets scale radial out, preferring backward
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
   odoherty_rtt:
@@ -45,5 +58,5 @@ dataset:
     include_sorted: False
 train:
   autoscale_batch_size: false
-  batch_size: 256
+  batch_size: 128
   patience: 200

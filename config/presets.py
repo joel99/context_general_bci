@@ -120,7 +120,8 @@ class FlatEncDecTaskConfig(TaskConfig):
 class FlatEncDecModelConfig(ModelConfig):
     lr_init: float = 5e-4
     lr_ramp_steps: int = 100
-    lr_decay_steps: int = 1000
+    lr_decay_steps: int = 2500 # we update to be even more conservative with decay, we just want to prevent killing too soon for scientific investigations
+    # lr_decay_steps: int = 1000
     hidden_size: int = 256
     dropout: float = 0.1
     encode_decode: bool = True

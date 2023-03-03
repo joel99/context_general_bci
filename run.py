@@ -94,8 +94,14 @@ def run_exp(cfg : RootConfig) -> None:
         eval_dataset = copy.deepcopy(dataset)
         eval_dataset.subset_split(splits=['eval'], keep_index=True)
     dataset.subset_split(keep_index=True)
-    if cfg.dataset.scale_ratio:
-        dataset.subset_scale(cfg.dataset.scale_ratio, keep_index=True)
+    if cfg.dataset.scale_limit_per_session or cfg.dataset.scale_limit_per_eval_session:
+        dataset.subset_scale(
+            limit_per_session=cfg.dataset.scale_limit_per_session,
+            limit_per_eval_session=cfg.dataset.scale_limit_per_eval_session,
+            keep_index=True
+        )
+    elif cfg.dataset.scale_ratio:
+        dataset.subset_scale(ratio=cfg.dataset.scale_ratio, keep_index=True)
     train, val = dataset.create_tv_datasets()
     logger.info(f"Training on {len(train)} examples")
     data_attrs = dataset.get_data_attrs()

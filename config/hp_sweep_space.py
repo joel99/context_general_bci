@@ -17,7 +17,7 @@ sweep_space = {
     },
     "ft_reg": {
         "model.dropout": {
-            'feasible_points': [0.1, 0.3, 0.5, 0.7]
+            'feasible_points': [0.1, 0.2, 0.3, 0.4]
         },
         "model.weight_decay": {
             'min': 1e-3,

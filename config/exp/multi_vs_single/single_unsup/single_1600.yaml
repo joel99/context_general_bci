@@ -25,7 +25,7 @@ dataset:
   max_length_ms: 2000 # fit
   max_arrays: 1
 
-  scale_limit_per_session: 100 # no limit
+  scale_limit_per_session: 1600 # no limit
 
   neurons_per_token: 16
   max_channels: 96
@@ -37,7 +37,7 @@ dataset:
   # This data was select for being the "biggest" and having a substantial number of nearby sessions (16 in +- 2 months)
   # This let's us evaluate scaling in-session and out-session 1:1
   # We would like to see how much out-session degrades, where the baseline is still single session performance.
-  - odoherty_rtt-Indy.*
+  - odoherty_rtt-Indy-20160627_01
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
   odoherty_rtt:

@@ -343,6 +343,8 @@ class DatasetConfig:
     """
     datasets: List[str] = field(default_factory=lambda: [])
     scale_ratio: float = 1. # ratio of dataset to use for training (For scaling experiments)
+    scale_limit_per_session: int = 0 # >0, limit number of trials per session (For scaling experiments)
+    scale_limit_per_eval_session: int = 0 # >0, separately limit number of eval sessions (For scaling experiments)
 
     # Datasets to hold a _subset_ of from training. (some exposure still required)
     # These datasets are used for evaluation (in analysis, and possibly during training), separate from validation step.
@@ -411,7 +413,7 @@ class DatasetConfig:
 
 @dataclass
 class TrainConfig:
-    epochs: int = 1000
+    epochs: int = 10000
     steps: int = 0 # Prefer to specify steps over epochs for FLOP consistency (pretty loose), but most other training settings are on epochs
     log_every_n_steps: int = 10
     batch_size: int = 64
