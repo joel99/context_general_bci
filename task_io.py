@@ -34,26 +34,28 @@ class PoissonCrossEntropyLoss(nn.CrossEntropyLoss):
         Poisson-softened multi-class cross entropy loss
         JY suspects multi-context spike counts may be multimodal and only classification can support this?
     """
-    def __init__(self, max_count=20, **kwargs):
+    def __init__(self, max_count=20, soften=True, **kwargs):
         super().__init__(**kwargs)
-        # spikes can range from 0 to max count.
-        poisson_map = torch.zeros(max_count+1, max_count+1)
-        for i in range(max_count):
-            probs = torch.distributions.poisson.Poisson(i).log_prob(torch.arange(max_count+1)).exp()
-            poisson_map[i] = probs / probs.sum()
-        # register buffer
-        self.register_buffer("poisson_map", poisson_map)
+        self.soften = soften
+        if self.soften:
+            poisson_map = torch.zeros(max_count+1, max_count+1)
+            for i in range(max_count):
+                probs = torch.distributions.poisson.Poisson(i).log_prob(torch.arange(max_count+1)).exp()
+                poisson_map[i] = probs / probs.sum()
+            self.register_buffer("poisson_map", poisson_map)
 
     def forward(self, logits, target, *args, **kwargs):
         # logits B C *
         # target B *
-        class_second = [0, -1, *range(1, target.ndim)]
-        og_size = target.size()
-        soft_target = self.poisson_map[target.long().flatten()].view(*og_size, -1)
-        soft_target = soft_target.permute(class_second)
+        target = target.long()
+        if self.soften:
+            class_second = [0, -1, *range(1, target.ndim)]
+            og_size = target.size()
+            soft_target = self.poisson_map[target.flatten()].view(*og_size, -1)
+            target = soft_target.permute(class_second)
         return super().forward(
             logits,
-            soft_target,
+            target,
             *args,
             **kwargs,
         )
@@ -217,7 +219,7 @@ class RatePrediction(TaskPipeline):
         if getattr(self.cfg, 'spike_loss', 'poisson') == 'poisson':
             self.loss = nn.PoissonNLLLoss(reduction='none', log_input=cfg.lograte)
         elif self.cfg.spike_loss == 'cross_entropy':
-            self.loss = PoissonCrossEntropyLoss(reduction='none')
+            self.loss = PoissonCrossEntropyLoss(reduction='none', soften=self.cfg.cross_ent_soften)
 
     @torch.no_grad()
     def bps(

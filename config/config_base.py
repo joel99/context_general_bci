@@ -120,6 +120,7 @@ class TaskConfig:
     mask_random_shuffle: bool = False # doesn't actually seem more helpful
 
     spike_loss: str = 'poisson' # poisson or cross_entropy
+    cross_ent_soften: bool = True
 
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps])
     outputs: List[Output] = field(default_factory=lambda: [])

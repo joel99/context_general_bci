@@ -11,9 +11,10 @@ defaults:
 model:
   # Well we already know from early scaling experiments that embed strategies promotes faster convergence
   # And doesn't hurt peak performance; and it must be explicitly through transfer mxsms, so I don't see why we shouldn't allow it.
-  hidden_size: 384
   session_embed_token_count: 8
   subject_embed_strategy: EmbedStrat.token
+  task_embed_strategy: EmbedStrat.token
+
   neurons_per_token: 16
 
   task:
@@ -35,11 +36,12 @@ dataset:
   - DataKey.spikes
   # - DataKey.bhvr_vel
   datasets:
-  - mc_maze.*
+  - mc_maze$
   - dyer_co.*
-  - churchland_misc.*
+  - churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG
   - odoherty_rtt-Indy-20160627_01
 
+  # Other multi datasets scale radial out, preferring backward
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
 

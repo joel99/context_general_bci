@@ -30,7 +30,6 @@ from analyze_utils import prep_plt
 # dataset_name = 'churchland_maze_nitschke-3'
 # dataset_name = 'churchland_maze_nitschke-4'
 
-# TODO - current inferred rates for RTT are wavy for some reason
 # dataset_name = 'mc_rtt'
 # dataset_name = 'odoherty_rtt-Loco-20170215_02'
 
@@ -43,46 +42,58 @@ from analyze_utils import prep_plt
 # dataset_name = 'odoherty_rtt-Loco-20170210_03'
 
 # dataset_name = 'odoherty_rtt-Indy.*'
-dataset_name = 'odoherty_rtt-Indy-20160627_01'
+# dataset_name = 'odoherty_rtt-Indy-20160627_01'
 # dataset_name = 'odoherty_rtt-Indy-20161005_06'
 # dataset_name = 'odoherty_rtt-Indy-20160630_01'
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
 # dataset_name = 'odoherty_rtt-Indy-20160916_01'
 # dataset_name = 'odoherty_rtt-Indy-20160921_01'
-dataset_name = 'odoherty_rtt-Indy-20160426_01'
+# dataset_name = 'odoherty_rtt-Indy-20160426_01'
 
-# dataset_name = 'dyer_co_mihi_2'
+# dataset_name = 'dyer_co_chewie_1'
+# dataset_name = 'dyer_co_mihi_1'
 # dataset_name = 'dyer_co_chewie_2'
+# dataset_name = 'dyer_co_mihi_2'
 # dataset_name = 'Chewie_CO_20161021'
 # dataset_name = 'churchland_misc_nitschke-.*'
-# dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
+dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
 # dataset_name = 'churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG'
 # dataset_name = 'mc_rtt'
 
 context = context_registry.query(alias=dataset_name)
-# context = context[0]
+if isinstance(context, list):
+    context = context[0]
 print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 # default_cfg.data_keys = [DataKey.spikes]
-default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+default_cfg.data_keys = [DataKey.spikes]
+# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 20
+default_cfg.max_channels = 288
 # default_cfg.bin_size_ms = 30
+default_cfg.churchland_misc.arrays = ['Jenkins-M1', 'Nitschke-M1', 'Reggie-M1']
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 # default_cfg.max_channels = 250
 default_cfg.datasets = [context.alias]
+
+
 #%%
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
 
-# import torch
-# lengths = []
-# for t in range(1000):
-#     lengths.append(dataset[t][DataKey.spikes].size(0))
-# print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
-print(len(dataset))
+lengths = []
+for t in range(len(dataset)):
+    lengths.append(dataset[t][DataKey.spikes].size(0))
+trial = 1
+print(dataset_name)
+print(f'Length: {len(dataset)}')
+print(f'Spike shape (padded): {dataset[trial][DataKey.spikes].size()}')
+print(f'Channels: {dataset[trial]["channel_counts"].sum(1)[0]}')
+print(f'Time: {min(lengths), max(lengths)}')
+
 #%%
 trial = 0
 # trial = 10
@@ -99,8 +110,11 @@ ax[1].plot(trial_pos)
 
 #%%
 # 262...
-print(dataset[trial]['channel_counts'].sum(1))
 #%%
+trial = 0
+trial = 1
+trial = 2
+trial = 4
 trial = 10
 
 pop_spikes = dataset[trial][DataKey.spikes]

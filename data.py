@@ -314,9 +314,12 @@ class SpikingDataset(Dataset):
                     else:
                         alias_arrays = SubjectArrayRegistry.resolve_alias(alias) # list of strs
                         array_group = torch.cat([payload[k][a] for a in alias_arrays], dim=-2) # T C' H
-                        array_group = array_group[:,:self.cfg.max_channels] # crop
+                        if self.cfg.max_channels:
+                            array_group = array_group[:,:self.cfg.max_channels] # crop
                         if getattr(self.cfg, 'permute_channels', False):
-                            array_group = array_group[:,self.channel_perms[trial[MetaKey.session]]]
+                            perm = self.channel_perms[trial[MetaKey.session]]
+                            perm  = perm[perm < array_group.shape[-2]]
+                            array_group = array_group[:,perm]
                         if not self.cfg.serve_tokenized_flat:
                             channel_counts.append(array_group.shape[-2])
                         # * Note to get array tokenization to respect array boundaries, use non-alias full array references
