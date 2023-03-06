@@ -22,6 +22,21 @@ from config import RootConfig
 
 
 # Wandb management
+def wandb_query_experiment(
+    experiment: str | List[str],
+    wandb_user="joelye9",
+    wandb_project="context_general_bci",
+    **kwargs,
+):
+    if not isinstance(experiment, list):
+        experiment = [experiment]
+    api = wandb.Api()
+    filters = {
+        'config.experiment_set': {"$in": experiment},
+        **kwargs
+    }
+    runs = api.runs(f"{wandb_user}/{wandb_project}", filters=filters)
+    return runs
 
 def cast_paths_and_enums(cfg: Dict, template=RootConfig()):
     # recursively cast any cfg field that is a path in template to a path, since dacite doesn't support our particular case quite well

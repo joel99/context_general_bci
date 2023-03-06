@@ -28,7 +28,7 @@ dataset:
   max_length_ms: 2000 # fit
   max_arrays: 2
 
-  scale_limit_per_eval_session: 100
+  scale_limit_per_eval_session: 1600
   scale_limit_per_session: 0
 
   neurons_per_token: 16
@@ -43,7 +43,6 @@ dataset:
   # - churchland_misc.*
   - odoherty_rtt-Indy-20160627_01
 
-  # Other multi datasets scale radial out, preferring backward
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
 
@@ -51,8 +50,7 @@ dataset:
     arrays: ["Reggie-M1", "Nitschke-M1", "Jenkins-M1"]
 train:
   patience: 200
-  autoscale_batch_size: true
-  # batch_size: 16
+  # autoscale_batch_size: false
+  # batch_size: 256
 init_from_id: reach_80000-qp92sqlc
 init_tag: val_loss
-
