@@ -8,22 +8,23 @@ model:
   subject_embed_strategy: EmbedStrat.token
   task:
     mask_ratio: 0.5 # for efficiency
-  neurons_per_token: 128
+  neurons_per_token: 8
 dataset:
-  neurons_per_token: 128
+  neurons_per_token: 8
 
   max_arrays: 1
-  max_channels: 384
+  max_channels: 288
 
   scale_ratio: 1.0
   scale_limit_per_eval_session: 300 # no limit
 
   datasets:
-  - odoherty_rtt-Indy.*
+  - odoherty_rtt-Indy-20160627_01
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
 
 train:
-  autoscale_batch_size: False
-  batch_size: 256
-notes: "Sorted, Patch size 128"
+  autoscale_batch_size: false
+  batch_size: 16
+
+notes: "Sorted, Patch size 8. Single session baseline"
