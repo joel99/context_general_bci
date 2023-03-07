@@ -1,16 +1,19 @@
 # @package _global_
 
 defaults:
-  - /model: flat_enc_dec
-  - /dataset: flat
+  - /model: pretrain_2x # equivalent to flat_enc_dec without flattening
+  - /dataset: flat # We override rather than use different preset for easy comparison
 model:
   causal: true
   subject_embed_strategy: EmbedStrat.token
   task:
     mask_ratio: 0.5 # for efficiency
-  neurons_per_token: 128
+
+  transformer:
+    n_layers: 8
 dataset:
-  neurons_per_token: 128
+  serve_tokenized: False
+  serve_tokenized_flat: False
 
   max_arrays: 1
   max_channels: 288
@@ -22,8 +25,8 @@ dataset:
   - odoherty_rtt-Indy.*
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
-
 train:
+  patience: 250 # Extra generous patience.
   autoscale_batch_size: False
   batch_size: 256
-notes: "Sorted, Patch size 128"
+notes: "Sorted, NDT1 (time only). Control for capacity"

@@ -23,4 +23,9 @@ dataset:
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
 
+train:
+  accumulate_batches: 16 # auto = 16 (12G GPU), effective = 256
+  autoscale_batch_size: false
+  batch_size: 16
+
 notes: "Sorted, Patch size 8"

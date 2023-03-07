@@ -9,7 +9,9 @@ Diffs:
 Causal, Sorted, Test Session restricted to 300 trials (5 minutes). ~26K trials.
 - Patch 4, 16, 32, 128
 - Stitch
-- Nonflat
+- NDT-1 (Time), 6 and 8 layer (control for capacity).
+
+Batch size controlled at 256, though we don't expect it to matter much.
 
 `scaledown`:
 TODO...

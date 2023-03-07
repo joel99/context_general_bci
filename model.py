@@ -58,9 +58,6 @@ class BrainBertInterface(pl.LightningModule):
         self.cfg.transformer.dropout = cfg.dropout
         self.cfg.transformer.transform_space = cfg.transform_space
 
-        if self.cfg.causal:
-            assert ModelTask.infill not in self.cfg.task.tasks, "Infill not implemented for causal models. Use `next_step_prediction`"
-
         self.data_attrs = data_attrs
         assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"
         if self.data_attrs.serve_tokens:

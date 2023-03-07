@@ -8,13 +8,8 @@ model:
   subject_embed_strategy: EmbedStrat.token
   task:
     mask_ratio: 0.5 # for efficiency
-
-  readin_strategy: EmbedStrat.unique_project
-  readout_strategy: EmbedStrat.unique_project
-  readin_compress: False
-  readin_dim: 256
-  readout_dim: 256
-  # Different than `saturation` pilots, we also provide context tokens here.
+  transformer:
+    n_layers: 8
 dataset:
   serve_tokenized: False
   serve_tokenized_flat: False
@@ -31,4 +26,6 @@ dataset:
   - odoherty_rtt-Indy-20160627_01
 train:
   patience: 250 # Extra generous patience.
-# notes: "Sorted, Stitched NDT1 (time only)"
+  autoscale_batch_size: False
+  batch_size: 256
+notes: "Sorted, NDT1 (time only)"
