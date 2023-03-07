@@ -45,6 +45,9 @@ dataset_name = 'odoherty_rtt.*'
 contexts = context_registry.query(alias=dataset_name)
 
 dataset_name ='churchland_maze_jenkins-0'
+
+dataset_name = ''
+#%%
 for context in contexts:
     datapath = context.datapath
 
@@ -146,6 +149,7 @@ for context in contexts:
             # print(full_spikes.shape)
         return spike_arr
     spike_arr = load_spikes_from_raw(datapath)
+
 #%%
 print(spike_arr.shape)
 
@@ -176,6 +180,19 @@ fig, axs = plt.subplots(
 for i, session_path in enumerate(session_paths):
     bhvr_payload = load_bhvr_from_raw(session_path)
     plot_trace(axs.ravel()[i], bhvr_payload, title=session_path)
+
+#%%
+ctxs = context_registry.query(task=ExperimentalTask.gallego_co)
+session_paths = [ctx.datapath for ctx in ctxs]
+datapath = session_paths[0]
+import pyaldata
+df: pd.DataFrame = pyaldata.mat2dataframe(datapath, shift_idx_fields=True)
+
+print(df.columns)
+
+#%%
+print(torch.tensor(df[f'M1_spikes'][0]).size()) # T x N
+
 
 #%%
 f, ax = plt.subplots(1, 1, figsize=(10, 10))

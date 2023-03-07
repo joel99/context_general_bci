@@ -53,5 +53,5 @@ train:
   patience: 200
   # autoscale_batch_size: false
   # batch_size: 256
-init_from_id: reach_80000-qp92sqlc
+init_from_id: joint_pt-2w23y67l
 init_tag: val_loss

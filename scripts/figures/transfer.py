@@ -108,7 +108,6 @@ df = get_run_df(runs, run_labels)
 df['group'] = df['tag'].map(groups)
 #%%
 
-# Thin out the plot for legibility
 ax = prep_plt()
 sns.lineplot(
     data=df,
@@ -156,3 +155,50 @@ ax.yaxis.set_minor_locator(ticker.NullLocator())
 # do not use scientific notation
 ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%g'))
 ax.tick_params(axis='y', rotation=90)
+
+#%%
+title = "Test loss against FT size"
+experiment = [
+    'multi_vs_single/single_unsup_sort',
+    'pt_vs_ft',
+]
+
+runs = wandb_query_experiment(
+    experiment,
+    state={"$in": ['finished', 'crashed']},
+    duration={"$gt": 300},
+)
+
+run_labels = [
+    'ft_800_100', 'ft_800_200', 'ft_800_400', 'ft_800_800', 'ft_800_1600',
+    'ft_1600_100', 'ft_1600_200', 'ft_1600_400', 'ft_1600_800', 'ft_1600_1600',
+    'ft_80k_100', 'ft_80k_200', 'ft_80k_400', 'ft_80k_800', 'ft_80k_1600',
+    'single_100', 'single_200', 'single_400', 'single_800', 'single_1600',
+]
+
+groups = lambda x: x.split('_')[-2]
+
+df = get_run_df(runs, run_labels)
+df['group'] = df['tag'].map(groups)
+
+#%%
+
+ax = prep_plt()
+sns.lineplot(
+    data=df,
+    x='dataset_size',
+    y='test_loss',
+    hue='group',
+    # style='tag',
+    ax=ax,
+    alpha=0.7,
+    legend=True
+)
+
+ax.set_xscale('log')
+ax.set_yscale('log')
+# ax.set_ylim(0.25, 0.33)
+ax.set_xlabel('In-session Training Samples')
+ax.set_ylabel('Test loss')
+
+ax.set_title('Finetune vs from scratch')

@@ -57,14 +57,10 @@ class PretrainingNewModelConfig(ModelConfig):
     # A little more informed after initial experimentation
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_ramp_steps: int = 100
-    lr_decay_steps: int = 1000
+    lr_decay_steps: int = 2500
     dropout: float = 0.1
     hidden_size: int = 256
-    session_embed_size: int = 256
-    subject_embed_size: int = 256
-    array_embed_size: int = 256
 
-    lr_init: float = 5e-4
     transformer: TransformerConfig = field(default_factory=BaseTransformerConfig)
 
     # base config: 6 layers, 256 hidden, 4 heads
@@ -118,12 +114,11 @@ class FlatEncDecTaskConfig(TaskConfig):
 
 @dataclass
 class FlatEncDecModelConfig(ModelConfig):
-    lr_init: float = 5e-4
     lr_ramp_steps: int = 100
     lr_decay_steps: int = 2500 # we update to be even more conservative with decay, we just want to prevent killing too soon for scientific investigations
     # lr_decay_steps: int = 1000
-    hidden_size: int = 256
     dropout: float = 0.1
+    hidden_size: int = 256
     encode_decode: bool = True
     transform_space: bool = True
     spike_embed_style: EmbedStrat = EmbedStrat.token
@@ -225,14 +220,22 @@ class FlatDataConfig(DatasetConfig):
     serve_tokenized_flat: bool = True
     bin_size_ms: int = 20 # typically 20
     max_tokens: int = 4096
+    max_length_ms: int = 2000 # most data is much shorter though
     data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
     meta_keys: List[MetaKey] = field(default_factory=lambda: [
         MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session, MetaKey.task
     ])
+    # M1 only
     odoherty_rtt: RTTConfig = field(default_factory=lambda: RTTConfig(
         arrays=['Indy-M1_all', 'Loco-M1_all'],
         # arrays=['Indy-M1', 'Loco-M1'],
         include_sorted=True,
+    ))
+    gallego_co: ExperimentalConfig = field(default_factory=lambda: ExperimentalConfig(
+        arrays=['Chewie-M1', 'Mihi-M1']
+    ))
+    churchland_misc: ExperimentalConfig = field(default_factory=lambda: ExperimentalConfig(
+        arrays=["Reggie-M1", "Nitschke-M1", "Jenkins-M1"]
     ))
 
 cs.store(group="dataset", name="flat", node=FlatDataConfig)

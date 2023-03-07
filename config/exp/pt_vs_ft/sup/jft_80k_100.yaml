@@ -29,7 +29,7 @@ dataset:
   max_length_ms: 2000 # fit
   max_arrays: 2
 
-  scale_limit_per_eval_session: 1600
+  scale_limit_per_eval_session: 100
   scale_limit_per_session: 0
 
   neurons_per_token: 16
@@ -51,7 +51,7 @@ dataset:
     arrays: ["Reggie-M1", "Nitschke-M1", "Jenkins-M1"]
 train:
   patience: 200
-  # autoscale_batch_size: false
-  # batch_size: 256
-init_from_id: reach_80000-qp92sqlc
+  autoscale_batch_size: false
+  batch_size: 16
+init_from_id: reach_80k-j76kzc1m
 init_tag: val_loss

@@ -14,6 +14,7 @@ model:
   neurons_per_token: 16
 
   task:
+    task_weights: [1.0, 20.0]
     behavior_lag: 120
     decode_time_pool: "mean"
 

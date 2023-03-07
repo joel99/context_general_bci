@@ -29,7 +29,7 @@ dataset:
   max_length_ms: 2000 # fit
   max_arrays: 2
 
-  scale_limit_per_eval_session: 1600
+  scale_limit_per_eval_session: 800
   scale_limit_per_session: 0
 
   neurons_per_token: 16
@@ -52,6 +52,6 @@ dataset:
 train:
   patience: 200
   # autoscale_batch_size: false
-  # batch_size: 256
-init_from_id: reach_80000-qp92sqlc
+  # batch_size: 128
+init_from_id: joint_pt-2w23y67l
 init_tag: val_loss

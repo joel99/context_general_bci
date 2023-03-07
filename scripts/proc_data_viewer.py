@@ -58,7 +58,8 @@ from analyze_utils import prep_plt
 # dataset_name = 'churchland_misc_nitschke-.*'
 dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
 # dataset_name = 'churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG'
-# dataset_name = 'mc_rtt'
+dataset_name = 'mc_rtt'
+dataset_name = 'gallego_co_Chewie_CO_20160510'
 
 context = context_registry.query(alias=dataset_name)
 if isinstance(context, list):
@@ -69,8 +70,8 @@ print(context)
 
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 # default_cfg.data_keys = [DataKey.spikes]
-default_cfg.data_keys = [DataKey.spikes]
-# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+# default_cfg.data_keys = [DataKey.spikes]
+default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 20
 default_cfg.max_channels = 288
 # default_cfg.bin_size_ms = 30
@@ -79,10 +80,10 @@ default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 # default_cfg.max_channels = 250
 default_cfg.datasets = [context.alias]
 
-
 #%%
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
+dataset.subset_split()
 
 lengths = []
 for t in range(len(dataset)):

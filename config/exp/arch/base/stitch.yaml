@@ -31,4 +31,4 @@ dataset:
   - odoherty_rtt-Indy-20160627_01
 train:
   patience: 250 # Extra generous patience.
-# notes: "Sorted, Stitched NDT1 (time only)"
+notes: "Sorted, Stitched NDT1 (time only)"

@@ -26,6 +26,8 @@ from subjects import SubjectInfo, SubjectArrayRegistry, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 
 import logging
+from einops import reduce
+from scipy.signal import decimate
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +47,23 @@ class GallegoCOLoader(ExperimentalTaskLoader):
         **kwargs,
     ):
         df: pd.DataFrame = pyaldata.mat2dataframe(datapath, shift_idx_fields=True)
-        assert cfg.bin_size_ms == df.bin_size[0] * 1000, "bin_size_ms must equal bin_size in the data"
-        # assert cfg.bin_size_ms % (df.bin_size[0] * 1000) == 0, "bin_size_ms must be a multiple of bin_size in the data"
-        # ! Todo implement "resample" utilities for bhvr + spikes
+        assert cfg.bin_size_ms % (df.bin_size[0] * 1000) == 0, "bin_size_ms must divide bin_size in the data"
+        chop_bins = int(cfg.bin_size_ms / (df.bin_size[0] * 1000))
+
+        def compress_spikes(spikes):
+            # make sure we divide evenly
+            if spikes.shape[0] % chop_bins != 0:
+                spikes = spikes[(spikes.shape[0] % chop_bins):]
+            return reduce(spikes, '(t b) h -> t h 1', 'sum', b=chop_bins)
+
+        def compress_vel(vel):
+            vel = vel / 100 # cm/s -> m/s
+            # Technically we just really need an actual data-based normalizer...
+            if vel.shape[0] % chop_bins != 0:
+                vel = vel[(vel.shape[0] % chop_bins):]
+            vel = torch.tensor(decimate(vel, chop_bins, axis=0).copy(), dtype=torch.float)
+            return torch.nan_to_num(vel) # some nan's found, data seems mostly good though? In general probably don't use this velocity
+
         meta_payload = {}
         meta_payload['path'] = []
 
@@ -56,10 +72,11 @@ class GallegoCOLoader(ExperimentalTaskLoader):
             spike_payload = {}
             for array in arrays_to_use:
                 if f'{SubjectInfo.unwrap_array(array)}_spikes' in df.columns:
-                    spike_payload[array] = torch.tensor(df[f'{SubjectInfo.unwrap_array(array)}_spikes'][trial_id]).unsqueeze(-1)
+                    spike_payload[array] = torch.tensor(df[f'{SubjectInfo.unwrap_array(array)}_spikes'][trial_id], dtype=torch.uint8)
+                    spike_payload[array] = compress_spikes(spike_payload[array])
             single_payload = {
                 DataKey.spikes: spike_payload,
-                DataKey.bhvr_vel: torch.tensor(df.vel[trial_id]), # T x H
+                DataKey.bhvr_vel: compress_vel(df.vel[trial_id]), # T x H
             }
             single_path = cache_root / f'{trial_id}.pth'
             meta_payload['path'].append(single_path)

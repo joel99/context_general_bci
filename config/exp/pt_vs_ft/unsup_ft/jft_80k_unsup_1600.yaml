@@ -15,6 +15,7 @@ model:
 
   task:
     task_weights: [1.0, 20.0]
+    blacklist_session_supervision: ['odoherty_rtt-Indy-20160627_01']
     behavior_lag: 120
     decode_time_pool: "mean"
 
@@ -53,5 +54,11 @@ train:
   patience: 200
   # autoscale_batch_size: false
   # batch_size: 256
-init_from_id: reach_80000-qp92sqlc
+init_from_id: reach_80k-j76kzc1m
 init_tag: val_loss
+# History
+
+# all neural pretrain
+# RTT joint finetune
+# Target session neural finetune (this)
+# TODO target session extremely low sup

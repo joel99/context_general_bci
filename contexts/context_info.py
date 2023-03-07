@@ -356,19 +356,21 @@ class DyerCOContextInfo(ReachingContextInfo):
             datapath=datapath,
         )
 
-GALLEGO_ARRAY_MAP = {
-    'Lando': ['LeftS1Area2'],
-    'Hans': ['LeftS1Area2'],
-    'Chewie': ['M1', 'PMd'],
-    'Mihi': ['M1', 'PMd'],
-}
+# Data has been replaced with M1 only data
+# GALLEGO_ARRAY_MAP = {
+#     'Lando': ['LeftS1Area2'],
+#     'Hans': ['LeftS1Area2'],
+#     'Chewie': ['M1', 'PMd'], # left hemisphere M1
+#     'Mihi': ['M1', 'PMd'],
+# }
 
-CHEWIE_ONLY_M1 = [
-    'Chewie_CO_20150313',
-    'Chewie_CO_20150630',
-    'Chewie_CO_20150319',
-    'Chewie_CO_20150629',
-]
+# CHEWIE_ONLY_M1 = [ # right hemisphere M1. We don't make a separate distinction
+#     'Chewie_CO_20150313',
+#     'Chewie_CO_20150630',
+#     'Chewie_CO_20150319',
+#     'Chewie_CO_20150629',
+# ]
+
 @dataclass
 class GallegoCOContextInfo(ReachingContextInfo):
     @classmethod
@@ -377,8 +379,10 @@ class GallegoCOContextInfo(ReachingContextInfo):
             logger.warning(f"Datapath not found, skipping ({root})")
             return []
         def make_info(datapath: Path):
-            alias = datapath.stem
-            subject, _, date = alias.split('_') # task is CO always
+            alias = f'{task.value}_{datapath.stem}'
+            if alias.endswith('_M1'):
+                alias = alias[:-3]
+            subject, _, date, *rest = datapath.stem.split('_') # task is CO always
             subject = subject.lower()
             if subject == "mihili":
                 subject = "mihi" # alias
@@ -386,9 +390,10 @@ class GallegoCOContextInfo(ReachingContextInfo):
             session = int(date)
             if subject.name == SubjectName.mihi and session in [20140303, 20140306]: # in Dyer release
                 return None
-            arrays = GALLEGO_ARRAY_MAP.get(subject.name.value)
-            if alias in CHEWIE_ONLY_M1:
-                arrays = ['M1']
+            arrays = ['M1']
+            # arrays = GALLEGO_ARRAY_MAP.get(subject.name.value)
+            # if alias in CHEWIE_ONLY_M1:
+                # arrays = ['M1']
             return GallegoCOContextInfo(
                 subject=subject,
                 task=task,
