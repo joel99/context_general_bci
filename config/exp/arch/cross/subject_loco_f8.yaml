@@ -19,8 +19,7 @@ dataset:
   scale_limit_per_eval_session: 300 # no limit
 
   datasets:
-  - mc_maze.*
-  - gallego_co.*
+  - odoherty_rtt-Loco.*
   - odoherty_rtt-Indy-20160627_01
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01

@@ -21,6 +21,7 @@ class ExperimentalTask(OrderedEnum):
     observation = "observation"
     ortho = "ortho"
     fbc = "fbc"
+    unstructured = "unstructured" # Pitt free play
     delay_reach = "delay_reach"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader

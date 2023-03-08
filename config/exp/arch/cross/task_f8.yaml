@@ -20,6 +20,7 @@ dataset:
 
   datasets:
   - mc_maze.*
+  - dyer_co.*
   - gallego_co.*
   - odoherty_rtt-Indy-20160627_01
   eval_datasets:
@@ -30,4 +31,4 @@ train:
   autoscale_batch_size: false
   batch_size: 16
 
-notes: "Sorted, transfer loco."
+notes: "Sorted, transfer task."

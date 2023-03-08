@@ -15,3 +15,7 @@ Batch size controlled at 256, though we don't expect it to matter much.
 
 `scaledown`:
 TODO...
+
+`cross`:
+- `subject_loco`: Cross animal
+- `task_co`: Cross task, using Gallego CO + NLB Maze reaches (multiple, to increase trial count)

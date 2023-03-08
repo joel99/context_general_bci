@@ -140,6 +140,7 @@ context_registry = ContextRegistry([
         'ortho/fbc': ExperimentalTask.fbc, # when both types are used, opt for more expressive
         'fbc': ExperimentalTask.fbc,
         'fbc-stitch': ExperimentalTask.fbc,
+        'unstructured': ExperimentalTask.unstructured,
         'default': ExperimentalTask.pitt_co
     }),
 ])
