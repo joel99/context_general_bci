@@ -1,16 +1,22 @@
 # @package _global_
 
 defaults:
-  - /model: flat_enc_dec
+  - /model: pretrain_2x # equivalent to flat_enc_dec without flattening
   - /dataset: flat
 model:
   causal: true
   subject_embed_strategy: EmbedStrat.token
   task:
     mask_ratio: 0.5 # for efficiency
-  neurons_per_token: 8
+
+  readin_strategy: EmbedStrat.unique_project
+  readout_strategy: EmbedStrat.unique_project
+  readin_compress: False
+  readin_dim: 256
+  readout_dim: 256
 dataset:
-  neurons_per_token: 8
+  serve_tokenized: False
+  serve_tokenized_flat: False
 
   max_arrays: 1
   max_channels: 288
@@ -25,8 +31,8 @@ dataset:
   - odoherty_rtt-Indy-20160627_01
 
 train:
-  accumulate_batches: 8 # auto = 16 (12G GPU) x 2 node, effective = 256
-  autoscale_batch_size: false
-  batch_size: 16
+  patience: 250 # Extra generous patience.
+  autoscale_batch_size: False
+  batch_size: 256
 
 notes: "Sorted, transfer loco."

@@ -773,10 +773,11 @@ class BehaviorRegression(TaskPipeline):
         )
         # For linear decoder, deal with multiple arrays by concatenating
         if self.cfg.decode_strategy == EmbedStrat.project:
-            assert self.cfg.decode_time_pool == 'mean', 'linear decode not implemented unless mean pool'
             if data_attrs.serve_tokens_flat:
+                assert self.cfg.decode_time_pool == 'mean', 'linear decode not implemented unless mean pool'
                 self.out = nn.Linear(backbone_out_size, data_attrs.behavior_dim)
             elif cfg.transform_space and not data_attrs.serve_tokens:
+                assert self.cfg.decode_time_pool == 'mean', 'linear decode not implemented unless mean pool'
                 self.out = nn.Sequential(
                     Rearrange('b t a s h -> b t (a s h)'),
                     nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token) * data_attrs.max_arrays, data_attrs.behavior_dim)

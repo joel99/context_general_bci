@@ -8,9 +8,9 @@ model:
   subject_embed_strategy: EmbedStrat.token
   task:
     mask_ratio: 0.5 # for efficiency
-  neurons_per_token: 32
+  neurons_per_token: 8
 dataset:
-  neurons_per_token: 32
+  neurons_per_token: 8
 
   max_arrays: 1
   max_channels: 288
@@ -19,13 +19,13 @@ dataset:
   scale_limit_per_eval_session: 300 # no limit
 
   datasets:
-  - odoherty_rtt-Indy.*
+  - odoherty_rtt-Indy-20160627_01
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
 
-# Sweeps run on CRC, A100 40G GPUs. Clip bsz to 256
 train:
   autoscale_batch_size: false
-  batch_size: 256
-# sweep_cfg: base_v2
-# sweep_trials: 16
+  accumulate_batches: 2
+  batch_size: 16
+sweep_cfg: base_v2
+sweep_trials: 16

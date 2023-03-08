@@ -415,16 +415,28 @@ with open('contexts/pitt_type.yaml') as f:
             session_type = list(session.values())[0]
             pitt_metadata[f'CRS02bHome.data.{session_num:05d}'] = session_type
 
+import json
+with open('contexts/query_payload.json') as f:
+    query_payload = json.load(f)
+    pitt_metadata.update(query_payload)
+
 @dataclass
 class BCIContextInfo(ReachingContextInfo):
+    session_set: int = 0
+
     @classmethod
     def build_from_dir(cls, root: str, task_map: Dict[str, ExperimentalTask], arrays=["main"]):
         if not Path(root).exists():
             logger.warning(f"Datapath not found, skipping ({root})")
             return []
         def make_info(datapath: Path):
-            alias = datapath.name
-            subject, _, session = alias.split('.')
+            if datapath.is_dir():
+                alias = datapath.name
+                subject, _, session = alias.split('.')
+                session_set = 0
+            else:
+                alias = datapath.stem
+                subject, _, session, _, session_set = alias.split('_')
             if subject.endswith('Home'):
                 subject = subject[:-4]
             elif subject.endswith('Lab'):
@@ -438,7 +450,8 @@ class BCIContextInfo(ReachingContextInfo):
                 ],
                 alias=alias,
                 session=int(session),
-                datapath=datapath
+                datapath=datapath,
+                session_set=session_set
             )
         infos = map(make_info, Path(root).glob("*"))
         return filter(lambda x: x is not None, infos)

@@ -237,8 +237,8 @@ class FlatDataConfig(DatasetConfig):
     churchland_misc: ExperimentalConfig = field(default_factory=lambda: ExperimentalConfig(
         arrays=["Reggie-M1", "Nitschke-M1", "Jenkins-M1"]
     ))
-    pitt_co: ExperimentalConfig = field(default_factory=lambda: ExperimentalConfig(
-        arrays=["CRS02b-lateral_m1", "CRS02b-medial_m1"]
+    pitt_co: PittConfig = field(default_factory=lambda: PittConfig(
+        arrays=["CRS02b-lateral_m1", "CRS02b-medial_m1", "CRS07-lateral_m1", "CRS07-medial_m1"]
     ))
 
 cs.store(group="dataset", name="flat", node=FlatDataConfig)

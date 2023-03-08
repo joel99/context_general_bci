@@ -290,9 +290,9 @@ class ExperimentalConfig:
         """
         return {}
 
-    @staticmethod
-    def create_with_arrays(arrays: List[str]):
-        return ExperimentalConfig(arrays=arrays)
+    @classmethod
+    def create_with_arrays(cls, arrays: List[str]):
+        return cls(arrays=arrays)
 
 @dataclass
 class RTTConfig(ExperimentalConfig):
@@ -330,6 +330,10 @@ class DyerCOConfig(ExperimentalConfig):
 @dataclass
 class NLBConfig(ExperimentalConfig):
     heldout_neurons: int = 32 # for RTT
+
+@dataclass
+class PittConfig(ExperimentalConfig):
+    chop_size_ms: int = 2000
 
 @dataclass
 class DatasetConfig:
@@ -406,7 +410,7 @@ class DatasetConfig:
     dyer_co: DyerCOConfig = DyerCOConfig()
     gallego_co: ExperimentalConfig = ExperimentalConfig()
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
-    pitt_co: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
+    pitt_co: PittConfig = PittConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
     observation: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
     ortho: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
     fbc: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])

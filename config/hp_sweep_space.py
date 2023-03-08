@@ -5,6 +5,22 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "base_v2": {
+        "model.dropout": {
+            'feasible_points': [0.1, 0.2, 0.3, 0.4]
+        },
+        "model.weight_decay": {
+            'min': 1e-3,
+            'max': 5e-2,
+            'scaling': 'log',
+        },
+        "model.hidden_size": {
+            'feasible_points': [128, 256]
+        },
+        "seed": {
+            'feasible_points': [0, 1, 2]
+        },
+    },
     "reg_tight": { # this may be one strategy, or, bigger models might even be better?
         "model.dropout": {
             'feasible_points': [0.05, 0.1, 0.2, 0.3]
@@ -72,7 +88,7 @@ sweep_space = {
     "base": {
         # we will use a fixed 6-layer architecture for now, sweep hidden.
         "model.hidden_size": {
-            'feasible_points': [128, 256, 384]
+            'feasible_points': [128, 256]
         },
         "model.lr_init": {
             'min': 1e-4,

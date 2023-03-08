@@ -230,7 +230,7 @@ class SpikingDataset(Dataset):
                     # context_array = [a for a in context_array if a in resolved_arrays]
                     if len(context_array) == 0:
                         raise Exception(
-                            f"Session {session_path} has arrays {context_array} which has no elements in task configuration {task_arrays}.\n"
+                            f"Session {session_path} has arrays {data_arrays} which has no elements in task configuration {task_arrays}.\n"
                             f"Remove or reconfigure (did you remember to add subject handle)?"
                         )
                 else:

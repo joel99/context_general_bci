@@ -106,24 +106,60 @@ class PittCOLoader(ExperimentalTaskLoader):
         meta_payload = {}
         meta_payload['path'] = []
         arrays_to_use = context_arrays
-        for i, fname in enumerate(datapath.glob("*.mat")):
-            if fname.stem.startswith('QL.Task'):
-                payload = load_trial(fname)
+        def chop_vector(vec: torch.Tensor):
+            # vec - already at target resolution, just needs chopping
+            chops = round(cfg.pitt_co.chop_size_ms / cfg.bin_size_ms)
+            return rearrange(
+                vec.unfold(0, chops, chops),
+                'trial hidden time -> trial time hidden'
+             ) # Trial x C x chop_size (time)
+
+        if not datapath.is_dir() and datapath.suffix == '.mat': # payload style, preproc-ed elsewhere
+            payload = load_trial(datapath)
+            if payload['spikes'].size(0) > 300:  # > 6s, assume free play
+                spikes = chop_vector(payload['spikes'])
+                for i, trial_spikes in enumerate(spikes):
+                    single_payload = {
+                        DataKey.spikes: create_spike_payload(
+                            trial_spikes.clone(), arrays_to_use
+                        ),
+                    }
+                    single_path = cache_root / f'{dataset_alias}_{i}.pth'
+                    meta_payload['path'].append(single_path)
+                    torch.save(single_payload, single_path)
+            else:
                 single_payload = {
                     DataKey.spikes: create_spike_payload(
                         payload['spikes'], arrays_to_use, cfg, payload['bin_size_ms']
                     ),
                 }
-                if 'position' in payload:
-                    position = payload['position']
-                    position = gaussian_filter1d(position, 2.5, axis=0) # derived from iteration in `raw_data_viewer_kinematics.py`
-                    vel = torch.tensor(np.gradient(position, axis=0)).float()
-                    vel[vel.isnan()] = 0
-                    assert cfg.bin_size_ms == 20, 'check out rtt code for resampling'
-                    single_payload[DataKey.bhvr_vel] = vel
-                single_path = cache_root / f'{i}.pth'
+                # Ignore position for simplicity, for now.
+                # if 'position' in payload:
+                    # position = payload['position']
+                    # position = gaussian_filter1d(position, 2.5, axis=0)
+                import pdb;pdb.set_trace() # what exactly do these look like?
+                single_path = cache_root / f'{dataset_alias}.pth'
                 meta_payload['path'].append(single_path)
                 torch.save(single_payload, single_path)
+        else: # folder style, preproc-ed on mind
+            for i, fname in enumerate(datapath.glob("*.mat")):
+                if fname.stem.startswith('QL.Task'):
+                    payload = load_trial(fname)
+                    single_payload = {
+                        DataKey.spikes: create_spike_payload(
+                            payload['spikes'], arrays_to_use, cfg, payload['bin_size_ms']
+                        ),
+                    }
+                    if 'position' in payload:
+                        position = payload['position']
+                        position = gaussian_filter1d(position, 2.5, axis=0) # derived from iteration in `raw_data_viewer_kinematics.py`
+                        vel = torch.tensor(np.gradient(position, axis=0)).float()
+                        vel[vel.isnan()] = 0
+                        assert cfg.bin_size_ms == 20, 'check out rtt code for resampling'
+                        single_payload[DataKey.bhvr_vel] = vel
+                    single_path = cache_root / f'{i}.pth'
+                    meta_payload['path'].append(single_path)
+                    torch.save(single_payload, single_path)
         return pd.DataFrame(meta_payload)
 
 
