@@ -84,6 +84,9 @@ def load_trial(fn, use_ql=True, key='data'):
             # cursor x, y
             out['position'] = torch.from_numpy(payload['Kinematics']['ActualPos'][:,1:3]) # 1 is y, 2 is X. Col 6 is click, src: Jeff Weiss
             out['position'] = out['position'].roll(1, dims=1) # swap x and y
+        elif 'pos' in payload:
+            out['position'] = torch.from_numpy(payload['pos'][:,1:3]) # 1 is y, 2 is X. Col 6 is click, src: Jeff Weiss
+            out['position'] = out['position'].roll(1, dims=1) # swap x and y
     else:
         data = payload['iData']
         trial_data = extract_ql_data(data['QL']['Data'])
@@ -133,8 +136,17 @@ class PittCOLoader(ExperimentalTaskLoader):
             torch.save(single_payload, single_path)
         if not datapath.is_dir() and datapath.suffix == '.mat': # payload style, preproc-ed/binned elsewhere
             payload = load_trial(datapath, key='thin_data')
-            if payload['spikes'].size(0) > 300:  # > 6s, assume free play, dont' bother with trial structure
-                spikes = chop_vector(payload['spikes'])
+
+            # Sanitize
+            spikes = payload['spikes']
+            elements = spikes.nelement()
+            unique, counts = np.unique(spikes, return_counts=True)
+            for u, c in zip(unique, counts):
+                if u >= 15 or c / elements < 1e-5: # anomalous, suppress. (Some bins randomly report impossibly high counts like 90 (in 20ms))
+                    spikes[spikes == u] = 0
+
+            if spikes.size(0) > 300:  # > 6s, assume free play, dont' bother with trial structure
+                spikes = chop_vector(spikes)
                 for i, trial_spikes in enumerate(spikes):
                     save_trial_spikes(trial_spikes, i)
             else:

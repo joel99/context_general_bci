@@ -144,4 +144,9 @@ context_registry = ContextRegistry([
         'free_play': ExperimentalTask.unstructured,
         'default': ExperimentalTask.pitt_co
     }),
+    *BCIContextInfo.build_from_dir('./data/pitt_varied', task_map={
+        'unstructured': ExperimentalTask.unstructured,
+        'free_play': ExperimentalTask.unstructured,
+        'default': ExperimentalTask.pitt_co,
+    }),
 ])
