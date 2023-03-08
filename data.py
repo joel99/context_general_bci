@@ -296,6 +296,7 @@ class SpikingDataset(Dataset):
         # the alternative to padding is to define custom readout via DataAttrs
         # we would rather maintain consistent interface and pad
         # heldout_channel_counts = []
+        # import pdb;pdb.set_trace()
         for k in self.cfg.data_keys:
             if k == DataKey.spikes:
                 array_spikes = []

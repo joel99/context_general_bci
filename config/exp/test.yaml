@@ -19,7 +19,7 @@ dataset:
   scale_limit_per_eval_session: 300 # no limit
 
   datasets:
-  - unstructured.
+  - unstructured.*
   # eval_datasets:
   # - odoherty_rtt-Indy-20160627_01
 train:
