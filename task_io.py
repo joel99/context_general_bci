@@ -322,7 +322,7 @@ class SelfSupervisedInfill(RatePrediction):
         ) # B T S or B Token - don't mask part of a token
         if not self.serve_tokens_flat:
             is_masked = is_masked.unsqueeze(-1) # mock spatial masking
-            is_masked = is_masked.expand(*spikes.shape[:2], spikes.shape[-1]) # B T S
+            is_masked = is_masked.expand(*spikes.shape[:2], spikes.shape[2]) # B T S
         mask_type = torch.rand_like(is_masked)
         mask_token = mask_type < self.cfg.mask_token_ratio
         mask_random = (mask_type >= self.cfg.mask_token_ratio) & (mask_type < self.cfg.mask_token_ratio + self.cfg.mask_random_ratio)
