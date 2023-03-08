@@ -82,7 +82,8 @@ def run_exp(cfg : RootConfig) -> None:
                 f'experiment_set={cfg.experiment_set}'
             ]
             # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
-            subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+            subprocess.run(['sbatch', './crc_scripts/launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+            # subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
         exit(0)
 
     logger = logging.getLogger(__name__)
