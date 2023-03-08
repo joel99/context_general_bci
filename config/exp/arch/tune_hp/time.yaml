@@ -25,5 +25,5 @@ dataset:
 train:
   patience: 250 # Extra generous patience.
   autoscale_batch_size: False
-  batch_size: 256
+  batch_size: 512 # higher auto for throughput
 notes: "Sorted, NDT1 (time only)"

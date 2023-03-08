@@ -23,9 +23,9 @@ dataset:
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
 
-# Sweeps run on CRC, A100 40G GPUs. Clip bsz to 256
+# Sweeps run on CRC, A100 40G GPUs. Clip bsz to 512
 train:
   autoscale_batch_size: false
-  batch_size: 256
+  batch_size: 512
 sweep_cfg: base_v2
 sweep_trials: 16
