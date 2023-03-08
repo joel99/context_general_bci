@@ -410,10 +410,26 @@ class DatasetConfig:
     dyer_co: DyerCOConfig = DyerCOConfig()
     gallego_co: ExperimentalConfig = ExperimentalConfig()
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
-    pitt_co: PittConfig = PittConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
-    observation: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
-    ortho: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
-    fbc: ExperimentalConfig = ExperimentalConfig.create_with_arrays(['CRS02b-lateral_m1', 'CRS02b-medial_m1'])
+    pitt_co: PittConfig = PittConfig.create_with_arrays([
+        'CRS02b-lateral_m1', 'CRS02b-medial_m1',
+        'CRS07-lateral_m1', 'CRS07-medial_m1',
+    ])
+    observation: PittConfig = PittConfig.create_with_arrays([
+        'CRS02b-lateral_m1', 'CRS02b-medial_m1',
+        'CRS07-lateral_m1', 'CRS07-medial_m1',
+    ])
+    ortho: PittConfig = PittConfig.create_with_arrays([
+        'CRS02b-lateral_m1', 'CRS02b-medial_m1',
+        'CRS07-lateral_m1', 'CRS07-medial_m1',
+    ])
+    fbc: PittConfig = PittConfig.create_with_arrays([
+        'CRS02b-lateral_m1', 'CRS02b-medial_m1',
+        'CRS07-lateral_m1', 'CRS07-medial_m1',
+    ])
+    unstructured: PittConfig = PittConfig.create_with_arrays([
+        'CRS02b-lateral_m1', 'CRS02b-medial_m1',
+        'CRS07-lateral_m1', 'CRS07-medial_m1',
+    ])
     delay_reach: ExperimentalConfig = ExperimentalConfig()
 
     permute_channels: bool = False # test flag, permute channels randomly per session

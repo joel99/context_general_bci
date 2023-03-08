@@ -141,6 +141,7 @@ context_registry = ContextRegistry([
         'fbc': ExperimentalTask.fbc,
         'fbc-stitch': ExperimentalTask.fbc,
         'unstructured': ExperimentalTask.unstructured,
+        'free_play': ExperimentalTask.unstructured,
         'default': ExperimentalTask.pitt_co
     }),
 ])

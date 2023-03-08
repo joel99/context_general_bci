@@ -434,16 +434,19 @@ class BCIContextInfo(ReachingContextInfo):
                 alias = datapath.name
                 subject, _, session = alias.split('.')
                 session_set = 0
-            else:
+                session_type = pitt_metadata.get(alias, 'default')
+            else: # matlab file
                 alias = datapath.stem
-                subject, _, session, _, session_set = alias.split('_')
+                subject, _, session, _, session_set, _, *session_type = alias.split('_')
+                session_type = '_'.join(session_type)
             if subject.endswith('Home'):
                 subject = subject[:-4]
             elif subject.endswith('Lab'):
                 subject = subject[:-3]
+            alias = f'{task_map.get(session_type).value}_{alias}'
             return BCIContextInfo(
                 subject=SubjectArrayRegistry.query_by_subject(subject),
-                task=task_map.get(pitt_metadata.get(alias, 'default')),
+                task=task_map.get(session_type),
                 _arrays=[
                     'lateral_s1', 'medial_s1',
                     'lateral_m1', 'medial_m1',

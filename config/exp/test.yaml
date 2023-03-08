@@ -12,18 +12,18 @@ dataset:
   serve_tokenized: False
   serve_tokenized_flat: False
 
-  max_arrays: 1
+  max_arrays: 2
   max_channels: 288
 
   scale_ratio: 1.0
   scale_limit_per_eval_session: 300 # no limit
 
   datasets:
-  - odoherty_rtt-Indy.*
-  eval_datasets:
-  - odoherty_rtt-Indy-20160627_01
+  - CRS02bLab*
+  # eval_datasets:
+  # - odoherty_rtt-Indy-20160627_01
 train:
   patience: 250 # Extra generous patience.
-  autoscale_batch_size: False
-  batch_size: 512
-notes: "Sorted, NDT1 (time only)"
+  # autoscale_batch_size: False
+  # batch_size: 512
+# notes: "Sorted, NDT1 (time only)"

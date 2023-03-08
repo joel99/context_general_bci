@@ -60,7 +60,7 @@ dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
 # dataset_name = 'churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG'
 dataset_name = 'mc_rtt'
 dataset_name = 'gallego_co_Chewie_CO_20160510'
-dataset_name = 'CRS07_session_64_set_5'
+dataset_name = 'unstructured_CRS02bLab_session_5_set_4_type_free_play'
 context = context_registry.query(alias=dataset_name)
 if isinstance(context, list):
     context = context[0]
