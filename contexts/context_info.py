@@ -104,7 +104,7 @@ class ContextInfo:
             cache_root=cache_root,
             subject=self.subject,
             context_arrays=self.array,
-            dataset_alias=self.alias
+            dataset_alias=self.alias,
             task=self.task
         )
 

@@ -135,7 +135,6 @@ class PittCOLoader(ExperimentalTaskLoader):
             single_path = cache_root / f'{dataset_alias}_{i}.pth'
             meta_payload['path'].append(single_path)
             torch.save(single_payload, single_path)
-        import pdb;pdb.set_trace() # what exactly do these look like?
         if not datapath.is_dir() and datapath.suffix == '.mat': # payload style, preproc-ed/binned elsewhere
             payload = load_trial(datapath, key='thin_data')
 
@@ -161,9 +160,12 @@ class PittCOLoader(ExperimentalTaskLoader):
                         continue
                     # trim edges -- typically a trial starts with half a second of inter-trial and ends with a second of failure/inter-trial pad
                     session_spikes = session_spikes[start_pad:-end_pad]
-                    session_spikes = chop_vector(session_spikes)
-                    for j, subtrial_spikes in enumerate(session_spikes):
-                        save_trial_spikes(subtrial_spikes, f'{i}_trial{j}')
+                    if session_spikes.size(0) < round(cfg.pitt_co.chop_size_ms / cfg.bin_size_ms):
+                        save_trial_spikes(session_spikes, i)
+                    else:
+                        session_spikes = chop_vector(session_spikes)
+                        for j, subtrial_spikes in enumerate(session_spikes):
+                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}')
 
                 # Ignore position for simplicity, for now.
                 # if 'position' in payload:
