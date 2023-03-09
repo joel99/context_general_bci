@@ -137,7 +137,7 @@ class TaskConfig:
     behavior_lag: int = 0 # in ms
     behavior_target: DataKey = DataKey.bhvr_vel
     behavior_lag_lookahead: bool = True # if true, allow lookahead up to `lag`. Only applied in causal path
-    behavior_fit_thresh: float = 0.0001 # exclude from loss, timesteps with values (velocities) less than this
+    behavior_fit_thresh: float = 0.0 # exclude from loss, timesteps with values (velocities) less than this
     behavior_metric_thresh: float = 0.0001 # exclude from r2, timesteps with values (velocities) less than this
 
     decode_separate: bool = False # for bhvr decoding, use a separate transformer decoder? (Only compat with EmbedStrat.token)

@@ -989,6 +989,12 @@ class BehaviorRegression(TaskPipeline):
         )
         length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
         r2_mask = length_mask
+
+        if self.cfg.behavior_fit_thresh:
+            loss_mask = length_mask & (bhvr_tgt.abs() > self.cfg.behavior_fit_thresh).any(-1)
+        else:
+            loss_mask = length_mask
+
         # blacklist
         if self.session_blacklist:
             session_mask = batch[MetaKey.session] != self.session_blacklist[0]
@@ -997,27 +1003,33 @@ class BehaviorRegression(TaskPipeline):
             if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
                 logits = self.blacklist_classifier(backbone_features)[..., 0]
                 blacklist_loss = self.blacklist_loss(logits, repeat((~session_mask).float(), 'b -> b t', t=backbone_features.shape[1]))
-                blacklist_loss = blacklist_loss[length_mask].mean()
+                blacklist_loss = blacklist_loss[loss_mask].mean()
                 batch_out['adversarial_loss'] = blacklist_loss
-            length_mask = length_mask & session_mask[:, None]
+            loss_mask = loss_mask & session_mask[:, None]
             if not session_mask.any(): # no valid sessions
                 loss = 0 # don't fail
             else:
-                loss = loss[length_mask].mean()
+                loss = loss[loss_mask].mean()
             if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
                 # print(f'loss: {loss:.3f}, blacklist loss: {blacklist_loss:.3f}, total = {(loss - (blacklist_loss) * self.cfg.adversarial_classify_lambda):.3f}')
                 loss += (-1 * blacklist_loss) * self.cfg.adversarial_classify_lambda # adversarial
         else:
-            loss = loss[length_mask].mean()
+            loss = loss[loss_mask].mean()
+
 
         if getattr(self.cfg, 'kl_lambda', 0.0):
             loss = loss + self.cfg.kl_lambda * batch_out['alignment_kl']
+
         batch_out['loss'] = loss
         if Metric.kinematic_r2 in self.cfg.metrics:
             # import pdb;pdb.set_trace()
             valid_bhvr = bhvr[r2_mask]
             valid_tgt = bhvr_tgt[r2_mask]
             batch_out[Metric.kinematic_r2] = r2_score(valid_tgt.detach().cpu(), valid_bhvr.detach().cpu(), multioutput='raw_values')
+            if Metric.kinematic_r2_thresh in self.cfg.metrics:
+                valid_bhvr = valid_bhvr[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
+                valid_tgt = valid_tgt[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
+                batch_out[Metric.kinematic_r2_thresh] = r2_score(valid_tgt.detach().cpu(), valid_bhvr.detach().cpu(), multioutput='raw_values')
             # print(batch_out[Metric.kinematic_r2])
             # if (batch_out[Metric.kinematic_r2] < 0).any():
             #     import pdb;pdb.set_trace()

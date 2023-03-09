@@ -833,7 +833,7 @@ class BrainBertInterface(pl.LightningModule):
             if not isinstance(m, Metric) and not isinstance(m, Output): # log misc, mostly task losses
                 self.log(f'{prefix}_{m}', metrics[m], **kwargs)
         for m in self.cfg.task.metrics:
-            if m == Metric.kinematic_r2:
+            if m == Metric.kinematic_r2 or m == Metric.kinematic_r2_thresh:
                 labels = ['x', 'y', 'z']
                 for i, r2 in enumerate(metrics[m]):
                     self.log(f'{prefix}_{m.value}_{labels[i]}', r2, **kwargs)
