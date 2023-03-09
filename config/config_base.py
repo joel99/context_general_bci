@@ -32,6 +32,7 @@ class Metric(Enum):
     co_bps = 'co-bps'
     block_co_bps = 'block-co-bps'
     kinematic_r2 = 'kinematic_r2'
+    kinematic_r2_thresh = 'kinematic_r2_thresh' # a clone that will threshold out extremely low velocities to match Pitt settings
     all_loss = 'all_loss'
 
 class Output(Enum):
@@ -136,6 +137,8 @@ class TaskConfig:
     behavior_lag: int = 0 # in ms
     behavior_target: DataKey = DataKey.bhvr_vel
     behavior_lag_lookahead: bool = True # if true, allow lookahead up to `lag`. Only applied in causal path
+    behavior_fit_thresh: float = 0.0001 # exclude from loss, timesteps with values (velocities) less than this
+    behavior_metric_thresh: float = 0.0001 # exclude from r2, timesteps with values (velocities) less than this
 
     decode_separate: bool = False # for bhvr decoding, use a separate transformer decoder? (Only compat with EmbedStrat.token)
     decode_time_pool: str = "" # none or 'mean'
@@ -410,7 +413,7 @@ class DatasetConfig:
     dyer_co: DyerCOConfig = DyerCOConfig()
     gallego_co: ExperimentalConfig = ExperimentalConfig()
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
-    pitt_co: PittConfig = PittConfig.create_with_arrays([
+    pitt_co: PittConfig = PittConfig.create_with_arrays([ # This is actually the catch all for Pitt, and doesn't have any particular structure. No guarantees, might not even be CO.
         'CRS02b-lateral_m1', 'CRS02b-medial_m1',
         'CRS07-lateral_m1', 'CRS07-medial_m1',
     ])

@@ -1,31 +1,44 @@
 # @package _global_
-
 defaults:
-  - /model: pretrain_2x # equivalent to flat_enc_dec without flattening
-  - /dataset: flat # We override rather than use different preset for easy comparison
+  - /model:
+    - flat_enc_dec
+  - /model/task:
+    - joint_bhvr_decode_flat
+  - /dataset: flat
 model:
-  causal: true
+  session_embed_token_count: 8
   subject_embed_strategy: EmbedStrat.token
-  task:
-    mask_ratio: 0.5 # for efficiency
-dataset:
-  serve_tokenized: False
-  serve_tokenized_flat: False
+  task_embed_strategy: EmbedStrat.token
+  neurons_per_token: 16
 
+  task:
+    task_weights: [1.0, 2000.0]
+    behavior_lag: 0
+    decode_time_pool: "mean"
+
+dataset:
+  max_tokens: 8192
+  max_length_ms: 2000 # fit
   max_arrays: 2
+
+  # scale_limit_per_eval_session: 100
+  # scale_limit_per_session: 0
+
+  neurons_per_token: 16
   max_channels: 288
 
-  scale_ratio: 1.0
-  scale_limit_per_eval_session: 300 # no limit
-
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
   datasets:
-  - obs.*
-  - ortho.*
-  - fbc.*
-  # eval_datasets:
-  # - odoherty_rtt-Indy-20160627_01
+  - observation_.*
+
+  eval_datasets:
+    - observation_CRS02bLab_session_1926.*
+
 train:
-  patience: 250 # Extra generous patience.
-  # autoscale_batch_size: False
-  # batch_size: 512
-# notes: "Sorted, NDT1 (time only)"
+  patience: 2000
+  # autoscale_batch_size: false
+  # batch_size: 32
+# init_from_id: reach_80000-qp92sqlc
+# init_tag: val_loss

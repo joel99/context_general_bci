@@ -38,12 +38,8 @@ dataset:
   eval_datasets:
     - CRS02bHome.data.00437
 
-  pitt_co:
-    arrays:
-    - CRS02b-lateral_m1
-    - CRS02b-medial_m1
 train:
-  patience: 200
+  patience: 2000
   # autoscale_batch_size: false
   # batch_size: 32
 # init_from_id: reach_80000-qp92sqlc

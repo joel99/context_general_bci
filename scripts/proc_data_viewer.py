@@ -15,6 +15,8 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 from omegaconf import OmegaConf
 from analyze_utils import prep_plt
+from tasks import ExperimentalTask
+# context_registry.query(task=ExperimentalTask.fbc)
 
 # dataset_name = 'mc_maze_large' # 122 sorted units
 # dataset_name = 'mc_maze_medium' # 114 sorted units
@@ -61,6 +63,10 @@ dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
 dataset_name = 'mc_rtt'
 dataset_name = 'gallego_co_Chewie_CO_20160510'
 dataset_name = 'unstructured_CRS02bLab_session_5_set_4_type_free_play'
+dataset_name = 'observation'
+# dataset_name = 'ortho'
+# dataset_name = 'ortho_CRS07'
+
 context = context_registry.query(alias=dataset_name)
 if isinstance(context, list):
     context = context[0]
@@ -70,8 +76,8 @@ print(context)
 
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 # default_cfg.data_keys = [DataKey.spikes]
-default_cfg.data_keys = [DataKey.spikes]
-# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+# default_cfg.data_keys = [DataKey.spikes]
+default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 20
 default_cfg.max_channels = 288
 # default_cfg.bin_size_ms = 30
@@ -79,25 +85,26 @@ default_cfg.churchland_misc.arrays = ['Jenkins-M1', 'Nitschke-M1', 'Reggie-M1']
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 # default_cfg.max_channels = 250
 default_cfg.datasets = [context.alias]
-
+default_cfg.datasets = ['observation_CRS02bHome.']
 #%%
 dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
 dataset.subset_split()
+print(context.alias)
 
 lengths = []
 for t in range(len(dataset)):
     lengths.append(dataset[t][DataKey.spikes].size(0))
 trial = 1
-print(dataset_name)
 print(f'Length: {len(dataset)}')
 print(f'Spike shape (padded): {dataset[trial][DataKey.spikes].size()}')
 print(f'Channels: {dataset[trial]["channel_counts"].sum(1)[0]}')
-print(f'Time: {min(lengths), max(lengths)}')
+print(f'Timerange: {min(lengths) * dataset.cfg.bin_size_ms, max(lengths) * dataset.cfg.bin_size_ms}')
 
 #%%
 trial = 0
-# trial = 10
+trial = 1
+# trial = 5
 trial_vel = dataset[trial][DataKey.bhvr_vel]
 
 # Show kinematic trace by integrating trial_vel
@@ -110,13 +117,22 @@ ax[0].plot(trial_vel)
 ax[1].plot(trial_pos)
 
 #%%
-# 262...
+# Print distribution of velocities etc
+vel_min = []
+vel_max = []
+for t in range(len(dataset)):
+    trial_vel = dataset[t][DataKey.bhvr_vel]
+    vel_min.append(trial_vel.min().item())
+    vel_max.append(trial_vel.max().item())
+sns.histplot(vel_min)
+sns.histplot(vel_max)
+
 #%%
 trial = 0
 trial = 1
 trial = 2
-trial = 4
-trial = 10
+# trial = 4
+# trial = 10
 
 pop_spikes = dataset[trial][DataKey.spikes]
 pop_spikes = pop_spikes[..., 0]

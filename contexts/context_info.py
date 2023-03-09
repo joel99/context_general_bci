@@ -416,10 +416,11 @@ with open('contexts/pitt_type.yaml') as f:
             session_type = list(session.values())[0]
             pitt_metadata[f'CRS02bHome.data.{session_num:05d}'] = session_type
 
-import json
-with open('contexts/query_payload.json') as f:
-    query_payload = json.load(f)
-    pitt_metadata.update(query_payload)
+with open('contexts/pitt_blacklist.csv') as f:
+    for line in f:
+        non_co_sessions = line.strip().split(',')
+        for session in non_co_sessions:
+            pitt_metadata[session] = 'default'
 
 @dataclass
 class BCIContextInfo(ReachingContextInfo):
@@ -440,6 +441,9 @@ class BCIContextInfo(ReachingContextInfo):
                 alias = datapath.stem
                 subject, _, session, _, session_set, _, *session_type = alias.split('_')
                 session_type = '_'.join(session_type)
+                blacklist_check_key = f'{subject}_session_{session}_set_{session_set}'
+                if blacklist_check_key in pitt_metadata:
+                    session_type = pitt_metadata[blacklist_check_key]
             if subject.endswith('Home'):
                 subject = subject[:-4]
             elif subject.endswith('Lab'):

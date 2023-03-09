@@ -116,6 +116,8 @@ class PittCOLoader(ExperimentalTaskLoader):
         dataset_alias: str,
         task: ExperimentalTask,
     ):
+        assert cfg.bin_size_ms == 20, 'code not prepped for different resolutions'
+
         meta_payload = {}
         meta_payload['path'] = []
         arrays_to_use = context_arrays
@@ -126,15 +128,21 @@ class PittCOLoader(ExperimentalTaskLoader):
                 vec.unfold(0, chop_size, chop_size),
                 'trial hidden time -> trial time hidden'
              ) # Trial x C x chop_size (time)
-        def save_trial_spikes(spikes, i):
+        def save_trial_spikes(spikes, i, other_data={}):
             single_payload = {
                 DataKey.spikes: create_spike_payload(
                     spikes.clone(), arrays_to_use
                 ),
+                **other_data
             }
             single_path = cache_root / f'{dataset_alias}_{i}.pth'
             meta_payload['path'].append(single_path)
             torch.save(single_payload, single_path)
+        def get_velocity(position):
+            position = gaussian_filter1d(position, 2.5, axis=0)
+            vel = torch.tensor(np.gradient(position, axis=0)).float()
+            vel[vel.isnan()] = 0
+            return vel
         if not datapath.is_dir() and datapath.suffix == '.mat': # payload style, preproc-ed/binned elsewhere
             payload = load_trial(datapath, key='thin_data')
 
@@ -154,23 +162,25 @@ class PittCOLoader(ExperimentalTaskLoader):
                 # Iterate by trial, assumes continuity
                 for i in payload['trial_num'].unique():
                     session_spikes = payload['spikes'][payload['trial_num'] == i]
+
                     start_pad = round(500 / cfg.bin_size_ms)
                     end_pad = round(1000 / cfg.bin_size_ms)
                     if session_spikes.size(0) <= start_pad + end_pad: # something's odd about this trial
                         continue
                     # trim edges -- typically a trial starts with half a second of inter-trial and ends with a second of failure/inter-trial pad
                     session_spikes = session_spikes[start_pad:-end_pad]
+                    if 'position' in payload and task == ExperimentalTask.observation: # We only "trust" in the labels provided by obs (for now)
+                        session_vel = get_velocity(payload['position'][payload['trial_num'] == i])[start_pad:-end_pad]
+                    else:
+                        session_vel = None
                     if session_spikes.size(0) < round(cfg.pitt_co.chop_size_ms / cfg.bin_size_ms):
-                        save_trial_spikes(session_spikes, i)
+                        save_trial_spikes(session_spikes, i, {DataKey.bhvr_vel: session_vel} if session_vel is not None else {})
                     else:
                         session_spikes = chop_vector(session_spikes)
+                        if session_vel is not None:
+                            session_vel = chop_vector(session_vel)
                         for j, subtrial_spikes in enumerate(session_spikes):
-                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}')
-
-                # Ignore position for simplicity, for now.
-                # if 'position' in payload:
-                    # position = payload['position']
-                    # position = gaussian_filter1d(position, 2.5, axis=0)
+                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', {DataKey.bhvr_vel: session_vel[j]} if session_vel is not None else {})
         else: # folder style, preproc-ed on mind
             for i, fname in enumerate(datapath.glob("*.mat")):
                 if fname.stem.startswith('QL.Task'):
@@ -181,12 +191,7 @@ class PittCOLoader(ExperimentalTaskLoader):
                         ),
                     }
                     if 'position' in payload:
-                        position = payload['position']
-                        position = gaussian_filter1d(position, 2.5, axis=0) # derived from iteration in `raw_data_viewer_kinematics.py`
-                        vel = torch.tensor(np.gradient(position, axis=0)).float()
-                        vel[vel.isnan()] = 0
-                        assert cfg.bin_size_ms == 20, 'check out rtt code for resampling'
-                        single_payload[DataKey.bhvr_vel] = vel
+                        single_payload[DataKey.bhvr_vel] = get_velocity(payload['position'])
                     single_path = cache_root / f'{i}.pth'
                     meta_payload['path'].append(single_path)
                     torch.save(single_payload, single_path)

@@ -142,7 +142,8 @@ context_registry = ContextRegistry([
         'fbc-stitch': ExperimentalTask.fbc,
         'unstructured': ExperimentalTask.unstructured,
         'free_play': ExperimentalTask.unstructured,
-        'default': ExperimentalTask.pitt_co
+        'default': ExperimentalTask.pitt_co,
+        'unk': ExperimentalTask.pitt_co,
     }),
     *BCIContextInfo.build_from_dir('./data/pitt_varied', task_map={
         'unstructured': ExperimentalTask.unstructured,
