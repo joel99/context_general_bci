@@ -38,6 +38,7 @@ class ChurchlandMazeLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
         sampling_rate: int = 1000 # Hz
     ):
         if cfg.churchland_maze.chop_size_ms > 0:

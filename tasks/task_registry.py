@@ -21,6 +21,7 @@ class ExperimentalTaskLoader:
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
     ) -> pd.DataFrame:
         r"""
             Load data from `path` into a dataframe.

@@ -38,6 +38,7 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
     ):
         # Hacky patch to determine the right arrays to use
         if cfg.odoherty_rtt.include_sorted:

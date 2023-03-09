@@ -114,6 +114,7 @@ class PittCOLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
     ):
         meta_payload = {}
         meta_payload['path'] = []
@@ -134,6 +135,7 @@ class PittCOLoader(ExperimentalTaskLoader):
             single_path = cache_root / f'{dataset_alias}_{i}.pth'
             meta_payload['path'].append(single_path)
             torch.save(single_payload, single_path)
+        import pdb;pdb.set_trace() # what exactly do these look like?
         if not datapath.is_dir() and datapath.suffix == '.mat': # payload style, preproc-ed/binned elsewhere
             payload = load_trial(datapath, key='thin_data')
 
@@ -145,18 +147,23 @@ class PittCOLoader(ExperimentalTaskLoader):
                 if u >= 15 or c / elements < 1e-5: # anomalous, suppress. (Some bins randomly report impossibly high counts like 90 (in 20ms))
                     spikes[spikes == u] = 0
 
-            if spikes.size(0) > 300:  # > 6s, assume free play, dont' bother with trial structure
+            if task == ExperimentalTask.unstructured:  # dont' bother with trial structure
                 spikes = chop_vector(spikes)
                 for i, trial_spikes in enumerate(spikes):
                     save_trial_spikes(trial_spikes, i)
             else:
                 # Iterate by trial, assumes continuity
-                import pdb;pdb.set_trace() # what exactly do these look like?
                 for i in payload['trial_num'].unique():
-                    trial_spikes = payload['spikes'][payload['trial_num'] == i]
-                    if trial_spikes.size(0) < 20: # something's odd about this trial
+                    session_spikes = payload['spikes'][payload['trial_num'] == i]
+                    start_pad = round(500 / cfg.bin_size_ms)
+                    end_pad = round(1000 / cfg.bin_size_ms)
+                    if session_spikes.size(0) <= start_pad + end_pad: # something's odd about this trial
                         continue
-                    save_trial_spikes(trial_spikes, i)
+                    # trim edges -- typically a trial starts with half a second of inter-trial and ends with a second of failure/inter-trial pad
+                    session_spikes = session_spikes[start_pad:-end_pad]
+                    session_spikes = chop_vector(session_spikes)
+                    for j, subtrial_spikes in enumerate(session_spikes):
+                        save_trial_spikes(subtrial_spikes, f'{i}_trial{j}')
 
                 # Ignore position for simplicity, for now.
                 # if 'position' in payload:

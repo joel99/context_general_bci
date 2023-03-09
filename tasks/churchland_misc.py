@@ -87,6 +87,7 @@ class ChurchlandMiscLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
         sampling_rate: int = 1000 # Hz
     ):
         meta_payload = {}

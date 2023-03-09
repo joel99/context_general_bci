@@ -36,6 +36,7 @@ class DelayReachLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
     ):
         meta_payload = {}
         meta_payload['path'] = []

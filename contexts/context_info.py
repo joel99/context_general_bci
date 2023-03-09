@@ -105,6 +105,7 @@ class ContextInfo:
             subject=self.subject,
             context_arrays=self.array,
             dataset_alias=self.alias
+            task=self.task
         )
 
     # For sorting

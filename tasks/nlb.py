@@ -45,6 +45,7 @@ class NLBLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
         phase='test',
         dataset_cls=NWBDataset,
         make_tensor_fn=make_train_input_tensors,
