@@ -26,9 +26,9 @@ dataset:
   odoherty_rtt:
     arrays: ["Indy-M1", "Loco-M1"]
     include_sorted: False
-# train:
-  # accumulate_batches: 16 # auto = 16 (12G GPU), effective = 256
-  # autoscale_batch_size: false
-  # batch_size: 16
+train:
+  accumulate_batches: 16 # auto = 16 (12G GPU), effective = 256
+  autoscale_batch_size: false
+  batch_size: 16
 
 notes: "Unsorted, Patch size 8"

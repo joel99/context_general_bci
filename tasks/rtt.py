@@ -89,14 +89,16 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
             channels, units = spike_refs.shape # units >= 1 are sorted, we just want MUA on unit 0
             mua_unit = 0
 
-            unit_budget = units if cfg.odoherty_rtt.include_sorted else 1
+            unit_budget = units # We change to include all units instead of just hash for unsorted, much more reasonable
+            # unit_budget = units if cfg.odoherty_rtt.include_sorted else 1
             spike_arr = torch.zeros((time_span, channels, unit_budget), dtype=torch.uint8)
 
             min_spike_time = []
             for c in range(channels):
                 if h5file[spike_refs[c, mua_unit]].dtype != np.float:
                     continue
-                unit_range = range(units) if cfg.odoherty_rtt.include_sorted else [mua_unit]
+                unit_range = range(units)
+                # unit_range = range(units) if cfg.odoherty_rtt.include_sorted else [mua_unit]
                 for unit in unit_range:
                     spike_times = h5file[spike_refs[c, unit]][()]
                     if spike_times.shape[0] == 2: # empty unit
@@ -111,6 +113,9 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
                     ms_spike_cnt = torch.tensor(ms_spike_cnt[spike_mask], dtype=torch.uint8)
                     spike_arr[ms_spike_times, c, unit] = ms_spike_cnt
                     min_spike_time.append(ms_spike_times[0])
+            if not cfg.odoherty_rtt.include_sorted:
+                spike_arr = spike_arr.sum(2, keepdim=True)
+
         min_spike_time = max(min(min_spike_time), 0) # some spikes come before marked trial start
         spike_arr: torch.Tensor = spike_arr[min_spike_time:, :]
 

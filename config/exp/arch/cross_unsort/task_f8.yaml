@@ -13,22 +13,25 @@ dataset:
   neurons_per_token: 8
 
   max_arrays: 1
-  max_channels: 96
+  max_channels: 288
 
   scale_ratio: 1.0
   scale_limit_per_eval_session: 300 # no limit
 
   datasets:
-  - odoherty_rtt-Indy.*
+  - mc_maze.*
+  - dyer_co.*
+  - gallego_co.*
+  - odoherty_rtt-Indy-20160627_01
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
 
   odoherty_rtt:
     arrays: ["Indy-M1", "Loco-M1"]
     include_sorted: False
-# train:
-  # accumulate_batches: 16 # auto = 16 (12G GPU), effective = 256
-  # autoscale_batch_size: false
-  # batch_size: 16
+train:
+  accumulate_batches: 8 # auto = 16 (12G GPU) x 2 GPU, effective = 256
+  autoscale_batch_size: false
+  batch_size: 16
 
-notes: "Unsorted, Patch size 8"
+notes: "Unsorted, transfer task."
