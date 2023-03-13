@@ -2,33 +2,42 @@
 
 defaults:
   - /model: flat_enc_dec
+  - /train: pretrain
   - /dataset: flat
 model:
-  causal: true
+  session_embed_token_count: 8
+  task_embed_token_count: 32
+  task_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.none
+
+  causal: True
+
+  transformer:
+    n_layers: 12
+  hidden_size: 384
+
   task:
-    mask_ratio: 0.5 # for efficiency
-  neurons_per_token: 8
+    mask_ratio: 0.5
+  neurons_per_token: 16
+
 dataset:
-  neurons_per_token: 8
+  neurons_per_token: 16
+  max_tokens: 8192
+  max_length_ms: 2000
+  max_arrays: 2
 
-  max_arrays: 1
-  max_channels: 96
-
-  scale_ratio: 1.0
-  scale_limit_per_eval_session: 300 # no limit
-
+  bin_size_ms: 20
+  max_channels: 288
   datasets:
-  - odoherty_rtt-Indy.*
-  eval_datasets:
-  - odoherty_rtt-Indy-20160627_01
+  - churchland_maze.*
+  - churchland_misc.*
+  # - CRS02bHome.data.*
+  - odoherty_rtt-Loco.*
+  - mc_maze.*
+  - dyer_co.*
+  - gallego_co.*
 
-  odoherty_rtt:
-    arrays: ["Indy-M1", "Loco-M1"]
-    include_sorted: False
 # train:
-  # accumulate_batches: 16 # auto = 16 (12G GPU), effective = 256
   # autoscale_batch_size: false
-  # batch_size: 16
-
-notes: "Unsorted, Patch size 8"
+  # batch_size: 32

@@ -29,7 +29,7 @@ dataset:
 train:
   patience: 250 # Extra generous patience.
   autoscale_batch_size: False
-  batch_size: 512 # higher auto for throughput
+  batch_size: 1024 # higher auto for throughput
 notes: "Unsorted, NDT1 (time only)"
 sweep_cfg: base_v2
 sweep_trials: 16

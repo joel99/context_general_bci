@@ -225,6 +225,7 @@ class ModelConfig:
 
     task_embed_strategy: EmbedStrat = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
     task_embed_size: int = 256
+    task_embed_token_count: int = 1
 
     # This needs a separate API from the rest, likely, tied to readin.
     array_embed_strategy: EmbedStrat = EmbedStrat.none # ? maybe subsumed by subject

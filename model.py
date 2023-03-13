@@ -149,7 +149,7 @@ class BrainBertInterface(pl.LightningModule):
         project_size = self.cfg.hidden_size
 
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            if self.cfg.session_embed_strategy == EmbedStrat.token and getattr(self.cfg, 'session_embed_token_count', 1) > 1:
+            if self.cfg.session_embed_strategy == EmbedStrat.token and self.cfg.session_embed_token_count > 1:
                 self.session_embed = nn.Parameter(torch.randn(len(self.data_attrs.context.session), self.cfg.session_embed_token_count, self.cfg.session_embed_size) / math.sqrt(self.cfg.session_embed_size))
                 self.session_flag = nn.Parameter(torch.randn(self.cfg.session_embed_token_count, self.cfg.session_embed_size) / math.sqrt(self.cfg.session_embed_size))
             else:
@@ -191,15 +191,19 @@ class BrainBertInterface(pl.LightningModule):
                     self.array_flag = nn.Parameter(torch.zeros(self.data_attrs.max_arrays, self.cfg.array_embed_size))
 
         if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            self.task_embed = nn.Embedding(len(self.data_attrs.context.task), self.cfg.task_embed_size)
-            if self.cfg.task_embed_strategy == EmbedStrat.concat:
-                project_size += self.cfg.task_embed_size
-            elif self.cfg.task_embed_strategy == EmbedStrat.token:
-                assert self.cfg.task_embed_size == self.cfg.hidden_size
-                if self.cfg.init_flags:
-                    self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
-                else:
-                    self.task_flag = nn.Parameter(torch.zeros(self.cfg.task_embed_size))
+            if self.cfg.task_embed_strategy == EmbedStrat.token and getattr(self.cfg, 'task_embed_token_count', 1) > 1:
+                self.task_embed = nn.Parameter(torch.randn(len(self.data_attrs.context.task), self.cfg.task_embed_token_count, self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
+                self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_token_count, self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
+            else:
+                self.task_embed = nn.Embedding(len(self.data_attrs.context.task), self.cfg.task_embed_size)
+                if self.cfg.task_embed_strategy == EmbedStrat.concat:
+                    project_size += self.cfg.task_embed_size
+                elif self.cfg.task_embed_strategy == EmbedStrat.token:
+                    assert self.cfg.task_embed_size == self.cfg.hidden_size
+                    if self.cfg.init_flags:
+                        self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
+                    else:
+                        self.task_flag = nn.Parameter(torch.zeros(self.cfg.task_embed_size))
 
         if project_size is not self.cfg.hidden_size:
             self.context_project = nn.Sequential(
@@ -446,7 +450,10 @@ class BrainBertInterface(pl.LightningModule):
         else:
             subject = None
         if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            task: torch.Tensor = self.task_embed(batch[MetaKey.task])
+            if getattr(self.cfg, 'task_embed_token_count', 1) > 1:
+                task: torch.Tensor = self.task_embed[batch[MetaKey.task]]
+            else:
+                task: torch.Tensor = self.task_embed(batch[MetaKey.task])
         else:
             task = None
         if self.cfg.array_embed_strategy is not EmbedStrat.none:

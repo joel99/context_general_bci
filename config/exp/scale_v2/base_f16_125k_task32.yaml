@@ -6,6 +6,7 @@ defaults:
   - /dataset: flat
 model:
   session_embed_token_count: 8
+  task_embed_token_count: 32
   task_embed_strategy: EmbedStrat.token
   subject_embed_strategy: EmbedStrat.token
   array_embed_strategy: EmbedStrat.none
@@ -29,14 +30,15 @@ dataset:
   bin_size_ms: 20
   max_channels: 288
   datasets:
-  # - churchland_maze.*
+  - churchland_maze.*
   - churchland_misc.*
   # - CRS02bHome.data.*
-  # - odoherty_rtt-Loco.*
+  - odoherty_rtt-Loco.*
   - mc_maze.*
   - dyer_co.*
-  # - gallego_co.*
+  - gallego_co.*
 
 train:
   autoscale_batch_size: false
   batch_size: 32
+notes: "Want to figure how to aggregate without task interference (which we observe in 125K base), testing task capacity"

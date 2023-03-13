@@ -9,11 +9,16 @@ defaults:
   - /dataset: flat
 model:
   session_embed_token_count: 8
+  # task_embed_token_count: 32
   subject_embed_strategy: EmbedStrat.token
   task_embed_strategy: EmbedStrat.token
   neurons_per_token: 16
 
   causal: True
+
+  transformer:
+    n_layers: 12
+  hidden_size: 512
 
   task:
     behavior_lag: 120
@@ -30,7 +35,7 @@ dataset:
   max_length_ms: 2000 # fit
   max_arrays: 2
 
-  scale_limit_per_eval_session: 100
+  scale_limit_per_eval_session: 400
   scale_limit_per_session: 0
 
   neurons_per_token: 16
@@ -47,9 +52,12 @@ dataset:
 
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
+
+  churchland_misc:
+    arrays: ["Reggie-M1", "Nitschke-M1", "Jenkins-M1"]
 train:
   patience: 200
-  autoscale_batch_size: false
-  batch_size: 16
-init_from_id: base_f16_80k-oj6otmdz
+  # autoscale_batch_size: false
+  # batch_size: 64
+init_from_id: base_f16_125k_12x512-1bt40l8h
 init_tag: val_loss

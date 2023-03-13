@@ -27,8 +27,8 @@ dataset:
     arrays: ["Indy-M1", "Loco-M1"]
     include_sorted: False
 train:
-  accumulate_batches: 16 # auto = 16 (12G GPU), effective = 256
+  accumulate_batches: 8 # auto = 128 (12G GPU)
   autoscale_batch_size: false
-  batch_size: 16
+  batch_size: 128
 
 notes: "Unsorted, Patch size 8"

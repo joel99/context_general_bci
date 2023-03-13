@@ -28,7 +28,6 @@ dataset:
     include_sorted: False
 train:
   autoscale_batch_size: false
-  accumulate_batches: 2
-  batch_size: 16
+  batch_size: 32
 sweep_cfg: base_v2
 sweep_trials: 16
