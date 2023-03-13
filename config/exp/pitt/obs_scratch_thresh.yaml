@@ -3,7 +3,7 @@ defaults:
   - /model:
     - flat_enc_dec
   - /model/task:
-    - joint_bhvr_decode_flat
+    - bhvr_decode_flat
   - /dataset: flat
 model:
   session_embed_token_count: 8
@@ -12,12 +12,9 @@ model:
   neurons_per_token: 16
 
   task:
-    task_weights: [1.0, 2000.0]
-    behavior_lag: 0
-    decode_time_pool: "mean"
-
-    behavior_fit_thresh: 1e-4
+    behavior_fit_thresh: 1e-2 # that many z-scores away...
     metrics: [Metric.kinematic_r2, Metric.kinematic_r2_thresh]
+    decode_normalizer: pitt_obs_zscore.pt
 
 dataset:
   max_tokens: 8192
@@ -39,6 +36,6 @@ dataset:
 train:
   patience: 2000
   autoscale_batch_size: false
-  batch_size: 32
+  batch_size: 16
 # init_from_id: reach_80000-qp92sqlc
 # init_tag: val_loss

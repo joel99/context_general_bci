@@ -16,34 +16,17 @@ import seaborn as sns
 from omegaconf import OmegaConf
 from analyze_utils import prep_plt, wandb_query_latest, load_wandb_run
 
-mode = 'rtt'
-# mode = 'pitt'
-if mode == 'rtt':
-    ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
-else:
-    ctxs = context_registry.query(task=ExperimentalTask.observation)
-
-context = ctxs[0]
-# context = context_registry.query(alias='mc_rtt')
-print(context)
-# datapath = './data/odoherty_rtt/indy_20160407_02.mat'
-# context = context_registry.query_by_datapath(datapath)
-
 sample_query = 'test' # just pull the latest run
-# sample_query = 'pt_parity'
+sample_query = 'pt_parity'
 
 wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 print(wandb_run)
 _, cfg, _ = load_wandb_run(wandb_run, tag='val_loss')
-default_cfg = cfg.dataset
+cfg.dataset.datasets = ['observation_.*']
 # default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 # default_cfg.data_keys = [DataKey.spikes]
-default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
-default_cfg.bin_size_ms = 20
-# default_cfg.datasets = [context.alias]
-default_cfg.max_arrays = min(max(1, len(context.array)), 2)
-# default_cfg.max_channels = 250
-dataset = SpikingDataset(default_cfg)
+cfg.dataset.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+dataset = SpikingDataset(cfg.dataset)
 dataset.build_context_index()
 dataset.subset_split()
 
@@ -53,6 +36,21 @@ dataset.subset_split()
 #     lengths.append(dataset[t][DataKey.spikes].size(0))
 # print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
 print(len(dataset))
+#%%
+vels = []
+for t in range(len(dataset)):
+    vels.append(dataset[t][DataKey.bhvr_vel])
+vels = torch.cat(vels, 0)
+print(vels.shape)
+#%%
+torch.save({
+    'mean': vels.mean(0),
+    'std': vels.std(0),
+}, 'pitt_obs_zscore.pt')
+# print(vels.mean(0), vels.std(0))
+# print(vels.min(0), vels.max(0))
+# print((vels / vels.std(0)).min(0), (vels / vels.std(0)).max(0))
+
 #%%
 # trial = 0
 trial = 10

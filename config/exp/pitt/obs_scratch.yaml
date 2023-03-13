@@ -11,10 +11,10 @@ model:
   task_embed_strategy: EmbedStrat.token
   neurons_per_token: 16
 
+  causal: True
+
   task:
-    task_weights: [1.0, 2000.0]
-    behavior_lag: 0
-    decode_time_pool: "mean"
+    decode_normalizer: pitt_obs_zscore.pt
 
 dataset:
   max_tokens: 8192

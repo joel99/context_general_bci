@@ -143,6 +143,7 @@ class TaskConfig:
     decode_separate: bool = False # for bhvr decoding, use a separate transformer decoder? (Only compat with EmbedStrat.token)
     decode_time_pool: str = "" # none or 'mean'
     decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
+    decode_normalizer: str = '' # If provided, use this path to normalize
 
 @dataclass
 class TransformerConfig:

@@ -856,6 +856,16 @@ class BehaviorRegression(TaskPipeline):
                 covariance_matrix=torch.diag(torch.diag(normal_params['cov'])) # covariance is unstable
             )
 
+        if getattr(self.cfg, 'decode_normalizer', ''):
+            # See `data_kin_global_stat`
+            zscore_path = Path(self.cfg.decode_normalizer)
+            assert zscore_path.exists(), f'normalizer path {zscore_path} does not exist'
+            self.register_buffer('bhvr_mean', torch.load(zscore_path)['mean'])
+            self.register_buffer('bhvr_std', torch.load(zscore_path)['std'])
+        else:
+            self.bhvr_mean = None
+            self.bhvr_std = None
+
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token or self.cfg.decode_separate:
             return batch
@@ -1009,6 +1019,9 @@ class BehaviorRegression(TaskPipeline):
             return batch_out
         # Compute loss
         bhvr_tgt = batch[self.cfg.behavior_target]
+        if self.bhvr_mean is not None:
+            bhvr_tgt = bhvr_tgt - self.bhvr_mean
+            bhvr_tgt = bhvr_tgt / self.bhvr_std
         loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
         # import pdb;pdb.set_trace()
         _, length_mask, _ = self.get_masks(
