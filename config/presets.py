@@ -147,15 +147,20 @@ class BhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
     decode_strategy: EmbedStrat = EmbedStrat.token
     decode_separate: bool = True
 
+    decode_time_pool: str = 'mean'
+
 cs.store(group='model/task', name='bhvr_decode_flat', node=BhvrDecodeFlatTaskConfig)
 
 @dataclass
 class JointBhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding])
     metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
-    task_weights: List[float] = field(default_factory=lambda: [1.0, 0.5]) # so they're both on order of 0.3 (for bin size 20ms)
+    task_weights: List[float] = field(default_factory=lambda: [1.0, 20.0]) # so they're both on order of 0.3 (for bin size 20ms)
+
     decode_strategy: EmbedStrat = EmbedStrat.token
     decode_separate: bool = True
+
+    decode_time_pool: str = 'mean'
 
 cs.store(group='model/task', name='joint_bhvr_decode_flat', node=JointBhvrDecodeFlatTaskConfig)
 
@@ -165,11 +170,15 @@ class BhvrDecodeTaskConfig(InfillTaskConfig):
     metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
     decode_strategy: EmbedStrat = EmbedStrat.project
 
+    decode_time_pool: str = "mean"
+
 cs.store(group='model/task', name='bhvr_decode', node=BhvrDecodeTaskConfig)
 
 @dataclass
 class JointBhvrDecodeTaskConfig(InfillTaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill, ModelTask.kinematic_decoding])
+    task_weights: List[float] = field(default_factory=lambda: [1.0, 20.0]) # so they're both on order of 0.3 (for bin size 20ms)
+
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps, Metric.kinematic_r2])
     decode_strategy: EmbedStrat = EmbedStrat.project
 

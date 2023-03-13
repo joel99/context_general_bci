@@ -333,6 +333,8 @@ class SpaceTimeTransformer(nn.Module):
 
         if self.cfg.flat_encoder:
             # The aesthetics though
+            # import pdb;pdb.set_trace()
+            # print(src.size(), times.size(), positions.size())
             src = src + self.time_encoder(times) + self.space_encoder(positions)
             b, t, s = src.size(0), src.size(1), 1 # it's implied that codepaths get that "space" is not really 1, but it's not used
             has_array_dim = False
@@ -541,6 +543,8 @@ class SpaceTimeTransformer(nn.Module):
                     padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
             else:
                 padding_mask = make_padding_mask(b, t, s, src, temporal_context, space_padding_mask)
+                if padding_mask is None:
+                    padding_mask = torch.zeros((b, t, s), dtype=torch.bool, device=src.device)
                 padding_mask = rearrange(padding_mask, 'b t s -> b (t s)')
             # Trial context is never padded
             if trial_context is not None:

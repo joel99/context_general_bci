@@ -10,10 +10,7 @@ model:
   subject_embed_strategy: EmbedStrat.token
   task:
     mask_ratio: 0.5 # for efficiency
-    decode_strategy: EmbedStrat.token
-    decode_separate: True
 
-    decode_time_pool: ""
     behavior_lag: 120
 
   readin_strategy: EmbedStrat.unique_project

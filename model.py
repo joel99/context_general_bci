@@ -483,11 +483,6 @@ class BrainBertInterface(pl.LightningModule):
             #     'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
             #     'b t a s_a chunk h -> b t a s_a (chunk h)'
             # ) # yes, we rearrange twice... better for alternative control flows..
-            if self.cfg.encode_decode: # TODO decouple
-                # cache context
-                batch['session'] = session
-                batch['subject'] = subject
-                batch['task'] = task
         else: # --> b t a h
             state_in = torch.as_tensor(rearrange(
                 batch[DataKey.spikes], 'b t a c h -> b t a (c h)'
@@ -500,6 +495,11 @@ class BrainBertInterface(pl.LightningModule):
                 state_in = self.readin(state_in, session, subject, array)
             else: # standard project
                 state_in = self.readin(state_in)
+        if self.cfg.encode_decode or self.cfg.task.decode_separate: # TODO decouple
+            # cache context
+            batch['session'] = session
+            batch['subject'] = subject
+            batch['task'] = task
 
         static_context = []
         project_context = [] # only for static info
@@ -899,7 +899,6 @@ class BrainBertInterface(pl.LightningModule):
     def configure_optimizers(self):
         scheduler = None
         if getattr(self.cfg, 'tune_decay', 0.0) > 0.0: # layer-wise LR decay
-            assert self.cfg.transform_space and not self.cfg.transformer.factorized_space_time, 'not implemented (only flat implemented rn)'
             # fix readin
             # accelerate context
             # decay decoder, encoder (Kaiming MAE strategy https://arxiv.org/abs/2111.06377)
@@ -915,7 +914,7 @@ class BrainBertInterface(pl.LightningModule):
             decayed_lr = self.cfg.lr_init * self.cfg.accelerate_new_params
             # Decoder
             for k in self.task_pipelines:
-                if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
                     raise NotImplementedError
                 # Supported pipelines use "out" and "decoder" terminology for final readout and transformer decoder, respectively
                 pipeline = self.task_pipelines[k]
@@ -926,7 +925,7 @@ class BrainBertInterface(pl.LightningModule):
                     grouped_params.append({"params": pipeline.decoder.final_norm.parameters(), 'lr': decayed_lr})
             for i in reversed(range(self.cfg.decoder_layers)):
                 for k in self.task_pipelines:
-                    if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                    if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
                         raise NotImplementedError
                     if not hasattr(pipeline, 'decoder'):
                         continue

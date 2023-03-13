@@ -3,18 +3,14 @@
 defaults:
   - /model: flat_enc_dec
   - /model/task:
-    - bhvr_decode_flat
+    - joint_bhvr_decode_flat
   - /dataset: flat
 model:
   causal: true
   subject_embed_strategy: EmbedStrat.token
   task:
-    mask_ratio: 0.5 # for efficiency
+    mask_ratio: 0.1 # for efficiency
     behavior_lag: 120
-
-    decode_separate: False
-    decode_time_pool: 'mean'
-    decode_strategy: EmbedStrat.project
 
   neurons_per_token: 128
   lr_init: 5e-5
@@ -48,4 +44,4 @@ train:
 init_from_id: f128-0urcwaf7
 init_tag: val_loss
 
-notes: "Controlled comparison with stitch/time."
+notes: "Sorted, Patch size 128"

@@ -3,7 +3,7 @@ defaults:
   - /model:
     - flat_enc_dec
   - /model/task:
-    - bhvr_decode_flat
+    - joint_bhvr_decode_flat
   - /dataset: flat
 model:
   session_embed_token_count: 8
@@ -28,14 +28,26 @@ dataset:
   - DataKey.spikes
   - DataKey.bhvr_vel
   datasets:
-  - observation_.*
+  - CRS02bHome.data.00329
+  - CRS02bHome.data.00336
+  - CRS02bHome.data.00339
+  - CRS02bHome.data.00345
+  - CRS02bHome.data.00360
+  - CRS02bHome.data.00371
+  - CRS02bHome.data.00402
+  - CRS02bHome.data.00422
+  - CRS02bHome.data.00424
+  - CRS02bHome.data.00437
+  - CRS02bHome.data.00445
 
   eval_datasets:
-  - observation_CRS02bLab_session_1926.*
+  - CRS02bHome.data.00445
+  # - observation_CRS02bLab_session_1926.*
 
 train:
   patience: 2000
   autoscale_batch_size: false
-  batch_size: 16
-# init_from_id: reach_80000-qp92sqlc
-# init_tag: val_loss
+  batch_size: 32 # happen to be using 40G this run, 32 x 4
+init_from_id: bci_pt-qz71ene9
+init_tag: val_loss
+notes: "Regress to Angelica's datasets, where we previously got nontrivial R2"
