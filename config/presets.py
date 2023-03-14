@@ -35,11 +35,8 @@ class PretrainingModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_ramp_steps: int = 500
     lr_decay_steps: int = 10000 # this is not that much for small models
-    dropout: float = 0.3
+    dropout: float = 0.1
     hidden_size: int = 128
-    session_embed_size: int = 128
-    subject_embed_size: int = 128
-    array_embed_size: int = 128
     transformer: TransformerConfig = field(default_factory=SmallTransformerConfigLessDrop)
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 

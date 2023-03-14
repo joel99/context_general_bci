@@ -899,7 +899,7 @@ class BehaviorRegression(TaskPipeline):
         # assume no padding (i.e. all timepoints have data) - this is square assumption
         temporal_padding_mask = torch.ones(backbone_features.size(0), backbone_features.size(1), dtype=bool, device=backbone_features.device)
 
-        # Scatter "padding" to remove square assumption.
+        # Scatter "padding" to remove square assumption. Output is padding iff all timepoints are padding
         temporal_padding_mask = temporal_padding_mask.float().scatter_reduce(
             src=torch.zeros_like(temporal_padding_mask).float(),
             dim=1,

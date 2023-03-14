@@ -551,7 +551,17 @@ class SpaceTimeTransformer(nn.Module):
                 padding_mask = F.pad(padding_mask, (0, trial_context.size(-2)), value=False)
             # import pdb;pdb.set_trace()
             # print(t, s, contextualized_src.size(), src_mask.size(), padding_mask.size())
+            # ! Bug patch note
+            # There's an edge case that nans out outputs. It occurs when a padding token can't attend to anything.
+            # This occurs specifically due to confluence of:
+            # 1. padding specified by `src_key_padding_mask` can't be attended to (no self attending)
+            # 2. we use shuffle on heterogeneous datasets. So we may get datapoints that have no real data in given timesteps.
+            # 3. pad value set to 0, so padding gets marked at time 0
+            # 4. all timestep 0 tokens are padding (no other tokens in sequence that can be attended to)
+            # Suggested fix: pad value set to something nonzero. (IDR why we didn't set that in the first place, I think concerns about attending to sub-chunk padding?)
             output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
+            # if output.isnan().any():
+                # import pdb;pdb.set_trace()
             output = output[:, : t * s]
             if not self.cfg.flat_encoder:
                 output = rearrange(output, 'b (t s) h -> b t s h', t=t, s=s)

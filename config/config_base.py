@@ -354,6 +354,8 @@ class DatasetConfig:
             - lightweight regex for _aliases_ (not paths). Note this is regex, not glob.
     """
     datasets: List[str] = field(default_factory=lambda: [])
+    exclude_datasets: List[str] = field(default_factory=lambda: []) # more specific aliases to exclude, processed after above, and no-ops for anything in `eval_datasets`
+
     scale_ratio: float = 1. # ratio of dataset to use for training (For scaling experiments)
     scale_limit_per_session: int = 0 # >0, limit number of trials per session (For scaling experiments)
     scale_limit_per_eval_session: int = 0 # >0, separately limit number of eval sessions (For scaling experiments)
@@ -399,7 +401,8 @@ class DatasetConfig:
     max_tokens: int = 1024 # for tokenized - note we will still respect max_length_ms (limit fills in space and then either this inferred time limit or the explicit one)
     # This will be the # of tokens served; be generous because we will crop in any flat task.
     # ! note that the above is going to be strictly more than amount proc-ed in encoder-decoder encoder -- since things are cropped.
-    pad_value: int = 0
+    pad_value: int = 5
+    pad_spike_value: int = 0 # extra thing just for spikes, which we can typically afford to keep low w/o consequence. Sometimes above pad value (which applies for time/space values) needs to be set higher than 0 to avoid nan attn
     # pad_value: int = 20
 
     # Experimental Task configuration - matching registered names

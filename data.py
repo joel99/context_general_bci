@@ -114,6 +114,11 @@ class SpikingDataset(Dataset):
 
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
+            if getattr(self.cfg, 'exclude_datasets', []):
+                exclude_contexts = self.list_alias_to_contexts(self.cfg.exclude_datasets)
+                eval_contexts = self.list_alias_to_contexts(self.cfg.eval_datasets)
+                exclude_contexts = [c for c in exclude_contexts if c not in eval_contexts]
+                contexts = [c for c in contexts if c not in exclude_contexts]
             self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
             # self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
             if 'split' in self.meta_df.columns and len(self.meta_df['split'].unique()) > 1:
@@ -187,7 +192,7 @@ class SpikingDataset(Dataset):
             return [context_registry.query_by_datapath(session_path_or_alias)]
 
     def mark_eval_split_if_exists(self):
-        if not getattr(self.cfg, 'eval_datasets', []):
+        if not self.cfg.eval_datasets:
             return
         assert self.loaded, "Must load meta_df before loading eval datasets"
         if 'split' not in self.meta_df:
@@ -325,7 +330,7 @@ class SpikingDataset(Dataset):
                         # * Note to get array tokenization to respect array boundaries, use non-alias full array references
                         if self.cfg.serve_tokenized:
                             pad_amount = (self.cfg.neurons_per_token - array_group.size(-2) % self.cfg.neurons_per_token) % self.cfg.neurons_per_token
-                            array_group = F.pad(array_group, (0, 0, 0, pad_amount), value=self.pad_value)
+                            array_group = F.pad(array_group, (0, 0, 0, pad_amount), value=getattr(self.cfg, 'pad_spike_value', 0))
                             tokenized_spikes = array_group.unfold(1, self.cfg.neurons_per_token, self.cfg.neurons_per_token) # time space H channel_in_token
                             array_spikes.append(rearrange(tokenized_spikes, 'time space h c -> time space c h'))
                             time, token_space = tokenized_spikes.size(0), tokenized_spikes.size(1) # track across aliases and arrays
@@ -436,7 +441,7 @@ class SpikingDataset(Dataset):
                     covariate_lengths = torch.tensor([el.size(0) for el in stack_batch[covariate_key]])
                 for k in stack_batch.keys():
                     if isinstance(k, DataKey) or (self.cfg.serve_tokenized_flat and k == CHANNEL_KEY):
-                        stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True)
+                        stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True, padding_value=self.pad_value)
                     else:
                         stack_batch[k] = torch.stack(stack_batch[k])
                 stack_batch[LENGTH_KEY] = lengths
