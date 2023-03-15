@@ -29,6 +29,47 @@ def apply_shuffle(item: torch.Tensor, shuffle: torch.Tensor):
     # shuffle: T
     return item.transpose(1, 0)[shuffle].transpose(1, 0)
 
+def temporal_pool(batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, temporal_padding_mask: torch.Tensor, pool='mean'):
+    # Originally developed for behavior regression, extracted for heldoutprediction
+    # Assumption is that bhvr is square!
+    # This path assumes DataKey.time is not padded!
+    time_key = DataKey.time
+    if 'update_time' in batch:
+        time_key = 'update_time'
+    pooled_features = torch.zeros(
+        backbone_features.shape[0],
+        batch[time_key].max() + 1 + 1, # 1 extra for padding
+        backbone_features.shape[-1],
+        device=backbone_features.device,
+        dtype=backbone_features.dtype
+    )
+    time_with_pad_marked = torch.where(
+        temporal_padding_mask,
+        batch[time_key].max() + 1,
+        batch[time_key]
+    )
+    pooled_features = pooled_features.scatter_reduce(
+        src=backbone_features,
+        dim=1,
+        index=repeat(time_with_pad_marked, 'b t -> b t h', h=backbone_features.shape[-1]),
+        reduce=pool,
+        include_self=False
+    )
+    # print(torch.allclose(pooled_features[:,0,:] - backbone_features[:,:7,:].mean(1), torch.tensor(0, dtype=torch.float), atol=1e-6))
+    backbone_features = pooled_features[:,:-1] # remove padding
+    # assume no padding (i.e. all timepoints have data) - this is square assumption
+    temporal_padding_mask = torch.ones(backbone_features.size(0), backbone_features.size(1), dtype=bool, device=backbone_features.device)
+
+    # Scatter "padding" to remove square assumption. Output is padding iff all timepoints are padding
+    temporal_padding_mask = temporal_padding_mask.float().scatter_reduce(
+        src=torch.zeros_like(batch[time_key]).float(),
+        dim=1,
+        index=batch[time_key],
+        reduce='prod',
+        include_self=False
+    ).bool()
+    return backbone_features, temporal_padding_mask
+
 class PoissonCrossEntropyLoss(nn.CrossEntropyLoss):
     r"""
         Poisson-softened multi-class cross entropy loss
@@ -286,7 +327,7 @@ class RatePrediction(TaskPipeline):
 
     @staticmethod
     def create_linear_head(
-        cfg: ModelConfig, in_size: int, out_size: int
+        cfg: ModelConfig, in_size: int, out_size: int, layers=1
     ):
         assert cfg.transform_space, 'Classification heads only supported for transformed space'
         if getattr(cfg.task, 'spike_loss', 'poisson') == 'poisson':
@@ -296,6 +337,9 @@ class RatePrediction(TaskPipeline):
         out_layers = [
             nn.Linear(in_size, out_size * classes)
         ]
+        if layers > 1:
+            out_layers.insert(0, nn.ReLU() if cfg.activation == 'relu' else nn.GELU())
+            out_layers.insert(0, nn.Linear(in_size, in_size))
         if getattr(cfg.task, 'spike_loss', 'poisson') == 'poisson':
             if not cfg.lograte:
                 out_layers.append(nn.ReLU())
@@ -431,7 +475,8 @@ class ShuffleInfill(RatePrediction):
         self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.neurons_per_token)
         self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
 
-        if getattr(self.cfg, 'query_heldout', 0):
+        self.joint_heldout = getattr(self.cfg, 'query_heldout', 0) and not ModelTask.heldout_decoding in self.cfg.tasks
+        if self.joint_heldout:
             self.heldout_mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
             self.query_readout = RatePrediction.create_linear_head(cfg, cfg.hidden_size, self.cfg.query_heldout)
 
@@ -495,6 +540,7 @@ class ShuffleInfill(RatePrediction):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         # B T
+        batch_out = {}
         target = batch['spike_target']
         if target.ndim == 5:
             raise NotImplementedError("cannot even remember what this should look like")
@@ -504,7 +550,7 @@ class ShuffleInfill(RatePrediction):
             decoder_input = torch.cat([backbone_features, decoder_mask_tokens], dim=1)
             times = torch.cat([batch[DataKey.time], batch[f'{DataKey.time}_target']], 1)
             positions = torch.cat([batch[DataKey.position], batch[f'{DataKey.position}_target']], 1)
-            if getattr(self.cfg, 'query_heldout', 0):
+            if self.joint_heldout:
                 time_seg = torch.arange(0, times.max()+1, device=times.device, dtype=times.dtype)
                 decoder_input = torch.cat([
                     decoder_input,
@@ -526,7 +572,7 @@ class ShuffleInfill(RatePrediction):
                 temporal_padding_mask = None
             else:
                 temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
-                if getattr(self.cfg, 'query_heldout', 0):
+                if self.joint_heldout:
                     temporal_padding_mask = torch.cat([
                         temporal_padding_mask,
                         torch.full((temporal_padding_mask.size(0), time_seg.size(0)), False, device=temporal_padding_mask.device, dtype=temporal_padding_mask.dtype),
@@ -540,12 +586,14 @@ class ShuffleInfill(RatePrediction):
                 times=times,
                 positions=positions
             )
-            if getattr(self.cfg, 'query_heldout', 0):
+            if self.joint_heldout:
                 heldout_reps, reps = torch.split(reps, [time_seg.size(0), reps.size(1)-time_seg.size(0)], dim=1)
                 heldout_rates = self.query_readout(heldout_reps)
+            if getattr(self.cfg, 'decode_use_shuffle_backbone', False):
+                batch_out['update_features'] = reps
+                batch_out['update_time'] = times
             reps = reps[:, -target.size(1):]
             rates = self.out(reps)
-        batch_out = {}
         assert not Metric.bps in self.cfg.metrics, 'not supported'
         if Output.logrates in self.cfg.outputs:
             # out is B T C, we want B T' C, and then to unshuffle
@@ -559,7 +607,7 @@ class ShuffleInfill(RatePrediction):
                 ], dim=1)
                 unshuffled = apply_shuffle(all_tokens, batch[SHUFFLE_KEY].argsort())
             batch_out[Output.logrates] = unshuffled  # unflattening occurs outside
-        if Output.heldout_logrates in self.cfg.outputs and getattr(self.cfg, 'query_heldout', 0):
+        if Output.heldout_logrates in self.cfg.outputs and self.joint_heldout:
             batch_out[Output.heldout_logrates] = heldout_rates
         if not compute_metrics:
             return batch_out
@@ -567,7 +615,7 @@ class ShuffleInfill(RatePrediction):
         loss_mask = self.get_loss_mask(batch, loss) # shuffle specific
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
-        if getattr(self.cfg, 'query_heldout', 0):
+        if self.joint_heldout:
             heldout_target = batch[DataKey.heldout_spikes][...,0]
             heldout_rates = heldout_rates[..., :heldout_target.size(-1)] # Crop to relevant max length
             heldout_loss = self.loss(heldout_rates, heldout_target)
@@ -731,14 +779,21 @@ class HeldoutPrediction(RatePrediction):
     def __init__(
         self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
     ):
+        self.spacetime = cfg.transform_space
+        self.concatenating = cfg.transform_space and not data_attrs.serve_tokens
         if cfg.task.decode_strategy == EmbedStrat.project:
-            self.concatenating = cfg.transform_space and not data_attrs.serve_tokens
-            if self.concatenating:
-                decoder = nn.Identity() # dummy
+            if data_attrs.serve_tokens_flat:
+                assert cfg.task.decode_time_pool == 'mean', "Only mean pooling is supported for flat serving"
+                decoder = RatePrediction.create_linear_head(cfg, backbone_out_size, cfg.task.query_heldout, layers=1 if cfg.task.linear_head else 2)
             else:
-                backbone_out_size = backbone_out_size * data_attrs.max_arrays
+                assert not data_attrs.serve_tokens, 'not implemented'
+                if self.concatenating:
+                    decoder = nn.Identity() # dummy
+                else:
+                    backbone_out_size = backbone_out_size * data_attrs.max_arrays
                 decoder = None
         elif cfg.task.decode_strategy == EmbedStrat.token:
+            # TODO vet this path (for spacetime), add the spacetime transformer decoder
             decoder = nn.Identity()
         super().__init__(
             backbone_out_size=backbone_out_size,
@@ -747,28 +802,28 @@ class HeldoutPrediction(RatePrediction):
             data_attrs=data_attrs,
             decoder=decoder
         )
-        if self.cfg.decode_strategy == EmbedStrat.project:
-            if self.concatenating:
-                # It takes too much memory to concatenate full length tokens x however many tokens there are
-                # Project down to neuron dim first.
-                decoder_layers = [
-                    nn.Linear(backbone_out_size, backbone_out_size),
-                    nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
-                    nn.Linear(backbone_out_size, cfg.neurons_per_token),
-                    Rearrange('b t a s_a c -> b t (a s_a c)'),
-                    nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
-                    nn.Linear(data_attrs.max_arrays * data_attrs.max_channel_count, channel_count),
-                ]
-                if not cfg.lograte:
-                    decoder_layers.append(nn.ReLU())
-                self.out = nn.Sequential(*decoder_layers) # override
-        elif self.cfg.decode_strategy == EmbedStrat.token:
+        # if self.cfg.decode_strategy == EmbedStrat.project:
+        #     if self.concatenating:
+        #         # It takes too much memory to concatenate full length tokens x however many tokens there are
+        #         # Project down to neuron dim first.
+        #         decoder_layers = [
+        #             nn.Linear(backbone_out_size, backbone_out_size),
+        #             nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+        #             nn.Linear(backbone_out_size, cfg.neurons_per_token),
+        #             Rearrange('b t a s_a c -> b t (a s_a c)'),
+        #             nn.ReLU() if cfg.activation == 'relu' else nn.GELU(),
+        #             nn.Linear(data_attrs.max_arrays * data_attrs.max_channel_count, channel_count),
+        #         ]
+        #         if not cfg.lograte:
+        #             decoder_layers.append(nn.ReLU())
+        #         self.out = nn.Sequential(*decoder_layers) # override
+        if self.cfg.decode_strategy == EmbedStrat.token:
             self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes)
             self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, channel_count)
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token:
-            return
+            return batch
         self.injector.inject(batch, in_place=True)
         return batch
 
@@ -777,7 +832,12 @@ class HeldoutPrediction(RatePrediction):
             # crop out injected tokens, -> B T H
             backbone_features = self.injector.extract(batch, backbone_features)
         elif self.cfg.decode_strategy == EmbedStrat.project and not self.concatenating:
-            backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
+            if self.spacetime:
+                temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch, truncate_shuffle=not self.cfg.decode_use_shuffle_backbone)
+                if self.cfg.decode_time_pool and DataKey.time in batch:
+                    backbone_features, temporal_padding_mask = temporal_pool(batch, backbone_features, temporal_padding_mask, pool=self.cfg.decode_time_pool)
+            else:
+                backbone_features = rearrange(backbone_features.clone(), 'b t a c -> b t (a c)')
         rates: torch.Tensor = self.out(backbone_features)
         batch_out = {}
         if Output.heldout_logrates in self.cfg.outputs:
@@ -786,14 +846,24 @@ class HeldoutPrediction(RatePrediction):
         if not compute_metrics:
             return batch_out
         spikes = batch[DataKey.heldout_spikes][..., 0]
+
+        if getattr(self.cfg, 'query_heldout', 0):
+            rates = rates[..., :spikes.size(-1)]
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
-        loss = rearrange(loss, 'b t c -> b t 1 c')
-        loss_mask, length_mask, channel_mask = self.get_masks(
-            batch,
-            compute_channel=False
-        ) # channel_key expected to be no-op since we don't provide this mask
-        loss = loss[loss_mask]
+        if getattr(self.cfg, 'query_heldout', 0):
+            loss_mask, length_mask, channel_mask = self.get_masks(
+                batch, ref=spikes,
+                length_key=COVARIATE_LENGTH_KEY,
+                channel_key=COVARIATE_CHANNEL_KEY
+            )
+        else:
+            loss = rearrange(loss, 'b t c -> b t 1 c')
+            loss_mask, length_mask, channel_mask = self.get_masks(
+                batch,
+                compute_channel=False
+            ) # channel_key expected to be no-op since we don't provide this mask
+            loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.co_bps in self.cfg.metrics:
             batch_out[Metric.co_bps] = self.bps(
@@ -925,43 +995,6 @@ class BehaviorRegression(TaskPipeline):
         self.injector.inject(batch, in_place=True)
         return batch
 
-    def temporal_pool(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, temporal_padding_mask: torch.Tensor):
-        # Assumption is that bhvr is square!
-        # This path assumes DataKey.time is not padded!
-        pooled_features = torch.zeros(
-            backbone_features.shape[0],
-            batch[DataKey.time].max() + 1 + 1, # 1 extra for padding
-            backbone_features.shape[-1],
-            device=backbone_features.device,
-            dtype=backbone_features.dtype
-        )
-        time_with_pad_marked = torch.where(
-            temporal_padding_mask,
-            batch[DataKey.time].max() + 1,
-            batch[DataKey.time]
-        )
-        pooled_features = pooled_features.scatter_reduce(
-            src=backbone_features,
-            dim=1,
-            index=repeat(time_with_pad_marked, 'b t -> b t h', h=backbone_features.shape[-1]),
-            reduce=self.cfg.decode_time_pool,
-            include_self=False
-        )
-        # print(torch.allclose(pooled_features[:,0,:] - backbone_features[:,:7,:].mean(1), torch.tensor(0, dtype=torch.float), atol=1e-6))
-        backbone_features = pooled_features[:,:-1] # remove padding
-        # assume no padding (i.e. all timepoints have data) - this is square assumption
-        temporal_padding_mask = torch.ones(backbone_features.size(0), backbone_features.size(1), dtype=bool, device=backbone_features.device)
-
-        # Scatter "padding" to remove square assumption. Output is padding iff all timepoints are padding
-        temporal_padding_mask = temporal_padding_mask.float().scatter_reduce(
-            src=torch.zeros_like(temporal_padding_mask).float(),
-            dim=1,
-            index=batch[DataKey.time].unique(dim=1),
-            reduce='prod',
-            include_self=False
-        ).bool()
-        return backbone_features, temporal_padding_mask
-
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
         if getattr(self.cfg, 'kl_lambda', 0.0):
@@ -970,12 +1003,12 @@ class BehaviorRegression(TaskPipeline):
             # But for reconstruction purposes it is _much_ more convenient to learn the alignment pre-pool
             # We are still _not_ trying a many to many map; it is a many to one.
             backbone_features = self.alignment_enc(backbone_features)
-            batch_out['cycle_features'] = backbone_features # pipe back out for reconstruction
+            batch_out['update_features'] = backbone_features # pipe back out for reconstruction
         if self.cfg.decode_strategy == EmbedStrat.token:
             if self.cfg.decode_separate:
                 temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
-                if getattr(self.cfg, 'decode_time_pool', ""): # B T H -> B T H
-                    backbone_features, temporal_padding_mask = self.temporal_pool(batch, backbone_features, temporal_padding_mask)
+                if self.cfg.decode_time_pool: # B T H -> B T H
+                    backbone_features, temporal_padding_mask = temporal_pool(batch, backbone_features, temporal_padding_mask, pool=self.cfg.decode_time_pool)
                     if Output.pooled_features in self.cfg.outputs:
                         batch_out[Output.pooled_features] = backbone_features.detach()
                 if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
@@ -1059,7 +1092,7 @@ class BehaviorRegression(TaskPipeline):
         elif self.cfg.decode_strategy == EmbedStrat.project: # linear
             temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
             if getattr(self.cfg, 'decode_time_pool', "") and DataKey.time in batch: # B T H -> B T H
-                backbone_features, temporal_padding_mask = self.temporal_pool(batch, backbone_features, temporal_padding_mask)
+                backbone_features, temporal_padding_mask = temporal_pool(batch, backbone_features, temporal_padding_mask, pool=self.cfg.decode_time_pool)
         bhvr = self.out(backbone_features)
         if self.bhvr_lag_bins:
             bhvr = bhvr[:, :-self.bhvr_lag_bins]

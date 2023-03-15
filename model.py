@@ -656,6 +656,11 @@ class BrainBertInterface(pl.LightningModule):
             for t in self.cfg.task.tasks:
                 if t != ModelTask.kinematic_decoding:
                     task_order.append(t)
+        if getattr(self.cfg.task, 'decode_use_shuffle_backbone', False):
+            task_order = [ModelTask.shuffle_infill]
+            for t in self.cfg.task.tasks:
+                if t != ModelTask.shuffle_infill:
+                    task_order.append(t)
         for i, task in enumerate(task_order):
             pipeline_features = unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features
             update = self.task_pipelines[task.value](
@@ -663,9 +668,14 @@ class BrainBertInterface(pl.LightningModule):
                 pipeline_features,
                 eval_mode=eval_mode
             )
-            if 'cycle_features' in batch_out:
-                features = batch_out['cycle_features']
-                del batch_out['cycle_features']
+            to_del = []
+            for k in update:
+                if 'update' in str(k):
+                    batch[k] = update[k]
+                    to_del.append(k)
+            for k in to_del:
+                del update[k]
+            features = batch.get('update_features', features)
             if 'loss' in update and self.cfg.task.task_weights[i] > 0:
                 batch_out[f'{task.value}_loss'] = update['loss']
                 running_loss = running_loss + self.cfg.task.task_weights[i] * update['loss']
@@ -728,18 +738,28 @@ class BrainBertInterface(pl.LightningModule):
             for t in self.cfg.task.tasks:
                 if t != ModelTask.kinematic_decoding:
                     task_order.append(t)
+        if getattr(self.cfg.task, 'decode_use_shuffle_backbone', False):
+            task_order = [ModelTask.shuffle_infill]
+            for t in self.cfg.task.tasks:
+                if t != ModelTask.shuffle_infill:
+                    task_order.append(t)
         for task in task_order:
-            batch_out.update(
-                self.task_pipelines[task.value](
-                    batch,
-                    unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none  else features,
-                    compute_metrics=False,
-                    eval_mode=True
-                )
+            update = self.task_pipelines[task.value](
+                batch,
+                unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none  else features,
+                compute_metrics=False,
+                eval_mode=True
             )
-            if 'cycle_features' in batch_out:
-                features = batch_out['cycle_features']
-                del batch_out['cycle_features']
+            to_del = []
+            for k in update:
+                if 'update' in str(k):
+                    batch[k] = update[k]
+                    to_del.append(k)
+            for k in to_del:
+                del update[k]
+            features = batch.get('update_features', features)
+            batch_out.update(update)
+
         if self.data_attrs.serve_tokens_flat and Output.logrates in batch_out:
             batch_out[Output.logrates] = unflatten(batch_out[Output.logrates], batch_out['time'], batch_out['position'])
         if transform_logrates:
@@ -836,7 +856,7 @@ class BrainBertInterface(pl.LightningModule):
     # ==================== Optimization ====================
     def common_log(self, metrics, prefix='', **kwargs):
         for m in metrics:
-            if not isinstance(m, Metric) and not isinstance(m, Output): # log misc, mostly task losses
+            if not isinstance(m, Metric) and not isinstance(m, Output) and 'update' not in m: # log misc, mostly task losses
                 self.log(f'{prefix}_{m}', metrics[m], **kwargs)
         for m in self.cfg.task.metrics:
             if m == Metric.kinematic_r2 or m == Metric.kinematic_r2_thresh:

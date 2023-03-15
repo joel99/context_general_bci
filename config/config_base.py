@@ -144,6 +144,7 @@ class TaskConfig:
     decode_time_pool: str = "" # none or 'mean'
     decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
     decode_normalizer: str = '' # If provided, use this path to normalize
+    decode_use_shuffle_backbone: bool = False # Don't discard shuffle infill decode, take full rates as input to backbone features (useful specifically for parity on HeldoutPrediction)
 
     # Held-out neuron prediction - for integration into `ShuffleInfill` (rather than separate task)
     query_heldout: int = 0 # number of heldout neurons to query

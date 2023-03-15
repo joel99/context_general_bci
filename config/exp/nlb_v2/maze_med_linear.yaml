@@ -28,7 +28,7 @@ model:
     # - ModelTask.infill
     - ModelTask.heldout_decoding
     metrics:
-    - Metric.bps
+    # - Metric.bps
     - Metric.co_bps
     - Metric.block_co_bps
   # lr_ramp_steps: 100
