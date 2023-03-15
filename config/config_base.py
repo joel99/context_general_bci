@@ -145,6 +145,9 @@ class TaskConfig:
     decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
     decode_normalizer: str = '' # If provided, use this path to normalize
 
+    # Held-out neuron prediction - for integration into `ShuffleInfill` (rather than separate task)
+    query_heldout: int = 0 # number of heldout neurons to query
+
 @dataclass
 class TransformerConfig:
     n_state: int = 256

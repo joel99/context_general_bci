@@ -15,7 +15,7 @@ model:
   hidden_size: 384
 
   task:
-    mask_ratio: 0.1
+    mask_ratio: 0.4
     query_heldout: 45 # mc_maze maxed at this
     metrics:
     - Metric.co_bps
@@ -34,18 +34,18 @@ dataset:
   max_length_ms: 2000
   max_arrays: 2
 
-  bin_size_ms: 20
   max_channels: 288
   datasets:
   - mc_maze.*
   eval_datasets:
-  - mc_maze_large
+  - mc_maze_med
+  eval_ratio: 0.2
 
   data_keys:
   - DataKey.spikes
   - DataKey.heldout_spikes
 train:
-  patience: 50000
+  patience: 5000
   # autoscale_batch_size: false
   # batch_size: 32
 init_from_id: base_f32_150k_acausal-viexqpg7

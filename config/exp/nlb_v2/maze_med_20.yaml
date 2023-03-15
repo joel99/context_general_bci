@@ -8,7 +8,7 @@ dataset:
   datasets:
   - mc_maze_med
   eval_datasets:
-  - mc_maze_med
+  - mc_maze_medium
   eval_ratio: 0.2
   nlb_maze:
     heldout_neurons: 38
@@ -30,7 +30,5 @@ model:
     - Metric.bps
     - Metric.co_bps
     - Metric.block_co_bps
-  # lr_ramp_steps: 100
-  # lr_decay_steps: 2500
 train:
   patience: 5000

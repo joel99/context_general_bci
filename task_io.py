@@ -14,7 +14,7 @@ from config import (
     ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey,
 )
 
-from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY, COVARIATE_LENGTH_KEY
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY, COVARIATE_LENGTH_KEY, COVARIATE_CHANNEL_KEY
 from contexts import context_registry, ContextInfo
 from subjects import subject_array_registry, SortedArrayInfo
 
@@ -104,6 +104,8 @@ class TaskPipeline(nn.Module):
             length_mask = torch.ones(b, t, device=ref.device, dtype=torch.bool)
         if channel_key in batch and compute_channel: # only some of b x a x c are valid
             channels = batch[channel_key] # b x a of ints < c (or b x t)
+            if channels.ndim == 1:
+                channels = channels.unsqueeze(1)
             # Note no shuffling occurs here because 1. channel_key shuffle is done when needed earlier
             # 2. no spatial shuffling occurs so we do need to apply_shuffle(torch.arange(c))
             if self.serve_tokens and not self.serve_tokens_flat: # if there's multiple arrays, this will show up as b x a (separate from spatial dim in tokens)
@@ -424,9 +426,14 @@ class ShuffleInfill(RatePrediction):
             max_spatial_tokens=data_attrs.max_spatial_tokens,
             n_layers=cfg.decoder_layers,
         )
+        self.max_spatial = data_attrs.max_spatial_tokens
         self.causal = cfg.causal
         self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.neurons_per_token)
         self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
+
+        if getattr(self.cfg, 'query_heldout', 0):
+            self.heldout_mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
+            self.query_readout = RatePrediction.create_linear_head(cfg, cfg.hidden_size, self.cfg.query_heldout)
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         return self.shuffle_crop_batch(self.cfg.mask_ratio, batch, eval_mode=eval_mode)
@@ -497,7 +504,19 @@ class ShuffleInfill(RatePrediction):
             decoder_input = torch.cat([backbone_features, decoder_mask_tokens], dim=1)
             times = torch.cat([batch[DataKey.time], batch[f'{DataKey.time}_target']], 1)
             positions = torch.cat([batch[DataKey.position], batch[f'{DataKey.position}_target']], 1)
-
+            if getattr(self.cfg, 'query_heldout', 0):
+                time_seg = torch.arange(0, times.max()+1, device=times.device, dtype=times.dtype)
+                decoder_input = torch.cat([
+                    decoder_input,
+                    repeat(self.heldout_mask_token, 'h -> b t h', b=target.size(0), t=time_seg.size(0)) # Assumes square
+                ], 1)
+                times = torch.cat([
+                    times, repeat(time_seg, 't -> b t', b=times.size(0))
+                ], 1)
+                positions = torch.cat([
+                    positions,
+                    torch.full((positions.size(0), time_seg.size(0)), self.max_spatial - 1, device=positions.device, dtype=positions.dtype),
+                ], 1)
             trial_context = []
             for key in ['session', 'subject', 'task']:
                 if key in batch and batch[key] is not None:
@@ -507,6 +526,11 @@ class ShuffleInfill(RatePrediction):
                 temporal_padding_mask = None
             else:
                 temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
+                if getattr(self.cfg, 'query_heldout', 0):
+                    temporal_padding_mask = torch.cat([
+                        temporal_padding_mask,
+                        torch.full((temporal_padding_mask.size(0), time_seg.size(0)), False, device=temporal_padding_mask.device, dtype=temporal_padding_mask.dtype),
+                    ], 1)
             reps: torch.Tensor = self.decoder(
                 decoder_input,
                 trial_context=trial_context,
@@ -516,6 +540,9 @@ class ShuffleInfill(RatePrediction):
                 times=times,
                 positions=positions
             )
+            if getattr(self.cfg, 'query_heldout', 0):
+                heldout_reps, reps = torch.split(reps, [time_seg.size(0), reps.size(1)-time_seg.size(0)], dim=1)
+                heldout_rates = self.query_readout(heldout_reps)
             reps = reps[:, -target.size(1):]
             rates = self.out(reps)
         batch_out = {}
@@ -532,12 +559,38 @@ class ShuffleInfill(RatePrediction):
                 ], dim=1)
                 unshuffled = apply_shuffle(all_tokens, batch[SHUFFLE_KEY].argsort())
             batch_out[Output.logrates] = unshuffled  # unflattening occurs outside
+        if Output.heldout_logrates in self.cfg.outputs and getattr(self.cfg, 'query_heldout', 0):
+            batch_out[Output.heldout_logrates] = heldout_rates
         if not compute_metrics:
             return batch_out
         loss: torch.Tensor = self.loss(rates, target) # b t' c
-        loss_mask = self.get_loss_mask(batch, loss)
+        loss_mask = self.get_loss_mask(batch, loss) # shuffle specific
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
+        if getattr(self.cfg, 'query_heldout', 0):
+            heldout_target = batch[DataKey.heldout_spikes][...,0]
+            heldout_rates = heldout_rates[..., :heldout_target.size(-1)] # Crop to relevant max length
+            heldout_loss = self.loss(heldout_rates, heldout_target)
+            heldout_loss_mask, heldout_length_mask, heldout_channel_mask = self.get_masks(
+                batch, ref=heldout_target,
+                length_key=COVARIATE_LENGTH_KEY,
+                channel_key=COVARIATE_CHANNEL_KEY
+            )
+            heldout_loss = heldout_loss[heldout_loss_mask]
+            batch_out['loss'] = batch_out['loss'] + heldout_loss.mean()
+            if Metric.co_bps in self.cfg.metrics:
+                batch_out[Metric.co_bps] = self.bps(
+                    heldout_rates.unsqueeze(-2), heldout_target.unsqueeze(-2),
+                    length_mask=heldout_length_mask,
+                    channel_mask=heldout_channel_mask
+                )
+            if Metric.block_co_bps in self.cfg.metrics:
+                batch_out[Metric.block_co_bps] = self.bps(
+                    heldout_rates.unsqueeze(-2), heldout_target.unsqueeze(-2),
+                    length_mask=heldout_length_mask,
+                    channel_mask=heldout_channel_mask,
+                    block=True
+                )
         return batch_out
 
 

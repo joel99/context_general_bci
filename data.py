@@ -40,8 +40,9 @@ r"""
 
 # Padding tokens
 LENGTH_KEY = 'length'
-COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for padded sequences of covariates in the flat case
 CHANNEL_KEY = 'channel_counts'
+COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for padded sequences of covariates in the flat case
+COVARIATE_CHANNEL_KEY = 'covariate_channel_counts' # essentially for heldout channels only
 HELDOUT_CHANNEL_KEY = 'heldout_channel_counts'
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,10 @@ class SpikingDataset(Dataset):
         current = self.preproc_version(task)
         cached_preproc_version.pop('arrays', None)
         current.pop('arrays', None)
+        if 'heldout_neurons' in cached_preproc_version:
+            cached_preproc_version.pop('heldout_neurons')
+        if 'heldout_neurons' in current:
+            current.pop('heldout_neurons')
         return current != cached_preproc_version
 
     def list_alias_to_contexts(self, path_or_alias_list: List[Path | str]) -> List[ContextInfo]:
@@ -373,7 +378,7 @@ class SpikingDataset(Dataset):
         if self.cfg.max_channels and not self.cfg.serve_tokenized_flat:
             out[CHANNEL_KEY] = torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
             # if heldout_channel_counts:
-            #     out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
+                # out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
         return out
 
     def __len__(self):
@@ -431,7 +436,7 @@ class SpikingDataset(Dataset):
                                     item = F.pad(item, (0, space_lengths[i] - item.size(1)), value=self.pad_value)
                             stack_batch[k].append(item)
                         else:
-                            if self.cfg.serve_tokenized_flat and k == CHANNEL_KEY:
+                            if self.cfg.serve_tokenized_flat and k == CHANNEL_KEY: # determine cropped channel count
                                 b[k] = b[k][crop_start[i]:crop_start[i]+time_budget[i]]
                                 stack_batch[k].append(b[k].flatten(0, 1))
                             else:
@@ -439,6 +444,12 @@ class SpikingDataset(Dataset):
                 lengths = torch.tensor([el.size(0) for el in stack_batch[DataKey.spikes]])
                 if covariate_key is not None:
                     covariate_lengths = torch.tensor([el.size(0) for el in stack_batch[covariate_key]])
+                    covariate_channels = torch.tensor([el.size(1) for el in stack_batch[covariate_key]])
+                    # Manually pad to max channels
+                    covariate_max = covariate_channels.max()
+                    pad_els = [0] + [0, 0] * (stack_batch[covariate_key][0].ndim - 2)
+                    for i, el in enumerate(stack_batch[covariate_key]):
+                        stack_batch[covariate_key][i] = F.pad(el, (*pad_els, covariate_max - el.size(1)), value=self.pad_value)
                 for k in stack_batch.keys():
                     if isinstance(k, DataKey) or (self.cfg.serve_tokenized_flat and k == CHANNEL_KEY):
                         stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True, padding_value=self.pad_value)
@@ -447,6 +458,7 @@ class SpikingDataset(Dataset):
                 stack_batch[LENGTH_KEY] = lengths
                 if covariate_key is not None:
                     stack_batch[COVARIATE_LENGTH_KEY] = covariate_lengths
+                    stack_batch[COVARIATE_CHANNEL_KEY] = covariate_channels
                 return dict(stack_batch) # cast back to dict as pytorch distributed can act up with defaultdicts
             return collater
         else:

@@ -22,9 +22,9 @@ model:
     dropout: 0.8
     n_heads: 2
   task:
-    task_weights: [1., 1.]
+    task_weights: [1.]
     tasks:
-    - ModelTask.infill
+    # - ModelTask.infill
     - ModelTask.heldout_decoding
     metrics:
     - Metric.bps
