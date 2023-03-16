@@ -933,7 +933,7 @@ class BrainBertInterface(pl.LightningModule):
             decayed_lr = self.cfg.lr_init * self.cfg.accelerate_new_params
             # Decoder
             for k in self.task_pipelines:
-                if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value, ModelTask.heldout_decoding.value]:
                     raise NotImplementedError
                 # Supported pipelines use "out" and "decoder" terminology for final readout and transformer decoder, respectively
                 pipeline = self.task_pipelines[k]
@@ -944,7 +944,7 @@ class BrainBertInterface(pl.LightningModule):
                     grouped_params.append({"params": pipeline.decoder.final_norm.parameters(), 'lr': decayed_lr})
             for i in reversed(range(self.cfg.decoder_layers)):
                 for k in self.task_pipelines:
-                    if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                    if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value, ModelTask.heldout_decoding.value]:
                         raise NotImplementedError
                     if not hasattr(pipeline, 'decoder'):
                         continue

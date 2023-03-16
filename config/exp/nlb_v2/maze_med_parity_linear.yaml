@@ -30,6 +30,7 @@ model:
     metrics:
     - Metric.co_bps
     - Metric.block_co_bps
+    linear_head: true
   neurons_per_token: 32
 
   lr_ramp_steps: 3000

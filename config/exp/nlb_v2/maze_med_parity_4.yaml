@@ -14,7 +14,7 @@ model:
 
   dropout: 0.8
   transformer:
-    n_layers: 6
+    n_layers: 4
     n_heads: 2
   hidden_size: 128
 

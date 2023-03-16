@@ -19,11 +19,11 @@ model:
   hidden_size: 128
 
   task:
-    task_weights: [1.0, 1.0]
+    # task_weights: [1.0, 1.0]
     decode_time_pool: 'mean'
-    decode_use_shuffle_backbone: true
+    # decode_use_shuffle_backbone: true
     tasks:
-    - ModelTask.shuffle_infill
+    # - ModelTask.shuffle_infill
     - ModelTask.heldout_decoding
     mask_ratio: 0.25
     query_heldout: 45 # mc_maze maxed at this

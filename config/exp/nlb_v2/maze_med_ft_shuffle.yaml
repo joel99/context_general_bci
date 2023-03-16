@@ -22,21 +22,17 @@ model:
     - Metric.block_co_bps
     tasks:
     - ModelTask.shuffle_infill
-    - ModelTask.heldout_decoding
-    task_weights: [1.0, 1.0]
-    decode_time_pool: 'mean'
-    decode_use_shuffle_backbone: true
-    linear_head: true
+    # - ModelTask.heldout_decoding
   neurons_per_token: 32
 
-  # lr_ramp_steps: 3000
-  # lr_decay_steps: 100000
+  lr_ramp_steps: 3000
+  lr_decay_steps: 100000
   # TODO tune
-  lr_init: 5e-5
-  lr_ramp_steps: 1000
-  lr_decay_steps: 10000
-  accelerate_new_params: 10.0
-  tune_decay: 0.75 # per Kaiming MAE
+  # lr_init: 5e-5
+  # lr_ramp_steps: 1000
+  # lr_decay_steps: 10000
+  # accelerate_new_params: 10.0
+  # tune_decay: 0.75 # per Kaiming MAE
 
 dataset:
   neurons_per_token: 32
@@ -56,7 +52,6 @@ dataset:
   - DataKey.heldout_spikes
 train:
   patience: 5000
-  epochs: 10000
   # autoscale_batch_size: false
   # batch_size: 64
 init_from_id: base_f32_150k_acausal-viexqpg7
