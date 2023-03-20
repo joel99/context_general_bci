@@ -59,6 +59,22 @@ def get_run_df(runs, labels):
     concat = concat.sort_values('val_loss').drop_duplicates(['tag', 'experiment'], keep='first')
     return concat
 
+tag_label = {
+    'f8': 'NDT-2.8',
+    'f32': 'NDT-2.32',
+    'f128': 'NDT-2.128',
+    'single_f8': 'NDT-2.8 Single',
+    'single_f32': 'NDT-2.32 Single',
+    'single_time': 'NDT Single',
+    'time': 'NDT',
+    'stitch': 'NDT-Stitch',
+    'task_f32': 'NDT-2.32 Task',
+    'task_f8': 'NDT-2.8 Task',
+    'subject_loco_f32': 'NDT-2.32 Subject',
+    'subject_loco_f8': 'NDT-2.8 Subject',
+    'task_stitch': 'NDT-Stitch Task',
+    'subject_loco_stitch': 'NDT-Stitch Subject',
+}
 
 #%%
 title = 'Arch Unsup and Sup'
@@ -162,3 +178,90 @@ for i, row in df.iterrows():
         xytext=(0, 10),
         ha='center'
     )
+
+
+#%%
+
+# Unsorted
+title = 'Arch Unsup and Sup'
+
+# pull experiment
+experiment = [
+    'arch/base_unsort',
+    'arch/base_unsort/probe',
+    'arch/cross_unsort',
+    'arch/cross_unsort/probe',
+]
+
+runs = wandb_query_experiment(
+    experiment,
+    state={"$in": ['finished', 'failed', 'crashed', 'running']},
+    duration={"$gt": 300},
+)
+
+run_labels = [
+    'f8',
+    'f32',
+    'f128',
+    'single_f8',
+    # 'single_f32',
+    'single_time',
+    'stitch',
+    'time',
+    'subject_loco_f8',
+    # 'subject_loco_f32',
+    'task_f8',
+    # 'task_f32',
+    'subject_loco_stitch',
+    'task_stitch',
+    # 'time_8l', # Inspected in wandb to be not better than `time`
+]
+
+df = get_run_df(runs, run_labels)
+
+# Collapse test r2 into tags
+print(df.experiment)
+# df[df['experiment'] == 'arch/base'].sort_values('tag')['test_kinematic_r2'] = df[df['experiment'] == 'arch/base/sup'].sort_values('tag')['test_kinematic_r2']
+
+# Apply the r2s to the unsupervised runs
+ordered_r2 = df[df['experiment'].isin(['arch/base_unsort/probe', 'arch/cross_unsort/probe'])].sort_values('tag')['test_kinematic_r2'].values
+ordered_targets = df[df['experiment'].isin(['arch/base_unsort', 'arch/cross_unsort'])].sort_values('tag')['tag'].values
+
+# use order of `ordered_targets` to apply r2s
+for target, r2 in zip(ordered_targets, ordered_r2):
+    df.loc[df['tag'] == target, 'test_kinematic_r2'] = r2
+df = df[df['experiment'].isin(['arch/base_unsort', 'arch/cross_unsort'])]
+#%%
+variant_map = {
+    'task': 'task',
+    'subject': 'subject'
+}
+variant_label = lambda x: variant_map.get(x.split('_')[0], 'session')
+
+df['variant'] = df['tag'].map(variant_label)
+
+ax = prep_plt()
+sns.scatterplot(
+    data=df,
+    x='test_loss',
+    # y='test_loss',
+    y='test_kinematic_r2',
+    hue='variant',
+    ax=ax,
+)
+
+ax.set_ylabel('Velocity $R^2$')
+ax.set_xlabel('Test NLL')
+
+# Annotate each of the points with their tag
+for i, row in df.iterrows():
+    ax.annotate(
+        # row['tag'], # Will figure out cosmetics later
+        tag_label[row['tag']],
+        # (row['test_loss'], row['test_loss']),
+        (row['test_loss'], row['test_kinematic_r2']),
+        textcoords="offset points",
+        xytext=(0, 10),
+        ha='center'
+    )
+

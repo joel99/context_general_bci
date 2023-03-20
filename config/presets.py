@@ -249,6 +249,14 @@ class FlatDataConfig(DatasetConfig):
 
 cs.store(group="dataset", name="flat", node=FlatDataConfig)
 
+@dataclass
+class ODohertyUnsort(FlatDataConfig):
+    odoherty_rtt: RTTConfig = field(default_factory=lambda: RTTConfig(
+        # arrays=['Indy-M1_all', 'Loco-M1_all'],
+        arrays=['Indy-M1', 'Loco-M1'],
+        include_sorted=False,
+    ))
+cs.store(group="dataset", name="odoherty_unsort_flat", node=ODohertyUnsort)
 
 @dataclass
 class RTTDataConfig(DatasetConfig):

@@ -1087,6 +1087,9 @@ class BehaviorRegression(TaskPipeline):
                     # batch_out['alignment_kl_loss'] = -ll.mean() * self.cfg.kl_lambda
 
                 decode_tokens, decode_time, decode_space = self.injector.inject(batch)
+                # Clip decode space to 0, space isn't used for this decoder
+                decode_space = torch.zeros_like(decode_space)
+
                 if self.cfg.decode_time_pool:
                     src_time = decode_time
                     src_space = torch.zeros_like(decode_space)
@@ -1209,7 +1212,7 @@ class BehaviorRegression(TaskPipeline):
             if Metric.kinematic_r2_thresh in self.cfg.metrics:
                 valid_bhvr = valid_bhvr[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
                 valid_tgt = valid_tgt[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
-                batch_out[Metric.kinematic_r2_thresh] = r2_score(valid_tgt.detach().cpu(), valid_bhvr.detach().cpu(), multioutput='raw_values')
+                batch_out[Metric.kinematic_r2_thresh] = r2_score(valid_tgt.float().detach().cpu(), valid_bhvr.float().detach().cpu(), multioutput='raw_values')
             # print(batch_out[Metric.kinematic_r2])
             # if (batch_out[Metric.kinematic_r2] < 0).any():
             #     import pdb;pdb.set_trace()

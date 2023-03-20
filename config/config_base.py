@@ -406,7 +406,7 @@ class DatasetConfig:
     # This will be the # of tokens served; be generous because we will crop in any flat task.
     # ! note that the above is going to be strictly more than amount proc-ed in encoder-decoder encoder -- since things are cropped.
     pad_value: int = 5
-    pad_spike_value: int = 0 # extra thing just for spikes, which we can typically afford to keep low w/o consequence. Sometimes above pad value (which applies for time/space values) needs to be set higher than 0 to avoid nan attn
+    pad_spike_value: int = 0 # extra thing just for spikes, which we can typically afford to keep low w/o consequence. Sometimes above pad value (which applies for time/space values) needs to be set higher than 0 to avoid nan attn, typically for co-bps
     # pad_value: int = 20
 
     # Experimental Task configuration - matching registered names
