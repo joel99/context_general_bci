@@ -25,8 +25,12 @@ model:
     - ModelTask.heldout_decoding
     task_weights: [1.0, 1.0]
     decode_time_pool: 'mean'
-    decode_use_shuffle_backbone: true
+    # decode_use_shuffle_backbone: true
+    decode_separate: true
+    decode_strategy: EmbedStrat.token
     linear_head: true
+    freeze_backbone: true
+
   neurons_per_token: 32
 
   # lr_ramp_steps: 3000
@@ -38,6 +42,7 @@ model:
   accelerate_new_params: 10.0
   tune_decay: 0.75 # per Kaiming MAE
 
+  decoder_layers: 1
 dataset:
   neurons_per_token: 32
   max_tokens: 8192
@@ -61,3 +66,6 @@ train:
   # batch_size: 64
 init_from_id: base_f32_150k_acausal-viexqpg7
 init_tag: val_loss
+
+sweep_cfg: nlb_parity
+sweep_trials: 16

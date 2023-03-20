@@ -818,18 +818,70 @@ class HeldoutPrediction(RatePrediction):
         #             decoder_layers.append(nn.ReLU())
         #         self.out = nn.Sequential(*decoder_layers) # override
         if self.cfg.decode_strategy == EmbedStrat.token:
+            assert self.spacetime, "Only spacetime transformer is supported for token decoding"
+            self.time_pad = cfg.transformer.max_trial_length
+            if self.cfg.decode_separate:
+                self.decoder = SpaceTimeTransformer(
+                    cfg.transformer,
+                    max_spatial_tokens=0, # Assume pooling
+                    n_layers=cfg.decoder_layers,
+                    allow_embed_padding=True
+                )
             self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes)
-            self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, channel_count)
+            self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.task.query_heldout)
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
-        if self.cfg.decode_strategy != EmbedStrat.token:
+        if self.cfg.decode_strategy != EmbedStrat.token or self.cfg.decode_separate:
             return batch
         self.injector.inject(batch, in_place=True)
         return batch
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         if self.cfg.decode_strategy == EmbedStrat.token:
+            # Copied verbatim from BehaviorRegression
             # crop out injected tokens, -> B T H
+            if self.cfg.decode_separate:
+                # import pdb;pdb.set_trace()
+                temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
+                if self.cfg.decode_time_pool: # B T H -> B T H
+                    backbone_features, temporal_padding_mask = temporal_pool(batch, backbone_features, temporal_padding_mask, pool=self.cfg.decode_time_pool)
+                    if Output.pooled_features in self.cfg.outputs:
+                        batch_out[Output.pooled_features] = backbone_features.detach()
+                decode_tokens, decode_time, decode_space = self.injector.inject(batch)
+                if self.cfg.decode_time_pool:
+                    src_time = decode_time
+                    src_space = torch.zeros_like(decode_space) # space is now uninformative (we still have cls tokens in our injection to distinguish novel queries)
+                    if backbone_features.size(1) < src_time.size(1):
+                        # We pooled, but encoding doesn't have all timesteps. Pad to match
+                        backbone_features = F.pad(backbone_features, (0, 0, 0, src_time.size(1) - backbone_features.size(1)), value=0)
+                        temporal_padding_mask = F.pad(temporal_padding_mask, (0, src_time.size(1) - temporal_padding_mask.size(1)), value=True)
+                else:
+                    src_time = batch.get(DataKey.time, None)
+                    if DataKey.position not in batch:
+                        src_space = None
+                    else:
+                        src_space = torch.zeros_like(batch[DataKey.position])
+                decoder_input = torch.cat([backbone_features, decode_tokens], dim=1)
+                times = torch.cat([src_time, decode_time], dim=1)
+                positions = torch.cat([src_space, torch.zeros_like(decode_space)], dim=1) # Kill any accidental padding, space is no-op here
+                if temporal_padding_mask is not None:
+                    extra_padding_mask = create_temporal_padding_mask(decode_tokens, batch, length_key=COVARIATE_LENGTH_KEY)
+                    temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
+
+                trial_context = []
+                for key in ['session', 'subject', 'task']:
+                    if key in batch and batch[key] is not None:
+                        trial_context.append(batch[key].detach()) # Provide context, but hey, let's not make it easier for the model to steer the unsupervised-calibrated context
+
+                backbone_features: torch.Tensor = self.decoder(
+                    decoder_input,
+                    temporal_padding_mask=temporal_padding_mask,
+                    trial_context=trial_context,
+                    times=times,
+                    positions=positions,
+                    space_padding_mask=None, # (low pri)
+                    causal=False,
+                )
             backbone_features = self.injector.extract(batch, backbone_features)
         elif self.cfg.decode_strategy == EmbedStrat.project and not self.concatenating:
             if self.spacetime:
@@ -846,7 +898,7 @@ class HeldoutPrediction(RatePrediction):
         if not compute_metrics:
             return batch_out
         spikes = batch[DataKey.heldout_spikes][..., 0]
-
+        # import pdb;pdb.set_trace()
         if getattr(self.cfg, 'query_heldout', 0):
             rates = rates[..., :spikes.size(-1)]
         loss: torch.Tensor = self.loss(rates, spikes)
@@ -915,7 +967,7 @@ class BehaviorRegression(TaskPipeline):
         elif self.cfg.decode_strategy == EmbedStrat.token:
             self.injector = TemporalTokenInjector(cfg, data_attrs, self.cfg.behavior_target)
             self.time_pad = cfg.transformer.max_trial_length
-            if getattr(self.cfg, 'decode_separate', False):
+            if self.cfg.decode_separate:
                 # This is more aesthetic flow, but both encode-only and this strategy seems to overfit.
                 self.decoder = SpaceTimeTransformer(
                     cfg.transformer,
@@ -1035,7 +1087,7 @@ class BehaviorRegression(TaskPipeline):
                     # batch_out['alignment_kl_loss'] = -ll.mean() * self.cfg.kl_lambda
 
                 decode_tokens, decode_time, decode_space = self.injector.inject(batch)
-                if getattr(self.cfg, 'decode_time_pool', ""):
+                if self.cfg.decode_time_pool:
                     src_time = decode_time
                     src_space = torch.zeros_like(decode_space)
                     if backbone_features.size(1) < src_time.size(1):

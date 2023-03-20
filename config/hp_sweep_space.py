@@ -5,6 +5,25 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "nlb_parity": {
+        "model.dropout": {
+            'feasible_points': [0.05, 0.1, 0.2]
+        },
+        "model.weight_decay": {
+            'feasible_points': [1e-3, 5e-3, 1e-2, 5e-2]
+        },
+        "model.task.mask_ratio": {
+            'feasible_points': [0.1, 0.25, 0.5, 0.75]
+        },
+        "model.lr_init": {
+            'min': 1e-5,
+            'max': 1e-3,
+            'scaling': 'log',
+        },
+        "model.task.freeze_backbone": {
+            'feasible_points': [True, False]
+        },
+    },
     "base_v2": {
         "model.dropout": {
             'feasible_points': [0.1, 0.2, 0.3, 0.4]
