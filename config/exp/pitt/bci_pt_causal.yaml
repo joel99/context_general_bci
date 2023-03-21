@@ -2,8 +2,6 @@
 defaults:
   - /model:
     - flat_enc_dec
-  - /model/task:
-    - joint_bhvr_decode_flat
   - /dataset: flat
 model:
   session_embed_token_count: 8
@@ -12,12 +10,6 @@ model:
   neurons_per_token: 16
 
   causal: True
-  task:
-    task_weights: [1.0, 1.0]
-    behavior_lag: 0
-    decode_time_pool: "mean"
-    decode_normalizer: pitt_obs_zscore.pt
-
 dataset:
   max_tokens: 8192
   max_length_ms: 2000 # fit
@@ -28,13 +20,18 @@ dataset:
 
   data_keys:
   - DataKey.spikes
-  - DataKey.bhvr_vel
+  # - DataKey.bhvr_vel
   datasets:
   - observation_.*
+  - ortho_.*
+  - fbc_.*
+  - unstructured_.*
+  - pitt_co.*
 
   eval_datasets:
-  - CRS02bHome.data.00445
-  # - observation_CRS02bLab_session_1926.*
+  - observation_CRS02bLab_session_1926.*
 
-init_from_id: bci_pt_causal-21wye93c
-init_tag: val_loss
+train:
+  patience: 2000
+  autoscale_batch_size: false
+  batch_size: 64

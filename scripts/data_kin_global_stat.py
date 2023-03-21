@@ -23,6 +23,7 @@ wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 print(wandb_run)
 _, cfg, _ = load_wandb_run(wandb_run, tag='val_loss')
 cfg.dataset.datasets = ['observation_.*']
+# cfg.dataset.datasets = ['observation_CRS07Lab_session_82_set_1']
 # default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 # default_cfg.data_keys = [DataKey.spikes]
 cfg.dataset.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
@@ -36,6 +37,40 @@ dataset.subset_split()
 #     lengths.append(dataset[t][DataKey.spikes].size(0))
 # print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
 print(len(dataset))
+#%%
+print(dataset.list_alias_to_contexts(['observation_CRS07Lab_session_82_set_1_type_obs']))
+#%%
+from collections import defaultdict
+session_stats = defaultdict(list)
+for t in range(len(dataset)):
+    session_stats[dataset.meta_df.iloc[t][MetaKey.session]].append(dataset[t][DataKey.bhvr_vel])
+for session in session_stats:
+    session_stats[session] = torch.cat(session_stats[session], 0)
+
+#%%
+sessions = list(session_stats.keys())
+def summarize(s):
+    return s.min().item(), s.max().item(), s.mean().item(), s.std().item(), len(s)
+mins, maxes, means, stds, lengths = zip(*[summarize(session_stats[s]) for s in sessions])
+# sns.histplot(mins)
+# sns.histplot(maxes)
+# sns.histplot(stds)
+sns.histplot(means)
+# sns.histplot(lengths)
+
+# Create blacklist based on statistic cutoffs
+blacklist = []
+for s in sessions:
+    if abs(session_stats[s].mean()) > 0.0002:
+        blacklist.append(s)
+    elif session_stats[s].std() < 0.001:
+        blacklist.append(s)
+    elif len(session_stats[s]) < 500: # remove abnormally short sessions (each trial is 100 timesteps)
+        blacklist.append(s)
+blacklist = [s.split('-')[-1] for s in blacklist]
+with open('pitt_obs_blacklist.txt', 'w') as f:
+    f.write('\n'.join(blacklist))
+
 #%%
 vels = []
 for t in range(len(dataset)):

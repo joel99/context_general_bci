@@ -359,6 +359,7 @@ class DatasetConfig:
     """
     datasets: List[str] = field(default_factory=lambda: [])
     exclude_datasets: List[str] = field(default_factory=lambda: []) # more specific aliases to exclude, processed after above, and no-ops for anything in `eval_datasets`
+    data_blacklist: str = '' # path to text file with one dataset alias per line to exclude (for a first pass, above is more specific)
 
     scale_ratio: float = 1. # ratio of dataset to use for training (For scaling experiments)
     scale_limit_per_session: int = 0 # >0, limit number of trials per session (For scaling experiments)

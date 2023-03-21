@@ -30,11 +30,24 @@ dataset:
   - DataKey.spikes
   - DataKey.bhvr_vel
   datasets:
-  - observation_.*
+  - CRS02bHome.data.00329
+  - CRS02bHome.data.00336
+  - CRS02bHome.data.00339
+  - CRS02bHome.data.00345
+  - CRS02bHome.data.00360
+  - CRS02bHome.data.00371
+  - CRS02bHome.data.00402
+  - CRS02bHome.data.00422
+  - CRS02bHome.data.00424
+  - CRS02bHome.data.00437
+  - CRS02bHome.data.00445
 
   eval_datasets:
   - CRS02bHome.data.00445
   # - observation_CRS02bLab_session_1926.*
 
+train:
+  autoscale_batch_size: false
+  batch_size: 32
 init_from_id: bci_pt_causal-21wye93c
 init_tag: val_loss

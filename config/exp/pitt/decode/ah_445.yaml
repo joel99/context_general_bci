@@ -36,5 +36,8 @@ dataset:
   - CRS02bHome.data.00445
   # - observation_CRS02bLab_session_1926.*
 
+train:
+  autoscale_batch_size: false
+  batch_size: 32
 init_from_id: bci_pt_causal-21wye93c
 init_tag: val_loss

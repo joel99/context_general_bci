@@ -9,6 +9,7 @@ from pynwb import NWBHDF5IO
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
 from scipy.ndimage import gaussian_filter1d
+from scipy.signal import convolve
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, create_spike_payload
 from tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
@@ -139,9 +140,13 @@ class PittCOLoader(ExperimentalTaskLoader):
             meta_payload['path'].append(single_path)
             torch.save(single_payload, single_path)
         def get_velocity(position):
-            position = gaussian_filter1d(position, 2.5, axis=0)
+            # position = gaussian_filter1d(position, 2.5, axis=0) # This seems reasonable, but useless since we can't compare to Pitt codebase without below
+            position = pd.Series(position.flatten()).interpolate().to_numpy().reshape(-1, 2) # remove intermediate nans
+            # Apply boxcar filter of 500ms - this is simply for Parity with Pitt decoding
+            position = convolve(position, np.ones((int(500 / cfg.bin_size_ms), 2))/ (500 / cfg.bin_size_ms), mode='same')
+
             vel = torch.tensor(np.gradient(position, axis=0)).float()
-            vel[vel.isnan()] = 0
+            vel[vel.isnan()] = 0 # extra call to deal with edge values
             return vel
         if not datapath.is_dir() and datapath.suffix == '.mat': # payload style, preproc-ed/binned elsewhere
             payload = load_trial(datapath, key='thin_data')

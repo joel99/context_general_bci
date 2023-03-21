@@ -115,11 +115,19 @@ class SpikingDataset(Dataset):
 
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
+            if getattr(self.cfg, 'data_blacklist', ''):
+                # load txt
+                with open(self.cfg.data_blacklist, 'r') as f:
+                    blacklist = f.readlines()
+                    blacklist = [b.strip() for b in blacklist]
+                exclude_contexts = self.list_alias_to_contexts(blacklist)
+            else:
+                exclude_contexts = []
             if getattr(self.cfg, 'exclude_datasets', []):
-                exclude_contexts = self.list_alias_to_contexts(self.cfg.exclude_datasets)
-                eval_contexts = self.list_alias_to_contexts(self.cfg.eval_datasets)
-                exclude_contexts = [c for c in exclude_contexts if c not in eval_contexts]
-                contexts = [c for c in contexts if c not in exclude_contexts]
+                exclude_contexts.extend(self.list_alias_to_contexts(self.cfg.exclude_datasets))
+            eval_contexts = self.list_alias_to_contexts(self.cfg.eval_datasets)
+            exclude_contexts = [c for c in exclude_contexts if c not in eval_contexts]
+            contexts = [c for c in contexts if c not in exclude_contexts]
             self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
             # self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
             if 'split' in self.meta_df.columns and len(self.meta_df['split'].unique()) > 1:
