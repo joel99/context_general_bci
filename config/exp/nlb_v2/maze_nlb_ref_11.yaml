@@ -54,9 +54,8 @@ model:
 
   lr_ramp_steps: 3000
   lr_decay_steps: 100000
-  force_zero_mask: True
 
 train:
   patience: 5000
-notes: "11 + Add force zero mask"
+notes: "10 + override dropout IO"
 # This switches masking strategy.

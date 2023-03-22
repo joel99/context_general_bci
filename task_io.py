@@ -469,11 +469,16 @@ class ShuffleInfill(RatePrediction):
             cfg.transformer,
             max_spatial_tokens=data_attrs.max_spatial_tokens,
             n_layers=cfg.decoder_layers,
+            debug_override_dropout_in=getattr(cfg.transformer, 'debug_override_dropout_io', False)
         )
         self.max_spatial = data_attrs.max_spatial_tokens
         self.causal = cfg.causal
         self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.neurons_per_token)
-        self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
+        import pdb;pdb.set_trace()
+        if getattr(cfg, 'force_zero_mask', False):
+            self.register_buffer('mask_token', torch.zeros(cfg.hidden_size))
+        else:
+            self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
 
         self.joint_heldout = getattr(self.cfg, 'query_heldout', 0) and not ModelTask.heldout_decoding in self.cfg.tasks
         if self.joint_heldout:
@@ -898,7 +903,6 @@ class HeldoutPrediction(RatePrediction):
         if not compute_metrics:
             return batch_out
         spikes = batch[DataKey.heldout_spikes][..., 0]
-        # import pdb;pdb.set_trace()
         if getattr(self.cfg, 'query_heldout', 0):
             rates = rates[..., :spikes.size(-1)]
         loss: torch.Tensor = self.loss(rates, spikes)
@@ -915,7 +919,7 @@ class HeldoutPrediction(RatePrediction):
                 batch,
                 compute_channel=False
             ) # channel_key expected to be no-op since we don't provide this mask
-            loss = loss[loss_mask]
+        loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()
         if Metric.co_bps in self.cfg.metrics:
             batch_out[Metric.co_bps] = self.bps(

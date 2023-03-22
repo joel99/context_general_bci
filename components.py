@@ -194,10 +194,11 @@ class ContextualMLP(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, cfg: TransformerConfig):
+    def __init__(self, cfg: TransformerConfig, input_times: bool = False):
         super().__init__()
+        self.input_times = input_times
         position = torch.arange(0, cfg.max_trial_length, dtype=torch.float).unsqueeze(1)
-        self.learnable = cfg.learnable_position
+        self.learnable = cfg.learnable_position and not getattr(cfg, 'debug_force_nonlearned_position', False)
         # if self.learnable:
         #     self.register_buffer('pe', position.long())
         #     self.pos_embedding = nn.Embedding(cfg.max_trial_length, cfg.n_state)
@@ -212,8 +213,12 @@ class PositionalEncoding(nn.Module):
             self.pe = nn.Parameter(self.pe)
 
     def forward(self, x: torch.Tensor, batch_first=True):
-        pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
-        return pos_embed.transpose(0, 1) if batch_first else pos_embed
+        if self.input_times:
+            pos_embed = self.pe[x].squeeze(2)
+        else:
+            pos_embed = self.pe[:x.size(1 if batch_first else 0), :]
+            pos_embed = pos_embed.transpose(0, 1) if batch_first else pos_embed
+        return pos_embed
         # return rearrange(pos_embed, 't b d -> b t 1 d' if batch_first else 't b d -> t b 1 d')
 
 class SpaceTimeTransformer(nn.Module):
@@ -230,6 +235,8 @@ class SpaceTimeTransformer(nn.Module):
         max_spatial_tokens: int = 0,
         n_layers: int = 0, # override
         allow_embed_padding=False,
+        debug_override_dropout_in=False,
+        debug_override_dropout_out=False,
     ):
         super().__init__()
         self.cfg = config
@@ -252,15 +259,21 @@ class SpaceTimeTransformer(nn.Module):
             self.time_transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers - round(n_layers / 2))
         else:
             self.transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers)
-        if self.cfg.flat_encoder or self.cfg.learnable_position:
+        if not getattr(self.cfg, 'debug_force_nonlearned_position', False) and (self.cfg.flat_encoder or self.cfg.learnable_position):
             if allow_embed_padding:
                 self.time_encoder = nn.Embedding(self.cfg.max_trial_length + 1, self.cfg.n_state, padding_idx=self.cfg.max_trial_length)
             else:
                 self.time_encoder = nn.Embedding(self.cfg.max_trial_length, self.cfg.n_state)
         else:
-            self.time_encoder = PositionalEncoding(self.cfg)
-        self.dropout_in = nn.Dropout(self.cfg.dropout)
-        self.dropout_out = nn.Dropout(self.cfg.dropout)
+            self.time_encoder = PositionalEncoding(self.cfg, input_times=self.cfg.transform_space)
+        if debug_override_dropout_in:
+            self.dropout_in = nn.Identity()
+        else:
+            self.dropout_in = nn.Dropout(self.cfg.dropout)
+        if debug_override_dropout_out:
+            self.dropout_out = nn.Identity()
+        else:
+            self.dropout_out = nn.Dropout(self.cfg.dropout)
         # And implement token level etc.
         # if self.cfg.fixup_init:
         #     self.fixup_initialization()
@@ -328,14 +341,11 @@ class SpaceTimeTransformer(nn.Module):
             (So attention masks do not vary across batch)
         """
         src = self.dropout_in(src)
-        # import pdb;pdb.set_trace()
         # === Embeddings ===
-
         if self.cfg.flat_encoder:
-            # The aesthetics though
-            # import pdb;pdb.set_trace()
-            # print(src.size(), times.size(), positions.size())
-            src = src + self.time_encoder(times) + self.space_encoder(positions)
+            src = src + self.time_encoder(times)
+            if self.cfg.embed_space:
+                src = src + self.space_encoder(positions)
             b, t, s = src.size(0), src.size(1), 1 # it's implied that codepaths get that "space" is not really 1, but it's not used
             has_array_dim = False
         else:

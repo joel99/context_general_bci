@@ -18,11 +18,10 @@ dataset:
   - DataKey.spikes
   - DataKey.heldout_spikes
   bin_size_ms: 20
-  max_channels: 128
   neurons_per_token: 128
+  max_channels: 128
 model:
   neurons_per_token: 128
-  session_embed_strategy: EmbedStrat.none
   session_embed_token_count: 1
   # session_embed_token_count: 8
   task_embed_strategy: EmbedStrat.none
@@ -32,17 +31,14 @@ model:
   hidden_size: 128
 
   dropout: 0.8
-  decoder_layers: 5
   transformer:
-    dropout: 0.6
-    n_layers: 1 # since we use 2 decoder layers
+    dropout: 0.8
+    n_layers: 6 # since we use 2 decoder layers
     n_heads: 2
-    debug_force_nonlearned_position: True
-    debug_override_dropout_io: True
   task:
     task_weights: [1., 1.]
     tasks:
-    - ModelTask.shuffle_infill
+    - ModelTask.infill
     - ModelTask.heldout_decoding
     mask_ratio: 0.25
     query_heldout: 45 # mc_maze maxed at this
@@ -50,13 +46,12 @@ model:
     - Metric.co_bps
     - Metric.block_co_bps
     decode_time_pool: 'mean' # shouldn't matter
-    decode_use_shuffle_backbone: true
+    # decode_use_shuffle_backbone: true
 
   lr_ramp_steps: 3000
   lr_decay_steps: 100000
-  force_zero_mask: True
 
 train:
   patience: 5000
-notes: "11 + Add force zero mask"
+notes: "Reference 1. Switch to shuffle, without changing anything else."
 # This switches masking strategy.

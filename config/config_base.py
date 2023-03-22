@@ -177,6 +177,9 @@ class TransformerConfig:
 
     factorized_space_time: bool = False # will split layers evenly in space and time
 
+    debug_force_nonlearned_position: bool = False
+    debug_override_dropout_io: bool = False
+
 @dataclass
 class ModelConfig:
     hidden_size: int = 256 # For parts outside of backbones
@@ -269,6 +272,9 @@ class ModelConfig:
     log_token_proc_throughput: bool = False # for flat models - log tokens
     # * ^ the above logs are actually going to be cumulative tokens processed, not throughput
     # realized that true wall clock fair tests are likely inconsistent for our tiny heterogeneous cluster
+
+    debug_project_space: bool = False # project spikes for spacetime models to hidden size (only for very special cases, used in NLB parity)
+    force_zero_mask: bool = False # for shuffle infill
 
 @dataclass
 class ExperimentalConfig:

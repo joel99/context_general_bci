@@ -30,7 +30,6 @@ from subjects import subject_array_registry, SortedArrayInfo
 from components import (
     SpaceTimeTransformer,
     ReadinMatrix,
-    SpaceTimeTransformer,
     ReadinCrossAttention,
     ContextualMLP,
 )
@@ -70,7 +69,8 @@ class BrainBertInterface(pl.LightningModule):
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
         self.backbone = SpaceTimeTransformer(
             self.cfg.transformer,
-            max_spatial_tokens=data_attrs.max_spatial_tokens
+            max_spatial_tokens=data_attrs.max_spatial_tokens,
+            debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
         )
         self.bind_io()
 
@@ -237,7 +237,10 @@ class BrainBertInterface(pl.LightningModule):
                 assert self.cfg.hidden_size % self.cfg.neurons_per_token == 0, "hidden size must be divisible by neurons per token"
                 spike_embed_dim = round(self.cfg.hidden_size / self.cfg.neurons_per_token)
             if self.cfg.spike_embed_style == EmbedStrat.project:
-                self.readin = nn.Linear(1, spike_embed_dim)
+                if getattr(self.cfg, 'debug_project_space', False):
+                    self.readin = nn.Linear(channel_count, channel_count)
+                else:
+                    self.readin = nn.Linear(1, spike_embed_dim)
             elif self.cfg.spike_embed_style == EmbedStrat.token:
                 assert self.cfg.max_neuron_count > self.data_attrs.pad_token, "max neuron count must be greater than pad token"
                 self.readin = nn.Embedding(self.cfg.max_neuron_count, spike_embed_dim, padding_idx=self.data_attrs.pad_token if self.data_attrs.pad_token else None) # I'm pretty confident we won't see more than 20 spikes in 20ms but we can always bump up
@@ -253,7 +256,6 @@ class BrainBertInterface(pl.LightningModule):
                 self.readin = ContextualMLP(channel_count, self.cfg.hidden_size, self.cfg)
             elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
                 self.readin = ReadinCrossAttention(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
-
         if self.cfg.readout_strategy == EmbedStrat.unique_project:
             self.readout = ReadinMatrix(
                 self.cfg.hidden_size,
@@ -460,7 +462,6 @@ class BrainBertInterface(pl.LightningModule):
             array: torch.Tensor = self.array_embed(batch[MetaKey.array])
         else:
             array = None
-
         if self.cfg.transform_space:
             # collapse space/array, channel/feature --> # b t s h
             state_in = torch.as_tensor(batch[DataKey.spikes], dtype=int)
@@ -475,10 +476,14 @@ class BrainBertInterface(pl.LightningModule):
             if self.cfg.spike_embed_style == EmbedStrat.token:
                 state_in = self.readin(state_in)
             elif self.cfg.spike_embed_style == EmbedStrat.project:
-                state_in = self.readin(state_in.float().unsqueeze(-1))
+                if getattr(self.cfg, 'debug_project_space', False):
+                    state_in = self.readin(state_in.float())
+                else:
+                    state_in = self.readin(state_in.float().unsqueeze(-1))
             else:
                 raise NotImplementedError
-            state_in = state_in.flatten(-2, -1) # b t s h
+            if not getattr(self.cfg, 'debug_project_space', False):
+                state_in = state_in.flatten(-2, -1) # b t s h
             # state_in = rearrange(state_in,
             #     'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
             #     'b t a s_a chunk h -> b t a s_a (chunk h)'
@@ -566,7 +571,6 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
-        # import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         # interfere
         # trial_context = [t + torch.randn_like(t) for t in trial_context] # this is huge perturb but actually minror effect...?
@@ -591,7 +595,6 @@ class BrainBertInterface(pl.LightningModule):
         else:
             assert not DataKey.extra in batch, 'not implemented'
             space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
-        # import pdb;pdb.set_trace()
         outputs: torch.Tensor = self.backbone(
             state_in,
             trial_context=trial_context,
@@ -635,7 +638,6 @@ class BrainBertInterface(pl.LightningModule):
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T S H
-
         if self.cfg.log_backbone_norm:
             # expected to track sqrt N. If it's not, then we're not normalizing properly
             self.log('backbone_norm', torch.linalg.vector_norm(
