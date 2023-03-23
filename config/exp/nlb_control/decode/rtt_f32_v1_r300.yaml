@@ -3,6 +3,8 @@
 defaults:
   - /model: flat_enc_dec
   - /train: pretrain
+  - /model/task:
+    - bhvr_decode_flat
   - /dataset: flat
 model:
   session_embed_token_count: 1
@@ -34,22 +36,25 @@ dataset:
   max_length_ms: 2000
   max_arrays: 2
 
-  bin_size_ms: 20
   max_channels: 288
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
   datasets:
   # - churchland_maze.*
   # - churchland_misc.*
   # - CRS02bHome.data.*
   # - odoherty_rtt.*
   # - mc_maze.*
-  - mc_maze_medium
+  - mc_rtt
   # - dyer_co.*
   # - gallego_co.*
   eval_datasets:
-  - mc_maze_med
+  - mc_rtt
   eval_ratio: 0.2
+  scale_limit_per_eval_session: 300 # no limit
 train:
   autoscale_batch_size: false
   batch_size: 64
-init_from_id: maze_f32_acausal_v2-cesda73w
+init_from_id: rtt_f32_v1_r300-hwkqucsa
 init_tag: val_loss

@@ -35,5 +35,6 @@ model:
     - Metric.block_co_bps
 train:
   patience: 5000
+seed: 2
 notes: "Reference 0. The goal"
 # This switches masking strategy.

@@ -29,7 +29,7 @@ def apply_shuffle(item: torch.Tensor, shuffle: torch.Tensor):
     # shuffle: T
     return item.transpose(1, 0)[shuffle].transpose(1, 0)
 
-def temporal_pool(batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, temporal_padding_mask: torch.Tensor, pool='mean'):
+def temporal_pool(batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, temporal_padding_mask: torch.Tensor, pool='mean', override_time=0):
     # Originally developed for behavior regression, extracted for heldoutprediction
     # Assumption is that bhvr is square!
     # This path assumes DataKey.time is not padded!
@@ -38,7 +38,7 @@ def temporal_pool(batch: Dict[str, torch.Tensor], backbone_features: torch.Tenso
         time_key = 'update_time'
     pooled_features = torch.zeros(
         backbone_features.shape[0],
-        batch[time_key].max() + 1 + 1, # 1 extra for padding
+        (override_time if override_time else batch[time_key].max() + 1) + 1, # 1 extra for padding
         backbone_features.shape[-1],
         device=backbone_features.device,
         dtype=backbone_features.dtype
@@ -473,8 +473,10 @@ class ShuffleInfill(RatePrediction):
         )
         self.max_spatial = data_attrs.max_spatial_tokens
         self.causal = cfg.causal
+        # import pdb;pdb.set_trace()
+        # ! TODO re-enable
+        # self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.neurons_per_token, layers=1 if self.cfg.linear_head else 2)
         self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.neurons_per_token)
-        import pdb;pdb.set_trace()
         if getattr(cfg, 'force_zero_mask', False):
             self.register_buffer('mask_token', torch.zeros(cfg.hidden_size))
         else:
@@ -484,6 +486,7 @@ class ShuffleInfill(RatePrediction):
         if self.joint_heldout:
             self.heldout_mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
             self.query_readout = RatePrediction.create_linear_head(cfg, cfg.hidden_size, self.cfg.query_heldout)
+        # import pdb;pdb.set_trace()
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         return self.shuffle_crop_batch(self.cfg.mask_ratio, batch, eval_mode=eval_mode)
@@ -748,7 +751,10 @@ class TemporalTokenInjector(nn.Module):
     ):
         super().__init__()
         self.reference = reference
-        self.cls_token = nn.Parameter(torch.randn(cfg.hidden_size))
+        if getattr(cfg, 'force_zero_mask', False):
+            self.register_buffer('cls_token', torch.zeros(cfg.hidden_size))
+        else:
+            self.cls_token = nn.Parameter(torch.randn(cfg.hidden_size))
         self.pad_value = data_attrs.pad_token
 
     def inject(self, batch: Dict[str, torch.Tensor], in_place=False):
@@ -877,7 +883,6 @@ class HeldoutPrediction(RatePrediction):
                 for key in ['session', 'subject', 'task']:
                     if key in batch and batch[key] is not None:
                         trial_context.append(batch[key].detach()) # Provide context, but hey, let's not make it easier for the model to steer the unsupervised-calibrated context
-
                 backbone_features: torch.Tensor = self.decoder(
                     decoder_input,
                     temporal_padding_mask=temporal_padding_mask,

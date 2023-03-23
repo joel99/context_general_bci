@@ -34,7 +34,6 @@ dataset:
   max_length_ms: 2000
   max_arrays: 2
 
-  bin_size_ms: 20
   max_channels: 288
   datasets:
   # - churchland_maze.*
@@ -42,12 +41,13 @@ dataset:
   # - CRS02bHome.data.*
   # - odoherty_rtt.*
   # - mc_maze.*
-  - mc_maze_medium
+  - mc_rtt
   # - dyer_co.*
   # - gallego_co.*
   eval_datasets:
-  - mc_maze_med
+  - mc_rtt
   eval_ratio: 0.2
+  scale_limit_per_eval_session: 300 # no limit
 train:
   autoscale_batch_size: false
   batch_size: 64

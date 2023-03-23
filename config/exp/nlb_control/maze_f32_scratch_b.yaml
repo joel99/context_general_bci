@@ -13,20 +13,20 @@ model:
 
   transformer:
     n_layers: 6
-    debug_force_nonlearned_position: True
+    # debug_force_nonlearned_position: True
   hidden_size: 128
 
   task:
     mask_ratio: 0.25
   neurons_per_token: 32
 
-  force_zero_mask: True
+  # force_zero_mask: True
 
-  lr_init: 5e-5
-  lr_ramp_steps: 1000
-  lr_decay_steps: 10000
-  accelerate_new_params: 10.0
-  tune_decay: 0.75 # per Kaiming MAE
+  # lr_init: 5e-5
+  # lr_ramp_steps: 1000
+  # lr_decay_steps: 10000
+  # accelerate_new_params: 10.0
+  # tune_decay: 0.75 # per Kaiming MAE
 
 dataset:
   neurons_per_token: 32
@@ -51,5 +51,5 @@ dataset:
 train:
   autoscale_batch_size: false
   batch_size: 64
-init_from_id: maze_f32_acausal_v2-cesda73w
-init_tag: val_loss
+# init_from_id: maze_f32_acausal-iv6n83mu
+# init_tag: val_loss

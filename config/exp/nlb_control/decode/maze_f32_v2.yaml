@@ -2,6 +2,8 @@
 # For use in NLB
 defaults:
   - /model: flat_enc_dec
+  - /model/task:
+    - bhvr_decode_flat
   - /train: pretrain
   - /dataset: flat
 model:
@@ -29,6 +31,11 @@ model:
   tune_decay: 0.75 # per Kaiming MAE
 
 dataset:
+  nlb_maze:
+    heldout_neurons: 45
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
   neurons_per_token: 32
   max_tokens: 8192
   max_length_ms: 2000
@@ -51,5 +58,6 @@ dataset:
 train:
   autoscale_batch_size: false
   batch_size: 64
-init_from_id: maze_f32_acausal_v2-cesda73w
+  patience: 500
+init_from_id: maze_f32_v2-yophgvnb
 init_tag: val_loss

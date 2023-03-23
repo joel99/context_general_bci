@@ -11,9 +11,11 @@ model:
 
   causal: False
 
+  dropout: 0.8
   transformer:
     n_layers: 6
-    debug_force_nonlearned_position: True
+    debug_override_dropout_io: true
+    # debug_force_nonlearned_position: True
   hidden_size: 128
 
   task:
@@ -22,19 +24,18 @@ model:
 
   force_zero_mask: True
 
-  lr_init: 5e-5
-  lr_ramp_steps: 1000
-  lr_decay_steps: 10000
-  accelerate_new_params: 10.0
-  tune_decay: 0.75 # per Kaiming MAE
+  # lr_init: 5e-5
+  # lr_ramp_steps: 1000
+  # lr_decay_steps: 10000
+  # accelerate_new_params: 10.0
+  # tune_decay: 0.75 # per Kaiming MAE
 
+  lr_ramp_steps: 3000
+  lr_decay_steps: 100000
 dataset:
   neurons_per_token: 32
-  max_tokens: 8192
-  max_length_ms: 2000
   max_arrays: 2
 
-  bin_size_ms: 20
   max_channels: 288
   datasets:
   # - churchland_maze.*
@@ -51,5 +52,5 @@ dataset:
 train:
   autoscale_batch_size: false
   batch_size: 64
-init_from_id: maze_f32_acausal_v2-cesda73w
-init_tag: val_loss
+# init_from_id: maze_f32_acausal-iv6n83mu
+# init_tag: val_loss

@@ -67,13 +67,16 @@ class BrainBertInterface(pl.LightningModule):
         if self.data_attrs.serve_tokens_flat:
             assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
-        self.backbone = SpaceTimeTransformer(
-            self.cfg.transformer,
-            max_spatial_tokens=data_attrs.max_spatial_tokens,
-            debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
-        )
+        if self.cfg.transformer.n_layers == 0: # debug for parity
+            self.backbone = nn.Identity()
+            self.backbone.out_size = self.cfg.hidden_size
+        else:
+            self.backbone = SpaceTimeTransformer(
+                self.cfg.transformer,
+                max_spatial_tokens=data_attrs.max_spatial_tokens,
+                debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
+            )
         self.bind_io()
-
         self.novel_params: List[str] = [] # for fine-tuning
         num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
         assert num_updates <= 1, "Only one task pipeline should update the root"
@@ -595,16 +598,19 @@ class BrainBertInterface(pl.LightningModule):
         else:
             assert not DataKey.extra in batch, 'not implemented'
             space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
-        outputs: torch.Tensor = self.backbone(
-            state_in,
-            trial_context=trial_context,
-            temporal_context=temporal_context,
-            temporal_padding_mask=temporal_padding_mask,
-            space_padding_mask=space_padding_mask,
-            causal=self.cfg.causal,
-            times=batch.get(DataKey.time, None),
-            positions=batch.get(DataKey.position, None),
-        ) # B x T x S x H or B x Token x H (flat)
+        if self.cfg.transformer.n_layers == 0:
+            outputs = state_in
+        else:
+            outputs: torch.Tensor = self.backbone(
+                state_in,
+                trial_context=trial_context,
+                temporal_context=temporal_context,
+                temporal_padding_mask=temporal_padding_mask,
+                space_padding_mask=space_padding_mask,
+                causal=self.cfg.causal,
+                times=batch.get(DataKey.time, None),
+                positions=batch.get(DataKey.position, None),
+            ) # B x T x S x H or B x Token x H (flat)
         # if outputs.isnan().any():
             # import pdb;pdb.set_trace()
         return outputs

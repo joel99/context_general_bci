@@ -569,6 +569,7 @@ class SpaceTimeTransformer(nn.Module):
             # 3. pad value set to 0, so padding gets marked at time 0
             # 4. all timestep 0 tokens are padding (no other tokens in sequence that can be attended to)
             # Suggested fix: pad value set to something nonzero. (IDR why we didn't set that in the first place, I think concerns about attending to sub-chunk padding?)
+            # import pdb;pdb.set_trace()
             output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
             # if output.isnan().any():
                 # import pdb;pdb.set_trace()

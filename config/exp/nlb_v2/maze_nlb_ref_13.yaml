@@ -62,5 +62,5 @@ model:
   debug_project_space: True
 train:
   patience: 5000
-notes: "11 + Add force zero mask"
+notes: "12 + fully commit to single transformer + kill space embed"
 # This switches masking strategy.
