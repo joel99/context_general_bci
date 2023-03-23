@@ -760,16 +760,16 @@ class TemporalTokenInjector(nn.Module):
     def inject(self, batch: Dict[str, torch.Tensor], in_place=False):
         # Implement injection
         # Assumption is that behavior time == spike time (i.e. if spike is packed, so is behavior), and there's no packing
+        b, t = batch[self.reference].size()[:2]
         injected_tokens = repeat(self.cls_token, 'h -> b t h',
-            b=batch[self.reference].size(0),
-            t=batch[self.reference].size(1), # Time (not _token_, i.e. in spite of flat serving)
+            b=b,
+            t=t, # Time (not _token_, i.e. in spite of flat serving)
         )
         injected_time = repeat(torch.arange(
-            batch[self.reference].size(1),
-            device=batch[self.reference].device
-        ), 't -> b t', b=batch[self.reference].size(0))
+            t, device=batch[self.reference].device
+        ), 't -> b t', b=b)
         injected_space = torch.full(
-            batch[self.reference].size()[:2],
+            (b, t),
             self.max_space - 1, # ! For heldout prediction path, we want to inject a clearly distinguished space token
             # ! This means - 1. make sure `max_channels` is configured high enough that this heldout token is unique (since we will _not_ always add a mask token)
             # self.pad_value, # There is never more than one injected space token

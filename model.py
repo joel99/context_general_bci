@@ -23,7 +23,7 @@ from config import (
     Architecture,
 )
 
-from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, COVARIATE_LENGTH_KEY
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, COVARIATE_LENGTH_KEY, COVARIATE_CHANNEL_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
@@ -709,6 +709,7 @@ class BrainBertInterface(pl.LightningModule):
             MetaKey.array: '* a',
             LENGTH_KEY: '*',
             COVARIATE_LENGTH_KEY: '*',
+            COVARIATE_CHANNEL_KEY: '*',
             CHANNEL_KEY: '* a', # or '* token'
             DataKey.time: '* t',
             DataKey.position: '* t',
@@ -779,7 +780,7 @@ class BrainBertInterface(pl.LightningModule):
             if Output.heldout_logrates in batch_out:
                 if self.data_attrs.serve_tokens_flat:
                     logger.warning('Assuming square data for rate transform')
-                    batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates])
+                    batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(batch_out[Output.heldout_logrates])
                 else:
                     batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(
                         batch_out[Output.heldout_logrates], batch[LENGTH_KEY]

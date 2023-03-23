@@ -367,18 +367,11 @@ class SpikingDataset(Dataset):
                         data_items[CHANNEL_KEY] = torch.cat(channel_counts, 1)
                 else:
                     data_items[k] = torch.cat(array_spikes, 1) # T A C H
-            # JY: Current state of heldout decoding is that we only do one dataset at a time; no need to pad due to consistent interface
-            # elif k == DataKey.heldout_spikes and not self.cfg.serve_tokenized:
-            #     # no array padding OR channel pad - heldout channel count should be preconfigured, and this only happens in finetuning (no heterogeneity)
-            #     assert self.cfg.max_channels > 0, "Heldout spikes logic without max channels not implemented"
-            #     # data_items[k] = F.pad(
-            #     #     payload[k],
-            #     #     (0, 0, 0, self.cfg.max_channels - payload[k].shape[-2]),
-            #     #     value=0
-            #     # ) # T C H
-            #     # heldout_channel_counts.append(payload[k].shape[-2])
             else:
-                data_items[k] = payload[k]
+                if k == DataKey.heldout_spikes and getattr(self.cfg, 'heldout_key_spoof_shape', []):
+                    data_items[k] = torch.full(list(self.cfg.heldout_key_spoof_shape), fill_value=self.pad_value)
+                else:
+                    data_items[k] = payload[k]
         out = {
             **data_items,
             **meta_items,

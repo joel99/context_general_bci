@@ -22,6 +22,7 @@ query = "indy_causal-stmn13ew"
 query = "indy_causal-4i8yc4bc"
 query = "loco_causal-ctkuwqpl"
 query = "indy_single-bw25v0ci"
+query = "rtt_f32_v2-7alicf5z"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -35,7 +36,11 @@ src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.model.task.tasks = [ModelTask.infill]
 # cfg.model.task.metrics = [Metric.bps]
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
-cfg.model.task.outputs = [Output.logrates, Output.spikes]
+cfg.model.task.outputs = [
+    Output.logrates,
+    Output.heldout_logrates,
+    Output.spikes
+]
 print(cfg.dataset.datasets)
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
@@ -97,6 +102,8 @@ heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]
 rates = heldin_outputs[Output.rates] # b t c
+rates = heldin_outputs[Output.heldout_rates] # b t c
+print(rates.size())
 
 if not data_attrs.serve_tokens_flat:
     spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
@@ -124,9 +131,9 @@ y_lim = ax.get_ylim()[1]
 #     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
 # trial = 10
-trial = 15
+# trial = 15
 # trial = 17
-# trial = 18
+trial = 18
 # trial = 80
 # trial = 85
 for channel in range(num):

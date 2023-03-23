@@ -389,6 +389,8 @@ class DatasetConfig:
         default_factory=lambda: [MetaKey.unique, MetaKey.session, MetaKey.array]
     ) # JY recommends providing array meta info, but thinks the system should be designed to not error without.
 
+    heldout_key_spoof_shape: List[int] = field(default_factory=lambda: []) # spoof shape for heldout key if not available
+
     split_key: MetaKey = MetaKey.unique
     # ==== Data parsing/processing ====
     bin_size_ms: int = 2

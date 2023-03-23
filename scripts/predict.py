@@ -4,7 +4,7 @@ from typing import Dict, List
 from omegaconf import OmegaConf
 
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 
 from matplotlib import pyplot as plt
 import seaborn as sns
@@ -43,7 +43,7 @@ ids = [
     # "maze_large-2lt96j3t",
     # "maze_med-1vdsby2m",
     # "maze_small-lj0l4nn3"
-    "rtt_nlb_07-1p6bdyja"
+    "rtt_f32_v2-5qqszlq4"
 ]
 # wandb_run = get_wandb_run(wandb_id)
 # heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val-')
@@ -66,13 +66,15 @@ def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
         out[k] = torch.cat(v)
     return out
 
+SPOOFS = { # heldout neuron shapes
+    'mc_rtt': [30, 32, 1]
+}
 def create_submission_dict(wandb_run):
     print(f"creating submission for {wandb_run.id}")
-    heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_Metric.co_bps')
-    heldout_model.cfg.task.outputs = [Output.heldout_logrates]
-
-    cfg.dataset.data_keys = [DataKey.spikes]
-    # cfg.dataset.datasets = [dataset_name] # do _not_ accidentally set this as just a str
+    heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+    heldout_model.cfg.task.outputs = [Output.heldout_logrates, Output.spikes]
+    cfg.dataset.data_keys = [DataKey.spikes, DataKey.heldout_spikes]
+    cfg.dataset.heldout_key_spoof_shape = SPOOFS[cfg.dataset.datasets[0]]
 
     dataset = SpikingDataset(cfg.dataset)
     test_dataset = deepcopy(dataset)
@@ -83,12 +85,12 @@ def create_submission_dict(wandb_run):
     if cfg.init_from_id:
         base_run = get_wandb_run(cfg.init_from_id)
         heldin_model, *_ = load_wandb_run(base_run, tag='val_loss')
-        heldin_model.cfg.task.outputs = [Output.logrates]
+        heldin_model.cfg.task.outputs = [Output.logrates, Output.spikes]
         # TODO make sure that the heldin model data attrs are transferred
-        raise NotImplementedError
+        # raise NotImplementedError
     else:
         heldin_model = heldout_model
-        heldin_model.cfg.task.outputs = [Output.logrates, Output.heldout_logrates]
+        heldin_model.cfg.task.outputs = [Output.logrates, Output.heldout_logrates, Output.spikes]
 
     dataloader = get_dataloader(dataset)
     test_dataloader = get_dataloader(test_dataset)
@@ -102,6 +104,11 @@ def create_submission_dict(wandb_run):
     else:
         heldout_outputs = heldin_outputs
         test_heldout_outputs = test_heldin_outputs
+
+    # Crop heldout neurons
+    heldout_count = SPOOFS[cfg.dataset.datasets[0]][1]
+    heldout_outputs[Output.heldout_rates] = heldout_outputs[Output.heldout_rates][:,:heldout_count]
+    test_heldout_outputs[Output.heldout_rates] = test_heldout_outputs[Output.heldout_rates][:,:heldout_count]
     return dataset.cfg.datasets[0], {
         'train_rates_heldin': heldin_outputs[Output.rates].squeeze(2).numpy(),
         'train_rates_heldout': heldout_outputs[Output.heldout_rates].numpy(),
