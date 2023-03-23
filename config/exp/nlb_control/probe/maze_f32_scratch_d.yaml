@@ -29,11 +29,11 @@ model:
 
   force_zero_mask: True
 
-  # lr_init: 5e-5
-  # lr_ramp_steps: 1000
-  # lr_decay_steps: 10000
-  # accelerate_new_params: 10.0
-  # tune_decay: 0.75 # per Kaiming MAE
+  lr_init: 5e-5
+  lr_ramp_steps: 1000
+  lr_decay_steps: 10000
+  accelerate_new_params: 10.0
+  tune_decay: 0.75 # per Kaiming MAE
 
 dataset:
   nlb_maze:

@@ -482,6 +482,7 @@ class ShuffleInfill(RatePrediction):
         else:
             self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
 
+        # * Redundant implementation with decode_separate: False path in HeldoutPrediction... scrap at some point
         self.joint_heldout = getattr(self.cfg, 'query_heldout', 0) and not ModelTask.heldout_decoding in self.cfg.tasks
         if self.joint_heldout:
             self.heldout_mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
@@ -585,6 +586,14 @@ class ShuffleInfill(RatePrediction):
                         temporal_padding_mask,
                         torch.full((temporal_padding_mask.size(0), time_seg.size(0)), False, device=temporal_padding_mask.device, dtype=temporal_padding_mask.dtype),
                     ], 1)
+                if DataKey.extra in batch:
+                    # we injected extra tokens and need to make up for it
+                    extra_padding_mask = create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
+                    temporal_padding_mask = torch.cat([
+                        temporal_padding_mask[:, :batch['encoder_frac']],
+                        extra_padding_mask,
+                        temporal_padding_mask[:, batch['encoder_frac']:],
+                    ], 1) # order of ops inferred from data flow (extra appended pre-task, decode frac appended just now)
             reps: torch.Tensor = self.decoder(
                 decoder_input,
                 trial_context=trial_context,
@@ -770,14 +779,16 @@ class TemporalTokenInjector(nn.Module):
         ), 't -> b t', b=batch[self.reference].size(0))
         injected_space = torch.full(
             batch[self.reference].size()[:2],
-            self.pad_value,
+            self.pad_value, # There is never more than one space token
             device=batch[self.reference].device
         )
         # I want to inject padding tokens for space so nothing actually gets added on that dimension
         if in_place:
             batch[DataKey.extra] = injected_tokens # B T H
-            batch[DataKey.time] = torch.cat([batch[DataKey.time], injected_time], dim=1)
-            batch[DataKey.position] = torch.cat([batch[DataKey.position], injected_space], dim=1)
+            batch[DataKey.extra_time] = injected_time
+            # batch[DataKey.time] = torch.cat([batch[DataKey.time], injected_time], dim=1)
+            batch[DataKey.extra_position] = injected_space
+            # batch[DataKey.position] = torch.cat([batch[DataKey.position], injected_space], dim=1)
         return injected_tokens, injected_time, injected_space
 
     def extract(self, batch: Dict[str, torch.Tensor], features: torch.Tensor) -> torch.Tensor:
@@ -1138,7 +1149,6 @@ class BehaviorRegression(TaskPipeline):
                 for key in ['session', 'subject', 'task']:
                     if key in batch and batch[key] is not None:
                         trial_context.append(batch[key].detach()) # Provide context, but hey, let's not make it easier for the model to steer the unsupervised-calibrated context
-                # import pdb;pdb.set_trace()
                 backbone_features: torch.Tensor = self.decoder(
                     decoder_input,
                     temporal_padding_mask=temporal_padding_mask,
@@ -1173,7 +1183,6 @@ class BehaviorRegression(TaskPipeline):
             bhvr_tgt = bhvr_tgt - self.bhvr_mean
             bhvr_tgt = bhvr_tgt / self.bhvr_std
         loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
-        # import pdb;pdb.set_trace()
         _, length_mask, _ = self.get_masks(
             batch, ref=backbone_features,
             length_key=COVARIATE_LENGTH_KEY if self.cfg.decode_strategy == EmbedStrat.token else LENGTH_KEY,
@@ -1214,7 +1223,6 @@ class BehaviorRegression(TaskPipeline):
 
         batch_out['loss'] = loss
         if Metric.kinematic_r2 in self.cfg.metrics:
-            # import pdb;pdb.set_trace()
             valid_bhvr = bhvr[r2_mask]
             valid_tgt = bhvr_tgt[r2_mask]
             batch_out[Metric.kinematic_r2] = r2_score(valid_tgt.float().detach().cpu(), valid_bhvr.float().detach().cpu(), multioutput='raw_values')
@@ -1222,13 +1230,6 @@ class BehaviorRegression(TaskPipeline):
                 valid_bhvr = valid_bhvr[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
                 valid_tgt = valid_tgt[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
                 batch_out[Metric.kinematic_r2_thresh] = r2_score(valid_tgt.float().detach().cpu(), valid_bhvr.float().detach().cpu(), multioutput='raw_values')
-            # print(batch_out[Metric.kinematic_r2])
-            # if (batch_out[Metric.kinematic_r2] < 0).any():
-            #     import pdb;pdb.set_trace()
-            # print(f'true: {bhvr_tgt[length_mask][:10,0]}')
-            # print(f'pred: {bhvr[length_mask][:10,0]}')
-            # print(f'loss: {loss[length_mask][:10,0]}')
-            # print(f'x_r2: {batch_out[Metric.kinematic_r2][0]}')
         return batch_out
 
 # === Utils ===
@@ -1245,6 +1246,7 @@ def create_temporal_padding_mask(
         return None
     if length_key == LENGTH_KEY and SHUFFLE_KEY in batch:
         token_position = batch[SHUFFLE_KEY]
+        # If we had extra injected, the padd
         if truncate_shuffle:
             token_position = token_position[:batch['encoder_frac']]
     else:
