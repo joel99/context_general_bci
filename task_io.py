@@ -587,13 +587,23 @@ class ShuffleInfill(RatePrediction):
                         torch.full((temporal_padding_mask.size(0), time_seg.size(0)), False, device=temporal_padding_mask.device, dtype=temporal_padding_mask.dtype),
                     ], 1)
                 if DataKey.extra in batch:
-                    # we injected extra tokens and need to make up for it
-                    extra_padding_mask = create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
+                    # Someone's querying (assuming `HeldoutPrediction`, integrate here)
+                    decoder_input = torch.cat([
+                        decoder_input,
+                        batch[DataKey.extra]
+                    ], 1)
+                    times = torch.cat([
+                        times,
+                        batch[DataKey.extra_time]
+                    ], 1)
+                    positions = torch.cat([
+                        positions,
+                        batch[DataKey.extra_position]
+                    ], 1)
                     temporal_padding_mask = torch.cat([
-                        temporal_padding_mask[:, :batch['encoder_frac']],
-                        extra_padding_mask,
-                        temporal_padding_mask[:, batch['encoder_frac']:],
-                    ], 1) # order of ops inferred from data flow (extra appended pre-task, decode frac appended just now)
+                        temporal_padding_mask,
+                        create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
+                    ], 1)
             reps: torch.Tensor = self.decoder(
                 decoder_input,
                 trial_context=trial_context,
@@ -606,6 +616,9 @@ class ShuffleInfill(RatePrediction):
             if self.joint_heldout:
                 heldout_reps, reps = torch.split(reps, [time_seg.size(0), reps.size(1)-time_seg.size(0)], dim=1)
                 heldout_rates = self.query_readout(heldout_reps)
+            if DataKey.extra in batch:
+                # remove extraneous
+                reps, batch[DataKey.extra] = torch.split(reps, [reps.size(1)-batch[DataKey.extra].size(1), batch[DataKey.extra].size(1)], dim=1)
             if getattr(self.cfg, 'decode_use_shuffle_backbone', False):
                 batch_out['update_features'] = reps
                 batch_out['update_time'] = times
@@ -709,35 +722,6 @@ class NextStepPrediction(RatePrediction):
 
         return batch_out
 
-# class ShuffleNextStepPrediction(ShuffleInfill):
-#     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
-#         r"""
-#             It's tricky/annoying to try to crop zero timestep or inject zero timestep,
-#             in flat scenarios it's not guaranteed there's a consistent number of tokens per timestep in each sequence (due to cropping)
-#             So we will just "roll" time annotation and match only on loss comparison
-#             # * by nature of task there is never supervision for final timestep encoding
-#         """
-#         out = super().update_batch(batch, eval_mode=eval_mode)
-#         # ? Why _shouldn't_ we allow attention to the current timestep? Not like we're bleeding ground truth.
-#         # roll_time = out[f'{DataKey.time}_target'] - 1
-#         # # Use -1 for target times, effectively these queries are shifted a step back (while still being matched to present)
-#         # overflow = roll_time < 0
-#         # roll_time = torch.maximum(roll_time, 0)
-#         # out.update({
-#         #     f'{DataKey.time}_target': roll_time,
-#         #     'overflow': overflow
-#         # })
-#         return out
-
-#     def get_loss_mask(self, batch: Dict[str, torch.Tensor], loss: torch.Tensor) -> torch.Tensor:
-#         r"""
-#             In this case we want to mask out the loss for the final timestep
-#             since there is no supervision for that timestep
-#         """
-#         loss_mask = super().get_loss_mask(batch, loss)
-#         loss_mask = loss_mask & ~batch['overflow']
-#         return loss_mask
-
 class ICMSNextStepPrediction(NextStepPrediction):
     does_update_root = True
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
@@ -755,6 +739,12 @@ class ICMSNextStepPrediction(NextStepPrediction):
         return [*parent, batch[DataKey.stim]]
 
 class TemporalTokenInjector(nn.Module):
+    r"""
+        The in-place "extra" pathway assumes will inject `extra` series for someone else to process.
+        It is assumed that the `extra` tokens will be updated elsewhere, and directly retrievable for decoding.
+        - There is no code regulating this update, i'm only juggling two tasks at most atm.
+        In held-out case, I'm routing update in `ShuffleInfill` update
+    """
     def __init__(
         self, cfg: ModelConfig, data_attrs: DataAttrs, reference: DataKey
     ):
@@ -765,6 +755,7 @@ class TemporalTokenInjector(nn.Module):
         else:
             self.cls_token = nn.Parameter(torch.randn(cfg.hidden_size))
         self.pad_value = data_attrs.pad_token
+        self.max_space = data_attrs.max_spatial_tokens
 
     def inject(self, batch: Dict[str, torch.Tensor], in_place=False):
         # Implement injection
@@ -779,7 +770,9 @@ class TemporalTokenInjector(nn.Module):
         ), 't -> b t', b=batch[self.reference].size(0))
         injected_space = torch.full(
             batch[self.reference].size()[:2],
-            self.pad_value, # There is never more than one space token
+            self.max_space - 1, # ! For heldout prediction path, we want to inject a clearly distinguished space token
+            # ! This means - 1. make sure `max_channels` is configured high enough that this heldout token is unique (since we will _not_ always add a mask token)
+            # self.pad_value, # There is never more than one injected space token
             device=batch[self.reference].device
         )
         # I want to inject padding tokens for space so nothing actually gets added on that dimension
@@ -792,6 +785,8 @@ class TemporalTokenInjector(nn.Module):
         return injected_tokens, injected_time, injected_space
 
     def extract(self, batch: Dict[str, torch.Tensor], features: torch.Tensor) -> torch.Tensor:
+        if DataKey.extra in batch: # in-place path assumed
+            return batch[DataKey.extra]
         return features[:, -batch[self.reference].size(1):] # assuming queries stitched to back
 
 class HeldoutPrediction(RatePrediction):

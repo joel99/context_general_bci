@@ -2,6 +2,8 @@
 # For use in NLB
 defaults:
   - /model: flat_enc_dec
+  - /model/task:
+    - bhvr_decode_flat
   - /train: pretrain
   - /dataset: flat
 model:
@@ -18,16 +20,6 @@ model:
 
   task:
     mask_ratio: 0.25
-    task_weights: [.1, 1.] # kind of unfair weight on some measly heldout tokens :)
-    tasks:
-    - ModelTask.shuffle_infill
-    - ModelTask.heldout_decoding
-    query_heldout: 45
-    decode_strategy: EmbedStrat.token
-    # decode_time_pool: 'mean' # shouldn't matter
-    metrics:
-    - Metric.co_bps
-    - Metric.block_co_bps
   neurons_per_token: 32
 
   force_zero_mask: True
@@ -36,14 +28,14 @@ model:
   lr_ramp_steps: 1000
   lr_decay_steps: 10000
   accelerate_new_params: 10.0
-  tune_decay: 0.75 # per Kaiming MAE
+  tune_decay: 0.95 # per Kaiming MAE
 
 dataset:
   nlb_maze:
     heldout_neurons: 45
   data_keys:
   - DataKey.spikes
-  - DataKey.heldout_spikes
+  - DataKey.bhvr_vel
   neurons_per_token: 32
   max_tokens: 8192
   max_length_ms: 2000
@@ -67,7 +59,5 @@ train:
   autoscale_batch_size: false
   batch_size: 64
   patience: 500
-# init_from_id: maze_f32_scratch_d-7wkvdvhx
-load_from_id: test-967rmqpk
+init_from_id: maze_f32_v2-yophgvnb
 init_tag: val_loss
-notes: "kicked off while max space was set to pad token of 5"

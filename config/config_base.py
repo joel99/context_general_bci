@@ -107,7 +107,7 @@ class TaskConfig:
         Beginning experiments will be pretrain -> fine-tune, but we will try to make migrating to multi-task easy.
     """
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill])
-    task_weights: List[float] = field(default_factory=lambda: [1.])
+    task_weights: List[float] = field(default_factory=lambda: [1., 1.])
     # List of session IDs to ignore supervised loss for. Using for mc_rtt pilot
     blacklist_session_supervision: List[str] = field(default_factory=lambda: [])
 

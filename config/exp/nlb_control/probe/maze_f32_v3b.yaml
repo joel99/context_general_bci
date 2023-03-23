@@ -56,8 +56,8 @@ dataset:
   # - churchland_misc.*
   # - CRS02bHome.data.*
   # - odoherty_rtt.*
-  # - mc_maze.*
-  - mc_maze_medium
+  - mc_maze.*
+  # - mc_maze_medium
   # - dyer_co.*
   # - gallego_co.*
   eval_datasets:
@@ -67,7 +67,5 @@ train:
   autoscale_batch_size: false
   batch_size: 64
   patience: 500
-# init_from_id: maze_f32_scratch_d-7wkvdvhx
-load_from_id: test-967rmqpk
+init_from_id: maze_f32_v2-yophgvnb
 init_tag: val_loss
-notes: "kicked off while max space was set to pad token of 5"
