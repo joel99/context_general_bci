@@ -45,7 +45,7 @@ dataset:
   # - churchland_misc.*
   # - CRS02bHome.data.*
   # - odoherty_rtt.*
-  - mc_maze_medium
+  - mc_maze_large
   # - mc_rtt
   # - dyer_co.*
   # - gallego_co.*

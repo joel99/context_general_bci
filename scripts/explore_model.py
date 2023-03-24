@@ -23,6 +23,7 @@ query = "indy_causal-4i8yc4bc"
 query = "loco_causal-ctkuwqpl"
 query = "indy_single-bw25v0ci"
 query = "rtt_f32_v2-7alicf5z"
+query = "med_f32_b-vozm3zip"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -71,8 +72,10 @@ dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets:
     dataset.subset_split(splits=['eval'])
 else:
-    dataset.subset_split()
+    dataset.subset_split() # remove data-native test trials etc
 dataset.build_context_index()
+train, val = dataset.create_tv_datasets()
+dataset = val
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
 # data_attrs.context.session = ['ExperimentalTask.odoherty_rtt-Indy-20161014_04'] # definitely using..
@@ -96,13 +99,16 @@ dataloader = get_dataloader(dataset, batch_size=16)
 # dataloader = get_dataloader(dataset, batch_size=4)
 
 print(query)
-# heldin_metrics = stack_batch(trainer.test(model, dataloader))
+heldin_metrics = stack_batch(trainer.test(model, dataloader))
+import pdb;pdb.set_trace()
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+#%%
+import pdb;pdb.set_trace()
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]
 rates = heldin_outputs[Output.rates] # b t c
-rates = heldin_outputs[Output.heldout_rates] # b t c
+# rates = heldin_outputs[Output.heldout_rates] # b t c
 print(rates.size())
 
 if not data_attrs.serve_tokens_flat:
@@ -112,11 +118,6 @@ ax = prep_plt()
 num = 20
 num = 5
 # channel = 5
-# channel = 10
-# channel = 18
-# channel = 19
-# channel = 20
-# channel = 80
 
 colors = sns.color_palette("husl", num)
 
@@ -124,11 +125,6 @@ colors = sns.color_palette("husl", num)
 #     ax.plot(rates[trial][:,channel], color=colors[trial])
 
 y_lim = ax.get_ylim()[1]
-# plot spike raster
-# for trial in range(num):
-#     spike_times = spikes[trial,:,channel].nonzero()
-#     y_height = y_lim * (trial+1) / num
-#     ax.scatter(spike_times, torch.ones_like(spike_times)*y_height, color=colors[trial], s=10, marker='|')
 
 # trial = 10
 # trial = 15

@@ -642,6 +642,7 @@ class ShuffleInfill(RatePrediction):
         if not compute_metrics:
             return batch_out
         loss: torch.Tensor = self.loss(rates, target) # b t' c
+        # import pdb;pdb.set_trace()
         loss_mask = self.get_loss_mask(batch, loss) # shuffle specific
         loss = loss[loss_mask]
         batch_out['loss'] = loss.mean()

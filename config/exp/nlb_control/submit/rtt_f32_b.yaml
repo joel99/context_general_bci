@@ -29,8 +29,6 @@ model:
   tune_decay: 0.9
 
 dataset:
-  nlb_maze:
-    heldout_neurons: 45
   data_keys:
   - DataKey.spikes
   - DataKey.heldout_spikes
@@ -45,8 +43,8 @@ dataset:
   # - churchland_misc.*
   # - CRS02bHome.data.*
   # - odoherty_rtt.*
-  - mc_maze_medium
-  # - mc_rtt
+  # - mc_maze.*
+  - mc_rtt
   # - dyer_co.*
   # - gallego_co.*
   # eval_datasets:
@@ -55,5 +53,5 @@ dataset:
 train:
   autoscale_batch_size: false
   batch_size: 64
-init_from_id: base_f32_150k_acausal-viexqpg7
+init_from_id: rtt_f32_v2-1itg97jr
 init_tag: val_loss

@@ -5,15 +5,26 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "nlb_tune_2": {
+        'model.task.mask_ratio': {
+            'feasible_points': [0.01, 0.05, 0.1],
+        },
+        'model.tune_decay': {
+            'feasible_points': [0.75, 0.85, 0.95],
+        },
+        'model.lr_ramp_steps': {
+            'feasible_points': [50, 100, 200],
+        },
+        'model.task.task_weights': {
+            'feasible_points': [(1., 1.), (0.5, 1.), (1., 0.5), (0.25, 1.), (1., 0.25)],
+        },
+    },
     "nlb_tune": {
         'model.task.mask_ratio': {
             'feasible_points': [0.1, 0.2, 0.3, 0.4, 0.5],
         },
         'model.tune_decay': {
             'feasible_points': [0.3, 0.5, 0.7, 0.9],
-        },
-        'model.task.task_weights': {
-            'feasible_points': [[1., 1.], [0.5, 1.], [1., 0.5], [0.25, 1.], [1., 0.25], [0.1, 1.], [1., 0.1]],
         },
         'model.lr_ramp_steps': {
             'feasible_points': [50, 250, 500, 750, 1000],

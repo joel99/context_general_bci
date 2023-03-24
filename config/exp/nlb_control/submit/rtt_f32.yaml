@@ -17,7 +17,6 @@ model:
   hidden_size: 384
 
   task:
-    task_weights: [0.1, 1.]
     mask_ratio: 0.1
     query_heldout: 45
   neurons_per_token: 32
@@ -29,8 +28,6 @@ model:
   tune_decay: 0.9
 
 dataset:
-  nlb_maze:
-    heldout_neurons: 45
   data_keys:
   - DataKey.spikes
   - DataKey.heldout_spikes
@@ -45,8 +42,8 @@ dataset:
   # - churchland_misc.*
   # - CRS02bHome.data.*
   # - odoherty_rtt.*
-  - mc_maze_medium
-  # - mc_rtt
+  # - mc_maze.*
+  - mc_rtt
   # - dyer_co.*
   # - gallego_co.*
   # eval_datasets:

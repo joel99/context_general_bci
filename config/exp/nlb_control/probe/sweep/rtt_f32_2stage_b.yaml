@@ -46,11 +46,13 @@ dataset:
   - mc_rtt
   # - dyer_co.*
   # - gallego_co.*
-  # eval_datasets:
-  # - mc_rtt
-  # eval_ratio: 0.2
+  eval_datasets:
+  - mc_rtt
+  eval_ratio: 0.2
 train:
   autoscale_batch_size: false
   batch_size: 64
-init_from_id: base_f32_150k_acausal-viexqpg7
+init_from_id: rtt_f32_v2-1itg97jr
 init_tag: val_loss
+sweep_cfg: 'nlb_tune'
+sweep_trials: 16

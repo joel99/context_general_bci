@@ -17,7 +17,6 @@ model:
   hidden_size: 384
 
   task:
-    task_weights: [0.1, 1.]
     mask_ratio: 0.1
     query_heldout: 45
   neurons_per_token: 32
@@ -45,7 +44,7 @@ dataset:
   # - churchland_misc.*
   # - CRS02bHome.data.*
   # - odoherty_rtt.*
-  - mc_maze_medium
+  - mc_maze_small
   # - mc_rtt
   # - dyer_co.*
   # - gallego_co.*

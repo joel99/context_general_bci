@@ -904,8 +904,8 @@ class BrainBertInterface(pl.LightningModule):
         r"""
             Note test step isn't capable of returning non-metrics. (use `predict` to get outputs)
         """
-        # metrics = self._step(batch, eval_mode=False)
-        metrics = self._step(batch, eval_mode=True)
+        metrics = self._step(batch, eval_mode=False)
+        # metrics = self._step(batch, eval_mode=True)
         self.common_log(metrics, prefix='test')
         return metrics
 
