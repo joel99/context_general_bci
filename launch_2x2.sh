@@ -6,8 +6,7 @@
 #SBATCH --cpus-per-task=6
 #SBATCH -p gpu
 #SBATCH -t 36:00:00
-#SBATCH --mem 30G
-#SBATCH -x mind-1-23,mind-1-26,mind-1-30
+#SBATCH --mem 40G
 #SBATCH --output=slurm_logs/%j.out
 
 # CPUs requested conservative, trying to slip these jobs in, unclear if cpu is limiting factor

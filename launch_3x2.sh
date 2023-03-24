@@ -1,14 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=ndt2_2x_4
-#SBATCH --nodes=2
-#SBATCH --gpus-per-node=4
-#SBATCH --ntasks-per-node=4
+#SBATCH --job-name=ndt2_4x2
+#SBATCH --nodes=3
+#SBATCH --gpus-per-node=2
+#SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=6
 #SBATCH -p gpu
 #SBATCH -t 36:00:00
-#SBATCH --mem 90G
+#SBATCH --mem 40G
 #SBATCH --output=slurm_logs/%j.out
 
+# CPUs requested conservative, trying to slip these jobs in, unclear if cpu is limiting factor
 # Mem is
 # Multinode notes
 # From https://pytorch-lightning.readthedocs.io/en/stable/clouds/cluster.html
@@ -30,11 +31,11 @@ export NCCL_IB_DISABLE=1
 echo 'tasks'
 echo $SLURM_NTASKS
 echo 'per node'
-export SLURM_NTASKS_PER_NODE=4
+export SLURM_NTASKS_PER_NODE=2
 echo $SLURM_NTASKS_PER_NODE
 
 hostname
 source ~/.bashrc # Note bashrc has been modified to allow slurm jobs
 source ~/load_env.sh
-srun python -u run.py nodes=2 $1
+srun python -u run.py nodes=3 $1
 

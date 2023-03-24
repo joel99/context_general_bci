@@ -50,4 +50,4 @@ dataset:
   - mc_maze$
 train:
   autoscale_batch_size: false
-  batch_size: 16
+  batch_size: 32

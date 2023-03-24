@@ -437,8 +437,6 @@ class BrainBertInterface(pl.LightningModule):
                 static_context: List(T') [B x H]
                 temporal_context: List(?) [B x T x H]
         """
-        if self.cfg.layer_norm_input:
-            state_in = self.layer_norm_input(state_in)
         temporal_context = []
         for task in self.cfg.task.tasks:
             temporal_context.extend(self.task_pipelines[task.value].get_temporal_context(batch))
@@ -570,6 +568,8 @@ class BrainBertInterface(pl.LightningModule):
             augmented_tokens, ps = pack([state_in, *project_context], 'b * a h')
             augmented_tokens = self.context_project(augmented_tokens)
             state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
+        if self.cfg.layer_norm_input:
+            state_in = self.layer_norm_input(state_in)
         return state_in, static_context, temporal_context
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:

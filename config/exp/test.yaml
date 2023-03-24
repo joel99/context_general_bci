@@ -1,34 +1,35 @@
 # @package _global_
-# For use in NLB
+
 defaults:
   - /model: pretrain_small
   - /dataset: maze_nlb
   - /train: nlb
 dataset:
   datasets:
-  - mc_maze_small
+  - mc_maze$
+  eval_datasets:
+  - mc_maze$
   nlb_maze:
-    heldout_neurons: 35
+    heldout_neurons: 45
   data_keys:
   - DataKey.spikes
-  - DataKey.heldout_spikes
+  # - DataKey.heldout_spikes
   bin_size_ms: 20
 model:
-  dropout: 0.8
+  dropout: 0.6
   transformer:
-    dropout: 0.8
+    dropout: 0.6
     n_heads: 2
-    n_layers: 4
   task:
     task_weights: [1., 1.]
     tasks:
     - ModelTask.infill
-    - ModelTask.heldout_decoding
+    # - ModelTask.heldout_decoding
     metrics:
     - Metric.bps
-    - Metric.co_bps
-    - Metric.block_co_bps
+    # - Metric.co_bps
+    # - Metric.block_co_bps
 train:
   autoscale_batch_size: false
   batch_size: 64
-  patience: 10000
+  patience: 1000

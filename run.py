@@ -218,6 +218,8 @@ def run_exp(cfg : RootConfig) -> None:
         if os.environ.get('SLURM_JOB_ID'):
             wandb.run.notes = f"{notes}. SLURM_JOB_ID={os.environ['SLURM_JOB_ID']}"
             cfg.slurm_id = int(os.environ['SLURM_JOB_ID'])
+            if not cfg.train.autoscale_batch_size:
+                cfg.effective_bsz = cfg.train.batch_size * cfg.train.accumulate_batches * cfg.nodes * torch.cuda.device_count()
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
         wandb.config.update({'data_attrs': dataclasses.asdict(data_attrs)})
         # Of course now I find these
@@ -249,7 +251,6 @@ def run_exp(cfg : RootConfig) -> None:
         if cfg.train.max_batch_size:
             new_bsz = min(new_bsz, cfg.train.max_batch_size)
         data_module.batch_size = new_bsz
-
     trainer.fit(
         model, datamodule=data_module,
         ckpt_path=get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None

@@ -11,7 +11,6 @@ model:
 
   causal: False
 
-  decoder_layers: 4 # inc from 2
   transformer:
     n_layers: 12
     debug_force_nonlearned_position: True
@@ -37,7 +36,7 @@ dataset:
   # - CRS02bHome.data.*
   - odoherty_rtt.*
   - mc_maze$
-  # - mc_maze.* # rest of NLB as test data...
+  # - mc_maze.* # NLB as test data...
   - dyer_co.*
   - gallego_co.*
 
@@ -50,4 +49,4 @@ dataset:
   - mc_maze$
 train:
   autoscale_batch_size: false
-  batch_size: 16
+  batch_size: 32
