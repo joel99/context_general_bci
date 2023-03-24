@@ -20,7 +20,6 @@ dataset:
   neurons_per_token: 4
 
   max_channels: 280
-  bin_size_ms: 20
   datasets:
   - odoherty_rtt-Indy.*
   eval_datasets:

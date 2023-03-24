@@ -30,8 +30,8 @@ print(context)
 # context = context_registry.query_by_datapath(datapath)
 
 sample_query = 'test' # just pull the latest run
-sample_query = 'indy_causal_joint'
-# sample_query = mode # just pull the latest run
+# sample_query = 'pt_parity'
+
 wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 print(wandb_run)
 _, cfg, _ = load_wandb_run(wandb_run, tag='val_loss')
@@ -39,9 +39,7 @@ default_cfg = cfg.dataset
 # default_cfg: DatasetConfig = OmegaConf.create(DatasetConfig())
 # default_cfg.data_keys = [DataKey.spikes]
 default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
-# default_cfg.bin_size_ms = 5
 default_cfg.bin_size_ms = 20
-# print(default_cfg.datasets )
 # default_cfg.datasets = [context.alias]
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
 # default_cfg.max_channels = 250
@@ -56,7 +54,7 @@ dataset.subset_split()
 # print(torch.tensor(lengths).max(), torch.tensor(lengths).min())
 print(len(dataset))
 #%%
-trial = 0
+# trial = 0
 trial = 10
 # trial = 30
 # trial = 10

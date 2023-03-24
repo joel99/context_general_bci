@@ -23,14 +23,13 @@ from config import (
     Architecture,
 )
 
-from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, COVARIATE_LENGTH_KEY
+from data import DataAttrs, LENGTH_KEY, CHANNEL_KEY, COVARIATE_LENGTH_KEY, COVARIATE_CHANNEL_KEY
 from subjects import subject_array_registry, SortedArrayInfo
 # It's not obvious that augmentation will actually help - might hinder feature tracking, which is consistent
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 from components import (
     SpaceTimeTransformer,
     ReadinMatrix,
-    SpaceTimeTransformer,
     ReadinCrossAttention,
     ContextualMLP,
 )
@@ -68,12 +67,16 @@ class BrainBertInterface(pl.LightningModule):
         if self.data_attrs.serve_tokens_flat:
             assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
         assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
-        self.backbone = SpaceTimeTransformer(
-            self.cfg.transformer,
-            max_spatial_tokens=data_attrs.max_spatial_tokens
-        )
+        if self.cfg.transformer.n_layers == 0: # debug for parity
+            self.backbone = nn.Identity()
+            self.backbone.out_size = self.cfg.hidden_size
+        else:
+            self.backbone = SpaceTimeTransformer(
+                self.cfg.transformer,
+                max_spatial_tokens=data_attrs.max_spatial_tokens,
+                debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
+            )
         self.bind_io()
-
         self.novel_params: List[str] = [] # for fine-tuning
         num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
         assert num_updates <= 1, "Only one task pipeline should update the root"
@@ -149,7 +152,7 @@ class BrainBertInterface(pl.LightningModule):
         project_size = self.cfg.hidden_size
 
         if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            if self.cfg.session_embed_strategy == EmbedStrat.token and getattr(self.cfg, 'session_embed_token_count', 1) > 1:
+            if self.cfg.session_embed_strategy == EmbedStrat.token and self.cfg.session_embed_token_count > 1:
                 self.session_embed = nn.Parameter(torch.randn(len(self.data_attrs.context.session), self.cfg.session_embed_token_count, self.cfg.session_embed_size) / math.sqrt(self.cfg.session_embed_size))
                 self.session_flag = nn.Parameter(torch.randn(self.cfg.session_embed_token_count, self.cfg.session_embed_size) / math.sqrt(self.cfg.session_embed_size))
             else:
@@ -191,15 +194,19 @@ class BrainBertInterface(pl.LightningModule):
                     self.array_flag = nn.Parameter(torch.zeros(self.data_attrs.max_arrays, self.cfg.array_embed_size))
 
         if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            self.task_embed = nn.Embedding(len(self.data_attrs.context.task), self.cfg.task_embed_size)
-            if self.cfg.task_embed_strategy == EmbedStrat.concat:
-                project_size += self.cfg.task_embed_size
-            elif self.cfg.task_embed_strategy == EmbedStrat.token:
-                assert self.cfg.task_embed_size == self.cfg.hidden_size
-                if self.cfg.init_flags:
-                    self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
-                else:
-                    self.task_flag = nn.Parameter(torch.zeros(self.cfg.task_embed_size))
+            if self.cfg.task_embed_strategy == EmbedStrat.token and getattr(self.cfg, 'task_embed_token_count', 1) > 1:
+                self.task_embed = nn.Parameter(torch.randn(len(self.data_attrs.context.task), self.cfg.task_embed_token_count, self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
+                self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_token_count, self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
+            else:
+                self.task_embed = nn.Embedding(len(self.data_attrs.context.task), self.cfg.task_embed_size)
+                if self.cfg.task_embed_strategy == EmbedStrat.concat:
+                    project_size += self.cfg.task_embed_size
+                elif self.cfg.task_embed_strategy == EmbedStrat.token:
+                    assert self.cfg.task_embed_size == self.cfg.hidden_size
+                    if self.cfg.init_flags:
+                        self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
+                    else:
+                        self.task_flag = nn.Parameter(torch.zeros(self.cfg.task_embed_size))
 
         if project_size is not self.cfg.hidden_size:
             self.context_project = nn.Sequential(
@@ -233,7 +240,10 @@ class BrainBertInterface(pl.LightningModule):
                 assert self.cfg.hidden_size % self.cfg.neurons_per_token == 0, "hidden size must be divisible by neurons per token"
                 spike_embed_dim = round(self.cfg.hidden_size / self.cfg.neurons_per_token)
             if self.cfg.spike_embed_style == EmbedStrat.project:
-                self.readin = nn.Linear(1, spike_embed_dim)
+                if getattr(self.cfg, 'debug_project_space', False):
+                    self.readin = nn.Linear(channel_count, channel_count)
+                else:
+                    self.readin = nn.Linear(1, spike_embed_dim)
             elif self.cfg.spike_embed_style == EmbedStrat.token:
                 assert self.cfg.max_neuron_count > self.data_attrs.pad_token, "max neuron count must be greater than pad token"
                 self.readin = nn.Embedding(self.cfg.max_neuron_count, spike_embed_dim, padding_idx=self.data_attrs.pad_token if self.data_attrs.pad_token else None) # I'm pretty confident we won't see more than 20 spikes in 20ms but we can always bump up
@@ -249,7 +259,6 @@ class BrainBertInterface(pl.LightningModule):
                 self.readin = ContextualMLP(channel_count, self.cfg.hidden_size, self.cfg)
             elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
                 self.readin = ReadinCrossAttention(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
-
         if self.cfg.readout_strategy == EmbedStrat.unique_project:
             self.readout = ReadinMatrix(
                 self.cfg.hidden_size,
@@ -446,14 +455,16 @@ class BrainBertInterface(pl.LightningModule):
         else:
             subject = None
         if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            task: torch.Tensor = self.task_embed(batch[MetaKey.task])
+            if getattr(self.cfg, 'task_embed_token_count', 1) > 1:
+                task: torch.Tensor = self.task_embed[batch[MetaKey.task]]
+            else:
+                task: torch.Tensor = self.task_embed(batch[MetaKey.task])
         else:
             task = None
         if self.cfg.array_embed_strategy is not EmbedStrat.none:
             array: torch.Tensor = self.array_embed(batch[MetaKey.array])
         else:
             array = None
-
         if self.cfg.transform_space:
             # collapse space/array, channel/feature --> # b t s h
             state_in = torch.as_tensor(batch[DataKey.spikes], dtype=int)
@@ -468,19 +479,18 @@ class BrainBertInterface(pl.LightningModule):
             if self.cfg.spike_embed_style == EmbedStrat.token:
                 state_in = self.readin(state_in)
             elif self.cfg.spike_embed_style == EmbedStrat.project:
-                state_in = self.readin(state_in.float().unsqueeze(-1))
+                if getattr(self.cfg, 'debug_project_space', False):
+                    state_in = self.readin(state_in.float())
+                else:
+                    state_in = self.readin(state_in.float().unsqueeze(-1))
             else:
                 raise NotImplementedError
-            state_in = state_in.flatten(-2, -1) # b t s h
+            if not getattr(self.cfg, 'debug_project_space', False):
+                state_in = state_in.flatten(-2, -1) # b t s h
             # state_in = rearrange(state_in,
             #     'b t s chunk h -> b t s (chunk h)' if self.data_attrs.serve_tokens else \
             #     'b t a s_a chunk h -> b t a s_a (chunk h)'
             # ) # yes, we rearrange twice... better for alternative control flows..
-            if self.cfg.encode_decode: # TODO decouple
-                # cache context
-                batch['session'] = session
-                batch['subject'] = subject
-                batch['task'] = task
         else: # --> b t a h
             state_in = torch.as_tensor(rearrange(
                 batch[DataKey.spikes], 'b t a c h -> b t a (c h)'
@@ -493,6 +503,11 @@ class BrainBertInterface(pl.LightningModule):
                 state_in = self.readin(state_in, session, subject, array)
             else: # standard project
                 state_in = self.readin(state_in)
+        if self.cfg.encode_decode or self.cfg.task.decode_separate: # TODO decouple
+            # cache context
+            batch['session'] = session
+            batch['subject'] = subject
+            batch['task'] = task
 
         static_context = []
         project_context = [] # only for static info
@@ -559,16 +574,11 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
-        # import pdb;pdb.set_trace()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
-        # interfere
-        # trial_context = [t + torch.randn_like(t) for t in trial_context] # this is huge perturb but actually minror effect...?
-        # trial_context = [torch.zeros_like(t) for t in trial_context]
-
         temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
-        if DataKey.extra in batch:
+        if DataKey.extra in batch and not self.data_attrs.serve_tokens_flat: # serve_tokens_flat is enc dec, don't integrate extra (query) tokens in enc
             state_in = torch.cat([state_in, batch[DataKey.extra]], dim=1)
-            if temporal_padding_mask is not None:
+            if temporal_padding_mask is not None: # Implicit - if we have extra that warrants padding, base certainly warrants padding
                 extra_padding_mask = create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
                 temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
 
@@ -584,17 +594,19 @@ class BrainBertInterface(pl.LightningModule):
         else:
             assert not DataKey.extra in batch, 'not implemented'
             space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
-        # import pdb;pdb.set_trace()
-        outputs: torch.Tensor = self.backbone(
-            state_in,
-            trial_context=trial_context,
-            temporal_context=temporal_context,
-            temporal_padding_mask=temporal_padding_mask,
-            space_padding_mask=space_padding_mask,
-            causal=self.cfg.causal,
-            times=batch.get(DataKey.time, None),
-            positions=batch.get(DataKey.position, None),
-        ) # B x T x S x H or B x Token x H (flat)
+        if self.cfg.transformer.n_layers == 0:
+            outputs = state_in
+        else:
+            outputs: torch.Tensor = self.backbone(
+                state_in,
+                trial_context=trial_context,
+                temporal_context=temporal_context,
+                temporal_padding_mask=temporal_padding_mask,
+                space_padding_mask=space_padding_mask,
+                causal=self.cfg.causal,
+                times=batch.get(DataKey.time, None),
+                positions=batch.get(DataKey.position, None),
+            ) # B x T x S x H or B x Token x H (flat)
         # if outputs.isnan().any():
             # import pdb;pdb.set_trace()
         return outputs
@@ -628,7 +640,6 @@ class BrainBertInterface(pl.LightningModule):
         for task in self.cfg.task.tasks:
             self.task_pipelines[task.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch) # B T S H
-
         if self.cfg.log_backbone_norm:
             # expected to track sqrt N. If it's not, then we're not normalizing properly
             self.log('backbone_norm', torch.linalg.vector_norm(
@@ -650,6 +661,11 @@ class BrainBertInterface(pl.LightningModule):
             for t in self.cfg.task.tasks:
                 if t != ModelTask.kinematic_decoding:
                     task_order.append(t)
+        if getattr(self.cfg.task, 'decode_use_shuffle_backbone', False):
+            task_order = [ModelTask.shuffle_infill]
+            for t in self.cfg.task.tasks:
+                if t != ModelTask.shuffle_infill:
+                    task_order.append(t)
         for i, task in enumerate(task_order):
             pipeline_features = unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features
             update = self.task_pipelines[task.value](
@@ -657,9 +673,14 @@ class BrainBertInterface(pl.LightningModule):
                 pipeline_features,
                 eval_mode=eval_mode
             )
-            if 'cycle_features' in batch_out:
-                features = batch_out['cycle_features']
-                del batch_out['cycle_features']
+            to_del = []
+            for k in update:
+                if 'update' in str(k):
+                    batch[k] = update[k]
+                    to_del.append(k)
+            for k in to_del:
+                del update[k]
+            features = batch.get('update_features', features)
             if 'loss' in update and self.cfg.task.task_weights[i] > 0:
                 batch_out[f'{task.value}_loss'] = update['loss']
                 running_loss = running_loss + self.cfg.task.task_weights[i] * update['loss']
@@ -668,7 +689,11 @@ class BrainBertInterface(pl.LightningModule):
         return batch_out
 
     @torch.inference_mode()
-    def predict(self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=True) -> Dict[str, torch.Tensor]:
+    def predict(
+        self, batch: Dict[str, torch.Tensor], transform_logrates=True, mask=True,
+        eval_mode=True,
+        # eval_mode=False,
+    ) -> Dict[str, torch.Tensor]:
         r"""
             Note: kind of annoying to change keywords here manually (no args can be passed in)
             batch should provide info needed by model. (responsibility of user)
@@ -688,6 +713,7 @@ class BrainBertInterface(pl.LightningModule):
             MetaKey.array: '* a',
             LENGTH_KEY: '*',
             COVARIATE_LENGTH_KEY: '*',
+            COVARIATE_CHANNEL_KEY: '*',
             CHANNEL_KEY: '* a', # or '* token'
             DataKey.time: '* t',
             DataKey.position: '* t',
@@ -710,7 +736,7 @@ class BrainBertInterface(pl.LightningModule):
                 batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
         if mask:
             for k in self.cfg.task.tasks:
-                self.task_pipelines[k.value].update_batch(batch, eval_mode=True)
+                self.task_pipelines[k.value].update_batch(batch, eval_mode=eval_mode)
         features = self(batch)
         if self.cfg.readout_strategy == EmbedStrat.mirror_project:
             unique_space_features = self.readin(features, batch, readin=False)
@@ -722,18 +748,28 @@ class BrainBertInterface(pl.LightningModule):
             for t in self.cfg.task.tasks:
                 if t != ModelTask.kinematic_decoding:
                     task_order.append(t)
+        if getattr(self.cfg.task, 'decode_use_shuffle_backbone', False):
+            task_order = [ModelTask.shuffle_infill]
+            for t in self.cfg.task.tasks:
+                if t != ModelTask.shuffle_infill:
+                    task_order.append(t)
         for task in task_order:
-            batch_out.update(
-                self.task_pipelines[task.value](
-                    batch,
-                    unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none  else features,
-                    compute_metrics=False,
-                    eval_mode=True
-                )
+            update = self.task_pipelines[task.value](
+                batch,
+                unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none  else features,
+                compute_metrics=False,
+                eval_mode=eval_mode
             )
-            if 'cycle_features' in batch_out:
-                features = batch_out['cycle_features']
-                del batch_out['cycle_features']
+            to_del = []
+            for k in update:
+                if 'update' in str(k):
+                    batch[k] = update[k]
+                    to_del.append(k)
+            for k in to_del:
+                del update[k]
+            features = batch.get('update_features', features)
+            batch_out.update(update)
+
         if self.data_attrs.serve_tokens_flat and Output.logrates in batch_out:
             batch_out[Output.logrates] = unflatten(batch_out[Output.logrates], batch_out['time'], batch_out['position'])
         if transform_logrates:
@@ -748,7 +784,7 @@ class BrainBertInterface(pl.LightningModule):
             if Output.heldout_logrates in batch_out:
                 if self.data_attrs.serve_tokens_flat:
                     logger.warning('Assuming square data for rate transform')
-                    batch_out[Output.rates] = self.unpad_and_transform_rates(batch_out[Output.logrates])
+                    batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(batch_out[Output.heldout_logrates])
                 else:
                     batch_out[Output.heldout_rates] = self.unpad_and_transform_rates(
                         batch_out[Output.heldout_logrates], batch[LENGTH_KEY]
@@ -830,7 +866,7 @@ class BrainBertInterface(pl.LightningModule):
     # ==================== Optimization ====================
     def common_log(self, metrics, prefix='', **kwargs):
         for m in metrics:
-            if not isinstance(m, Metric) and not isinstance(m, Output): # log misc, mostly task losses
+            if not isinstance(m, Metric) and not isinstance(m, Output) and 'update' not in m: # log misc, mostly task losses
                 self.log(f'{prefix}_{m}', metrics[m], **kwargs)
         for m in self.cfg.task.metrics:
             if m == Metric.kinematic_r2 or m == Metric.kinematic_r2_thresh:
@@ -872,8 +908,8 @@ class BrainBertInterface(pl.LightningModule):
         r"""
             Note test step isn't capable of returning non-metrics. (use `predict` to get outputs)
         """
-        # metrics = self._step(batch, eval_mode=False)
-        metrics = self._step(batch, eval_mode=True)
+        metrics = self._step(batch, eval_mode=False)
+        # metrics = self._step(batch, eval_mode=True)
         self.common_log(metrics, prefix='test')
         return metrics
 
@@ -892,7 +928,6 @@ class BrainBertInterface(pl.LightningModule):
     def configure_optimizers(self):
         scheduler = None
         if getattr(self.cfg, 'tune_decay', 0.0) > 0.0: # layer-wise LR decay
-            assert self.cfg.transform_space and not self.cfg.transformer.factorized_space_time, 'not implemented (only flat implemented rn)'
             # fix readin
             # accelerate context
             # decay decoder, encoder (Kaiming MAE strategy https://arxiv.org/abs/2111.06377)
@@ -908,7 +943,7 @@ class BrainBertInterface(pl.LightningModule):
             decayed_lr = self.cfg.lr_init * self.cfg.accelerate_new_params
             # Decoder
             for k in self.task_pipelines:
-                if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value, ModelTask.heldout_decoding.value]:
                     raise NotImplementedError
                 # Supported pipelines use "out" and "decoder" terminology for final readout and transformer decoder, respectively
                 pipeline = self.task_pipelines[k]
@@ -919,7 +954,7 @@ class BrainBertInterface(pl.LightningModule):
                     grouped_params.append({"params": pipeline.decoder.final_norm.parameters(), 'lr': decayed_lr})
             for i in reversed(range(self.cfg.decoder_layers)):
                 for k in self.task_pipelines:
-                    if k not in [ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value]:
+                    if k not in [ModelTask.infill.value, ModelTask.shuffle_infill.value, ModelTask.kinematic_decoding.value, ModelTask.heldout_decoding.value]:
                         raise NotImplementedError
                     if not hasattr(pipeline, 'decoder'):
                         continue

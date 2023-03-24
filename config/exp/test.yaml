@@ -1,5 +1,5 @@
 # @package _global_
-
+# For use in NLB
 defaults:
   - /model: pretrain_small
   - /dataset: maze_nlb

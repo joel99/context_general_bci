@@ -40,8 +40,9 @@ r"""
 
 # Padding tokens
 LENGTH_KEY = 'length'
-COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for padded sequences of covariates in the flat case
 CHANNEL_KEY = 'channel_counts'
+COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for padded sequences of covariates in the flat case
+COVARIATE_CHANNEL_KEY = 'covariate_channel_counts' # essentially for heldout channels only
 HELDOUT_CHANNEL_KEY = 'heldout_channel_counts'
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,19 @@ class SpikingDataset(Dataset):
 
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
+            if getattr(self.cfg, 'data_blacklist', ''):
+                # load txt
+                with open(self.cfg.data_blacklist, 'r') as f:
+                    blacklist = f.readlines()
+                    blacklist = [b.strip() for b in blacklist]
+                exclude_contexts = self.list_alias_to_contexts(blacklist)
+            else:
+                exclude_contexts = []
+            if getattr(self.cfg, 'exclude_datasets', []):
+                exclude_contexts.extend(self.list_alias_to_contexts(self.cfg.exclude_datasets))
+            eval_contexts = self.list_alias_to_contexts(self.cfg.eval_datasets)
+            exclude_contexts = [c for c in exclude_contexts if c not in eval_contexts]
+            contexts = [c for c in contexts if c not in exclude_contexts]
             self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
             # self.meta_df = pd.concat([self.load_single_session(c) for c in contexts]).reset_index(drop=True)
             if 'split' in self.meta_df.columns and len(self.meta_df['split'].unique()) > 1:
@@ -167,6 +181,10 @@ class SpikingDataset(Dataset):
         current = self.preproc_version(task)
         cached_preproc_version.pop('arrays', None)
         current.pop('arrays', None)
+        if 'heldout_neurons' in cached_preproc_version:
+            cached_preproc_version.pop('heldout_neurons')
+        if 'heldout_neurons' in current:
+            current.pop('heldout_neurons')
         return current != cached_preproc_version
 
     def list_alias_to_contexts(self, path_or_alias_list: List[Path | str]) -> List[ContextInfo]:
@@ -187,7 +205,7 @@ class SpikingDataset(Dataset):
             return [context_registry.query_by_datapath(session_path_or_alias)]
 
     def mark_eval_split_if_exists(self):
-        if not getattr(self.cfg, 'eval_datasets', []):
+        if not self.cfg.eval_datasets:
             return
         assert self.loaded, "Must load meta_df before loading eval datasets"
         if 'split' not in self.meta_df:
@@ -325,7 +343,7 @@ class SpikingDataset(Dataset):
                         # * Note to get array tokenization to respect array boundaries, use non-alias full array references
                         if self.cfg.serve_tokenized:
                             pad_amount = (self.cfg.neurons_per_token - array_group.size(-2) % self.cfg.neurons_per_token) % self.cfg.neurons_per_token
-                            array_group = F.pad(array_group, (0, 0, 0, pad_amount), value=self.pad_value)
+                            array_group = F.pad(array_group, (0, 0, 0, pad_amount), value=getattr(self.cfg, 'pad_spike_value', 0))
                             tokenized_spikes = array_group.unfold(1, self.cfg.neurons_per_token, self.cfg.neurons_per_token) # time space H channel_in_token
                             array_spikes.append(rearrange(tokenized_spikes, 'time space h c -> time space c h'))
                             time, token_space = tokenized_spikes.size(0), tokenized_spikes.size(1) # track across aliases and arrays
@@ -349,18 +367,11 @@ class SpikingDataset(Dataset):
                         data_items[CHANNEL_KEY] = torch.cat(channel_counts, 1)
                 else:
                     data_items[k] = torch.cat(array_spikes, 1) # T A C H
-            # JY: Current state of heldout decoding is that we only do one dataset at a time; no need to pad due to consistent interface
-            # elif k == DataKey.heldout_spikes and not self.cfg.serve_tokenized:
-            #     # no array padding OR channel pad - heldout channel count should be preconfigured, and this only happens in finetuning (no heterogeneity)
-            #     assert self.cfg.max_channels > 0, "Heldout spikes logic without max channels not implemented"
-            #     # data_items[k] = F.pad(
-            #     #     payload[k],
-            #     #     (0, 0, 0, self.cfg.max_channels - payload[k].shape[-2]),
-            #     #     value=0
-            #     # ) # T C H
-            #     # heldout_channel_counts.append(payload[k].shape[-2])
             else:
-                data_items[k] = payload[k]
+                if k == DataKey.heldout_spikes and getattr(self.cfg, 'heldout_key_spoof_shape', []):
+                    data_items[k] = torch.full(list(self.cfg.heldout_key_spoof_shape), fill_value=self.pad_value)
+                else:
+                    data_items[k] = payload[k]
         out = {
             **data_items,
             **meta_items,
@@ -368,7 +379,7 @@ class SpikingDataset(Dataset):
         if self.cfg.max_channels and not self.cfg.serve_tokenized_flat:
             out[CHANNEL_KEY] = torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
             # if heldout_channel_counts:
-            #     out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
+                # out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
         return out
 
     def __len__(self):
@@ -426,7 +437,7 @@ class SpikingDataset(Dataset):
                                     item = F.pad(item, (0, space_lengths[i] - item.size(1)), value=self.pad_value)
                             stack_batch[k].append(item)
                         else:
-                            if self.cfg.serve_tokenized_flat and k == CHANNEL_KEY:
+                            if self.cfg.serve_tokenized_flat and k == CHANNEL_KEY: # determine cropped channel count
                                 b[k] = b[k][crop_start[i]:crop_start[i]+time_budget[i]]
                                 stack_batch[k].append(b[k].flatten(0, 1))
                             else:
@@ -434,14 +445,21 @@ class SpikingDataset(Dataset):
                 lengths = torch.tensor([el.size(0) for el in stack_batch[DataKey.spikes]])
                 if covariate_key is not None:
                     covariate_lengths = torch.tensor([el.size(0) for el in stack_batch[covariate_key]])
+                    covariate_channels = torch.tensor([el.size(1) for el in stack_batch[covariate_key]])
+                    # Manually pad to max channels
+                    covariate_max = covariate_channels.max()
+                    pad_els = [0] + [0, 0] * (stack_batch[covariate_key][0].ndim - 2)
+                    for i, el in enumerate(stack_batch[covariate_key]):
+                        stack_batch[covariate_key][i] = F.pad(el, (*pad_els, covariate_max - el.size(1)), value=self.pad_value)
                 for k in stack_batch.keys():
                     if isinstance(k, DataKey) or (self.cfg.serve_tokenized_flat and k == CHANNEL_KEY):
-                        stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True)
+                        stack_batch[k] = pad_sequence(stack_batch[k], batch_first=True, padding_value=self.pad_value)
                     else:
                         stack_batch[k] = torch.stack(stack_batch[k])
                 stack_batch[LENGTH_KEY] = lengths
                 if covariate_key is not None:
                     stack_batch[COVARIATE_LENGTH_KEY] = covariate_lengths
+                    stack_batch[COVARIATE_CHANNEL_KEY] = covariate_channels
                 return dict(stack_batch) # cast back to dict as pytorch distributed can act up with defaultdicts
             return collater
         else:

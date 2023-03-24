@@ -35,11 +35,8 @@ class PretrainingModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=InfillTaskConfig)
     lr_ramp_steps: int = 500
     lr_decay_steps: int = 10000 # this is not that much for small models
-    dropout: float = 0.3
+    dropout: float = 0.1
     hidden_size: int = 128
-    session_embed_size: int = 128
-    subject_embed_size: int = 128
-    array_embed_size: int = 128
     transformer: TransformerConfig = field(default_factory=SmallTransformerConfigLessDrop)
 cs.store(group="model", name="pretrain", node=PretrainingModelConfig)
 
@@ -147,17 +144,31 @@ class BhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
     decode_strategy: EmbedStrat = EmbedStrat.token
     decode_separate: bool = True
 
+    decode_time_pool: str = 'mean'
+
 cs.store(group='model/task', name='bhvr_decode_flat', node=BhvrDecodeFlatTaskConfig)
 
 @dataclass
 class JointBhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding])
     metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
-    task_weights: List[float] = field(default_factory=lambda: [1.0, 0.5]) # so they're both on order of 0.3 (for bin size 20ms)
+    task_weights: List[float] = field(default_factory=lambda: [1.0, 20.0]) # so they're both on order of 0.3 (for bin size 20ms)
+
     decode_strategy: EmbedStrat = EmbedStrat.token
     decode_separate: bool = True
 
+    decode_time_pool: str = 'mean'
+
 cs.store(group='model/task', name='joint_bhvr_decode_flat', node=JointBhvrDecodeFlatTaskConfig)
+
+@dataclass
+class JointHeldoutDecodeTaskConfig(FlatEncDecTaskConfig):
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.shuffle_infill, ModelTask.heldout_decoding])
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.co_bps, Metric.block_co_bps])
+
+    decode_strategy: EmbedStrat = EmbedStrat.token
+    decode_separate: bool = False
+cs.store(group='model/task', name='joint_heldout_decode', node=JointHeldoutDecodeTaskConfig)
 
 @dataclass
 class BhvrDecodeTaskConfig(InfillTaskConfig):
@@ -165,11 +176,15 @@ class BhvrDecodeTaskConfig(InfillTaskConfig):
     metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
     decode_strategy: EmbedStrat = EmbedStrat.project
 
+    decode_time_pool: str = "mean"
+
 cs.store(group='model/task', name='bhvr_decode', node=BhvrDecodeTaskConfig)
 
 @dataclass
 class JointBhvrDecodeTaskConfig(InfillTaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill, ModelTask.kinematic_decoding])
+    task_weights: List[float] = field(default_factory=lambda: [1.0, 20.0]) # so they're both on order of 0.3 (for bin size 20ms)
+
     metrics: List[Metric] = field(default_factory=lambda: [Metric.bps, Metric.kinematic_r2])
     decode_strategy: EmbedStrat = EmbedStrat.project
 
@@ -243,6 +258,14 @@ class FlatDataConfig(DatasetConfig):
 
 cs.store(group="dataset", name="flat", node=FlatDataConfig)
 
+@dataclass
+class ODohertyUnsort(FlatDataConfig):
+    odoherty_rtt: RTTConfig = field(default_factory=lambda: RTTConfig(
+        # arrays=['Indy-M1_all', 'Loco-M1_all'],
+        arrays=['Indy-M1', 'Loco-M1'],
+        include_sorted=False,
+    ))
+cs.store(group="dataset", name="odoherty_unsort_flat", node=ODohertyUnsort)
 
 @dataclass
 class RTTDataConfig(DatasetConfig):

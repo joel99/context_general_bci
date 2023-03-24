@@ -13,7 +13,7 @@ dataset:
   neurons_per_token: 8
 
   max_arrays: 1
-  max_channels: 288
+  max_channels: 96
 
   scale_ratio: 1.0
   scale_limit_per_eval_session: 300 # no limit
@@ -28,8 +28,8 @@ dataset:
     arrays: ["Indy-M1", "Loco-M1"]
     include_sorted: False
 train:
-  accumulate_batches: 8 # auto = 16 (12G GPU) x 2 node, effective = 256
+  accumulate_batches: 4 # auto = 16 (12G GPU) x 2 node, effective = 256
   autoscale_batch_size: false
-  batch_size: 16
+  batch_size: 128
 
 notes: "Unsorted, transfer loco."

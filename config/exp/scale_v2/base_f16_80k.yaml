@@ -37,6 +37,6 @@ dataset:
   - dyer_co.*
   # - gallego_co.*
 
-# train:
-  # autoscale_batch_size: false
-  # batch_size: 32
+train:
+  autoscale_batch_size: false
+  batch_size: 32

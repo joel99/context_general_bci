@@ -13,6 +13,8 @@ model:
   task_embed_strategy: EmbedStrat.token
   neurons_per_token: 16
 
+  causal: True
+
   task:
     behavior_lag: 120
     decode_time_pool: "mean"
@@ -45,12 +47,9 @@ dataset:
 
   eval_datasets:
   - odoherty_rtt-Indy-20160627_01
-
-  churchland_misc:
-    arrays: ["Reggie-M1", "Nitschke-M1", "Jenkins-M1"]
 train:
   patience: 200
   autoscale_batch_size: false
   batch_size: 16
-init_from_id: reach_80000-qp92sqlc
+init_from_id: base_f16_80k-oj6otmdz
 init_tag: val_loss

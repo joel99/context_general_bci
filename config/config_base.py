@@ -66,6 +66,8 @@ class DataKey(Enum):
     time = 'time'
     position = 'position' # space, however you want to think about it. Tracks channel cluster.
     extra = 'extra' # utility for decoding
+    extra_time = 'extra_time'
+    extra_position = 'extra_position'
 
 class MetaKey(Enum):
     r"""
@@ -105,7 +107,7 @@ class TaskConfig:
         Beginning experiments will be pretrain -> fine-tune, but we will try to make migrating to multi-task easy.
     """
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.infill])
-    task_weights: List[float] = field(default_factory=lambda: [1.])
+    task_weights: List[float] = field(default_factory=lambda: [1., 1.])
     # List of session IDs to ignore supervised loss for. Using for mc_rtt pilot
     blacklist_session_supervision: List[str] = field(default_factory=lambda: [])
 
@@ -143,6 +145,11 @@ class TaskConfig:
     decode_separate: bool = False # for bhvr decoding, use a separate transformer decoder? (Only compat with EmbedStrat.token)
     decode_time_pool: str = "" # none or 'mean'
     decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
+    decode_normalizer: str = '' # If provided, use this path to normalize
+    decode_use_shuffle_backbone: bool = False # Don't discard shuffle infill decode, take full rates as input to backbone features (useful specifically for parity on HeldoutPrediction)
+
+    # Held-out neuron prediction - for integration into `ShuffleInfill` (rather than separate task)
+    query_heldout: int = 0 # number of heldout neurons to query
 
 @dataclass
 class TransformerConfig:
@@ -171,6 +178,9 @@ class TransformerConfig:
     max_spatial_tokens: int = 0 # 0 means infer; which is max_channels * max_arrays / chunk_size
 
     factorized_space_time: bool = False # will split layers evenly in space and time
+
+    debug_force_nonlearned_position: bool = False
+    debug_override_dropout_io: bool = False
 
 @dataclass
 class ModelConfig:
@@ -225,6 +235,7 @@ class ModelConfig:
 
     task_embed_strategy: EmbedStrat = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
     task_embed_size: int = 256
+    task_embed_token_count: int = 1
 
     # This needs a separate API from the rest, likely, tied to readin.
     array_embed_strategy: EmbedStrat = EmbedStrat.none # ? maybe subsumed by subject
@@ -263,6 +274,9 @@ class ModelConfig:
     log_token_proc_throughput: bool = False # for flat models - log tokens
     # * ^ the above logs are actually going to be cumulative tokens processed, not throughput
     # realized that true wall clock fair tests are likely inconsistent for our tiny heterogeneous cluster
+
+    debug_project_space: bool = False # project spikes for spacetime models to hidden size (only for very special cases, used in NLB parity)
+    force_zero_mask: bool = False # for shuffle infill
 
 @dataclass
 class ExperimentalConfig:
@@ -352,6 +366,9 @@ class DatasetConfig:
             - lightweight regex for _aliases_ (not paths). Note this is regex, not glob.
     """
     datasets: List[str] = field(default_factory=lambda: [])
+    exclude_datasets: List[str] = field(default_factory=lambda: []) # more specific aliases to exclude, processed after above, and no-ops for anything in `eval_datasets`
+    data_blacklist: str = '' # path to text file with one dataset alias per line to exclude (for a first pass, above is more specific)
+
     scale_ratio: float = 1. # ratio of dataset to use for training (For scaling experiments)
     scale_limit_per_session: int = 0 # >0, limit number of trials per session (For scaling experiments)
     scale_limit_per_eval_session: int = 0 # >0, separately limit number of eval sessions (For scaling experiments)
@@ -371,6 +388,8 @@ class DatasetConfig:
     meta_keys: List[MetaKey] = field(
         default_factory=lambda: [MetaKey.unique, MetaKey.session, MetaKey.array]
     ) # JY recommends providing array meta info, but thinks the system should be designed to not error without.
+
+    heldout_key_spoof_shape: List[int] = field(default_factory=lambda: []) # spoof shape for heldout key if not available
 
     split_key: MetaKey = MetaKey.unique
     # ==== Data parsing/processing ====
@@ -397,7 +416,8 @@ class DatasetConfig:
     max_tokens: int = 1024 # for tokenized - note we will still respect max_length_ms (limit fills in space and then either this inferred time limit or the explicit one)
     # This will be the # of tokens served; be generous because we will crop in any flat task.
     # ! note that the above is going to be strictly more than amount proc-ed in encoder-decoder encoder -- since things are cropped.
-    pad_value: int = 0
+    pad_value: int = 5
+    pad_spike_value: int = 0 # extra thing just for spikes, which we can typically afford to keep low w/o consequence. Sometimes above pad value (which applies for time/space values) needs to be set higher than 0 to avoid nan attn, typically for co-bps
     # pad_value: int = 20
 
     # Experimental Task configuration - matching registered names

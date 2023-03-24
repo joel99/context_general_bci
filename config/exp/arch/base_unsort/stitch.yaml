@@ -20,7 +20,7 @@ dataset:
   serve_tokenized_flat: False
 
   max_arrays: 1
-  max_channels: 288
+  max_channels: 96
 
   scale_ratio: 1.0
   scale_limit_per_eval_session: 300 # no limit
@@ -36,5 +36,5 @@ dataset:
 train:
   patience: 250 # Extra generous patience.
   autoscale_batch_size: False
-  batch_size: 256
+  batch_size: 1024
 notes: "Unsorted, Stitched NDT1 (time only). ~2.5M params for encoder, 5M params for stitching IO. Autobsz ~2048."
