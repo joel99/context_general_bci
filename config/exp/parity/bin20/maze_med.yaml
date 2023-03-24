@@ -6,9 +6,9 @@ defaults:
   - /train: nlb
 dataset:
   datasets:
-  - mc_maze_small
+  - mc_maze_medium
   nlb_maze:
-    heldout_neurons: 35
+    heldout_neurons: 38
   data_keys:
   - DataKey.spikes
   - DataKey.heldout_spikes
@@ -18,7 +18,6 @@ model:
   transformer:
     dropout: 0.8
     n_heads: 2
-    n_layers: 4
   task:
     task_weights: [1., 1.]
     tasks:
