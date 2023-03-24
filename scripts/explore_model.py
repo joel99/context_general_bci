@@ -99,16 +99,14 @@ dataloader = get_dataloader(dataset, batch_size=16)
 # dataloader = get_dataloader(dataset, batch_size=4)
 
 print(query)
-heldin_metrics = stack_batch(trainer.test(model, dataloader))
-import pdb;pdb.set_trace()
+# heldin_metrics = stack_batch(trainer.test(model, dataloader))
+# import pdb;pdb.set_trace()
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
-#%%
-import pdb;pdb.set_trace()
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
 # test = heldin_outputs[Output.heldout_rates]
-rates = heldin_outputs[Output.rates] # b t c
-# rates = heldin_outputs[Output.heldout_rates] # b t c
+# rates = heldin_outputs[Output.rates] # b t c
+rates = heldin_outputs[Output.heldout_rates] # b t c
 print(rates.size())
 
 if not data_attrs.serve_tokens_flat:
@@ -127,9 +125,9 @@ colors = sns.color_palette("husl", num)
 y_lim = ax.get_ylim()[1]
 
 # trial = 10
-# trial = 15
+trial = 15
 # trial = 17
-trial = 18
+# trial = 18
 # trial = 80
 # trial = 85
 for channel in range(num):

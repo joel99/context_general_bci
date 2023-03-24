@@ -505,8 +505,8 @@ class ShuffleInfill(RatePrediction):
                 SHUFFLE_KEY: torch.arange(spikes.size(1), device=spikes.device),
                 'spike_target': target,
                 'encoder_frac': spikes.size(1),
-                f'{DataKey.time}_target': batch[DataKey.time],
-                f'{DataKey.position}_target': batch[DataKey.position],
+                # f'{DataKey.time}_target': batch[DataKey.time],
+                # f'{DataKey.position}_target': batch[DataKey.position],
             })
             return batch
         # spikes: B T S H or B T H (no array support)
@@ -555,10 +555,15 @@ class ShuffleInfill(RatePrediction):
             raise NotImplementedError("cannot even remember what this should look like")
             # decoder_mask_tokens = repeat(self.mask_token, 'h -> b t s h', b=target.size(0), t=target.size(1), s=target.size(2))
         else:
-            decoder_mask_tokens = repeat(self.mask_token, 'h -> b t h', b=target.size(0), t=target.size(1))
-            decoder_input = torch.cat([backbone_features, decoder_mask_tokens], dim=1)
-            times = torch.cat([batch[DataKey.time], batch[f'{DataKey.time}_target']], 1)
-            positions = torch.cat([batch[DataKey.position], batch[f'{DataKey.position}_target']], 1)
+            if not eval_mode:
+                decoder_mask_tokens = repeat(self.mask_token, 'h -> b t h', b=target.size(0), t=target.size(1))
+                decoder_input = torch.cat([backbone_features, decoder_mask_tokens], dim=1)
+                times = torch.cat([batch[DataKey.time], batch[f'{DataKey.time}_target']], 1)
+                positions = torch.cat([batch[DataKey.position], batch[f'{DataKey.position}_target']], 1)
+            else:
+                decoder_input = backbone_features
+                times = batch[DataKey.time]
+                positions = batch[DataKey.position]
             if self.joint_heldout:
                 time_seg = torch.arange(0, times.max()+1, device=times.device, dtype=times.dtype)
                 decoder_input = torch.cat([
@@ -576,34 +581,30 @@ class ShuffleInfill(RatePrediction):
             for key in ['session', 'subject', 'task']:
                 if key in batch and batch[key] is not None:
                     trial_context.append(batch[key])
-            if eval_mode:
-                # we're doing a full query for qualitative eval
-                temporal_padding_mask = None
-            else:
-                temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
-                if self.joint_heldout:
-                    temporal_padding_mask = torch.cat([
-                        temporal_padding_mask,
-                        torch.full((temporal_padding_mask.size(0), time_seg.size(0)), False, device=temporal_padding_mask.device, dtype=temporal_padding_mask.dtype),
-                    ], 1)
-                if DataKey.extra in batch:
-                    # Someone's querying (assuming `HeldoutPrediction`, integrate here)
-                    decoder_input = torch.cat([
-                        decoder_input,
-                        batch[DataKey.extra]
-                    ], 1)
-                    times = torch.cat([
-                        times,
-                        batch[DataKey.extra_time]
-                    ], 1)
-                    positions = torch.cat([
-                        positions,
-                        batch[DataKey.extra_position]
-                    ], 1)
-                    temporal_padding_mask = torch.cat([
-                        temporal_padding_mask,
-                        create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
-                    ], 1)
+            temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
+            if self.joint_heldout:
+                temporal_padding_mask = torch.cat([
+                    temporal_padding_mask,
+                    torch.full((temporal_padding_mask.size(0), time_seg.size(0)), False, device=temporal_padding_mask.device, dtype=temporal_padding_mask.dtype),
+                ], 1)
+            if DataKey.extra in batch:
+                # Someone's querying (assuming `HeldoutPrediction`, integrate here)
+                decoder_input = torch.cat([
+                    decoder_input,
+                    batch[DataKey.extra]
+                ], 1)
+                times = torch.cat([
+                    times,
+                    batch[DataKey.extra_time]
+                ], 1)
+                positions = torch.cat([
+                    positions,
+                    batch[DataKey.extra_position]
+                ], 1)
+                temporal_padding_mask = torch.cat([
+                    temporal_padding_mask,
+                    create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
+                ], 1)
             reps: torch.Tensor = self.decoder(
                 decoder_input,
                 trial_context=trial_context,
@@ -911,7 +912,6 @@ class HeldoutPrediction(RatePrediction):
         batch_out = {}
         if Output.heldout_logrates in self.cfg.outputs:
             batch_out[Output.heldout_logrates] = rates
-
         if not compute_metrics:
             return batch_out
         spikes = batch[DataKey.heldout_spikes][..., 0]

@@ -40,10 +40,10 @@ ids = [
     # "maze_all_large_ft-fswsqcx3",
     # "maze_all_med_ft-1uwtb7qc",
     # "maze_all_small_ft-23vu306p"
-    "large_f32-m2s6mwyw",
-    "med_f32-zqtfqgah",
-    "small_f32-ilqufcjl",
-    "rtt_f32_b-90236ui9"
+    "large_f32_b-58p5em1j",
+    "med_f32_b-vozm3zip",
+    "small_f32_b-565cpbdm",
+    "rtt_f32_b-wfu1df8l"
 ]
 # wandb_run = get_wandb_run(wandb_id)
 # heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val-')
