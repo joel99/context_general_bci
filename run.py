@@ -48,6 +48,7 @@ r"""
     To access subdirectory experiments, the command would look like
     `python run.py +exp/subdir=test`
     (As opposed to +exp=subdir/test)
+    - The latter runs but doesn't log `experiment_set` correctly
 """
 reset_early_stop = True # todo move into config
 

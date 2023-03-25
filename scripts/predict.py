@@ -37,13 +37,23 @@ wandb_id = "maze_all_med_ft-1uwtb7qc" # note a previous run did substantially be
 wandb_id = "maze_all_small_ft-23vu306p"
 
 ids = [
-    # "maze_all_large_ft-fswsqcx3",
-    # "maze_all_med_ft-1uwtb7qc",
-    # "maze_all_small_ft-23vu306p"
-    "large_f32_b-58p5em1j",
-    "med_f32_b-vozm3zip",
-    "small_f32_b-565cpbdm",
-    "rtt_f32_b-wfu1df8l"
+    # Failed init finetuning of base 150k acausal f32
+    # "large_f32_b-58p5em1j",
+    # "med_f32_b-vozm3zip",
+    # "small_f32_b-565cpbdm",
+    # "rtt_f32_b-wfu1df8l"
+
+    # Parity check (joint NDT1 settings)
+    # "rtt-1maz3ea5",
+    # "maze_small-hr4prtoe",
+    # "maze_med-5v08a4oy",
+    # "maze_large-wuawcvls",
+
+    # Not-quite parity NDT2 check (cf heldin)
+    "ndt2_32_rtt-05dqi05j",
+    "ndt2_128_maze_small-tnnvmdkv",
+    "ndt2_128_maze_med_2a-kvuo6q15",
+    "ndt2_128_maze_large_1a-irc57zhv",
 ]
 # wandb_run = get_wandb_run(wandb_id)
 # heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val-')
@@ -159,7 +169,10 @@ print(output_dict[dataset_name + suffix].keys()) # sanity check
 # for rtt, expected shapes are 1080 / 272, 120, 98 / 32
 print(output_dict[dataset_name + suffix]['train_rates_heldin'].shape) # should be trial x time x neuron
 # print(output_dict[dataset_name + suffix]['train_rates_heldout'])
-import pdb;pdb.set_trace()
+
+# remove file if exists
+if os.path.exists("submission.h5"):
+    os.remove("submission.h5")
 save_to_h5(output_dict, "submission.h5")
 #%%
 print(output_dict[dataset_name+suffix]['train_rates_heldin'].sum())
