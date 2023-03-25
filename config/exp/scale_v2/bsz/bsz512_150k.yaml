@@ -17,11 +17,11 @@ model:
   hidden_size: 384
 
   task:
-    mask_ratio: 0.3
-  neurons_per_token: 8
+    mask_ratio: 0.1
+  neurons_per_token: 32
 
 dataset:
-  neurons_per_token: 8
+  neurons_per_token: 32
   max_tokens: 8192
   max_channels: 288
   max_arrays: 2
@@ -36,4 +36,8 @@ dataset:
   - gallego_co.*
   eval_datasets:
   - mc_maze$
-notes: "vs m3_150k for 32"
+train:
+  # accumulate_batches: 2 # assumed to be running on 40G A100, base size 128
+  autoscale_batch_size: false
+  batch_size: 256
+  # uses 2 gpus

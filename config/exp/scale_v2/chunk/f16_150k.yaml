@@ -18,10 +18,10 @@ model:
 
   task:
     mask_ratio: 0.3
-  neurons_per_token: 8
+  neurons_per_token: 16
 
 dataset:
-  neurons_per_token: 8
+  neurons_per_token: 16
   max_tokens: 8192
   max_channels: 288
   max_arrays: 2
@@ -37,3 +37,4 @@ dataset:
   eval_datasets:
   - mc_maze$
 notes: "vs m3_150k for 32"
+# autoscale = 128 on 40G, 256 on 80g
