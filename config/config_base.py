@@ -482,6 +482,7 @@ class RootConfig:
 
     sweep_cfg: str = "" # See `hp_sweep_space.py`
     sweep_trials: int = 8
+    sweep_mode: str = 'random' # or grid, which is implicitly exhaustive
     sweep_tag: str = "" # * don't specify this, we use this to track in wandb
 
     default_root_dir: Path = Path("./data/runs").resolve()
@@ -496,6 +497,8 @@ class RootConfig:
     # use_ckpt_model_cfg: bool = False
     init_tag: str = "bps"
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
+    probe_finetune: bool = False # If true, fit probe (novel params unlocked and trained), and then unfreeze, reset to best val, and train the rest of the model. Same training params are used in both instanced.
+    # See https://arxiv.org/pdf/2202.10054.pdf
 
     exp: Any = MISSING # delta config, provide via yaml and on CLI as `+exp=<test>.yaml`
     slurm_id: int = 0 # for experiment tracking...

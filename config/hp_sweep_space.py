@@ -5,6 +5,11 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "simple_lr_sweep": {
+        "model.lr_init": {
+            'feasible_points': [1e-5, 3e-5, 5e-5, 1e-4]
+        }
+    },
     "nlb_tune_2": {
         'model.task.mask_ratio': {
             'feasible_points': [0.01, 0.05, 0.1],

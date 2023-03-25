@@ -28,7 +28,7 @@ from config import RootConfig, Metric, hp_sweep_space
 from data import SpikingDataset, SpikingDataModule
 from model import BrainBertInterface, load_from_checkpoint
 from analyze_utils import get_best_ckpt_from_wandb_id
-from utils import generate_search
+from utils import generate_search, grid_search
 
 r"""
     For this script
@@ -72,7 +72,7 @@ def run_exp(cfg : RootConfig) -> None:
             cfg.experiment_set = exp_arg[0].split('=')[0][len('+exp/'):]
     if cfg.sweep_cfg and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
         sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
-        for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
+        def run_cfg(cfg_trial):
             init_call = sys.argv
             init_args = init_call[init_call.index('run.py')+1:]
             additional_cli_flags = [f'{k}={v}' for k, v in cfg_trial.items()]
@@ -85,6 +85,13 @@ def run_exp(cfg : RootConfig) -> None:
             # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
             # subprocess.run(['sbatch', './crc_scripts/launch.sh', *init_args, *additional_cli_flags, *meta_flags])
             subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+        if cfg.sweep_mode == 'grid':
+            # Create a list of dicts from the cross product of the sweep config
+            for cfg_trial in grid_search(sweep_cfg):
+                run_cfg(cfg_trial)
+        else:
+            for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
+                run_cfg(cfg_trial)
         exit(0)
 
     logger = logging.getLogger(__name__)
