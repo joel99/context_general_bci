@@ -36,4 +36,8 @@ dataset:
   - gallego_co.*
   eval_datasets:
   - mc_maze$
+train:
+  autoscale_batch_size: false
+  batch_size: 64 # uses 4 80G gpus -> 256
 notes: "vs m3_150k for 32"
+# autoscale bsz = 32 on 40G

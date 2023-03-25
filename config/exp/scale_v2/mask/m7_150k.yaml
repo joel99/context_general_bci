@@ -17,11 +17,11 @@ model:
   hidden_size: 384
 
   task:
-    mask_ratio: 0.3
-  neurons_per_token: 8
+    mask_ratio: 0.7
+  neurons_per_token: 32
 
 dataset:
-  neurons_per_token: 8
+  neurons_per_token: 32
   max_tokens: 8192
   max_channels: 288
   max_arrays: 2
@@ -36,4 +36,4 @@ dataset:
   - gallego_co.*
   eval_datasets:
   - mc_maze$
-notes: "vs m3_150k for 32"
+notes: "vs bsz256, since we have autoscale"

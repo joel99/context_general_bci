@@ -32,6 +32,10 @@ Data setup is not modularized yet, bulk setup is done with:
 ```
 . install_datasets.sh
 ```
+Other things needed:
+- pip install mat73
+- pip install gdown
+
 
 Data processing libs will unfortunately also be needed (for now). Call the following outside this repo:
 ```
