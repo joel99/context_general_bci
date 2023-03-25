@@ -7,7 +7,7 @@ defaults:
   - /dataset: flat
 dataset:
   datasets:
-  - mc_maze_large
+  - mc_rtt
   data_keys:
   - DataKey.spikes
   - DataKey.heldout_spikes
@@ -19,11 +19,14 @@ model:
   lr_decay_steps: 100000
   neurons_per_token: 128
 
-  dropout: 0.6
+  dropout: 0.7
   transformer:
-    dropout: 0.6
+    dropout: 0.7
     n_heads: 2
+    debug_force_nonlearned_position: True
+    debug_override_dropout_io: True
   task:
+    mask_ratio: 0.25
     query_heldout: 45
 train:
   autoscale_batch_size: false

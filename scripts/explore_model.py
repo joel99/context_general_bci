@@ -24,6 +24,9 @@ query = "loco_causal-ctkuwqpl"
 query = "indy_single-bw25v0ci"
 query = "rtt_f32_v2-7alicf5z"
 query = "med_f32_b-vozm3zip"
+query = "maze_large-wuawcvls"
+# query = "maze_med-5v08a4oy"
+# query = "maze_small-hr4prtoe"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -94,12 +97,12 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
         collate_fn=dataset.collater_factory()
     )
 
-# dataloader = get_dataloader(dataset)
-dataloader = get_dataloader(dataset, batch_size=16)
+dataloader = get_dataloader(dataset)
+# dataloader = get_dataloader(dataset, batch_size=16)
 # dataloader = get_dataloader(dataset, batch_size=4)
 
 print(query)
-# heldin_metrics = stack_batch(trainer.test(model, dataloader))
+heldin_metrics = stack_batch(trainer.test(model, dataloader))
 # import pdb;pdb.set_trace()
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 #%%

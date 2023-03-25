@@ -23,9 +23,17 @@ model:
   transformer:
     dropout: 0.6
     n_heads: 2
+    debug_force_nonlearned_position: True
+    debug_override_dropout_io: True
   task:
+    mask_ratio: 0.25
     query_heldout: 45
+    decode_time_pool: 'mean'
+    decode_strategy: EmbedStrat.project
+    decode_use_shuffle_backbone: True
 train:
   autoscale_batch_size: false
   batch_size: 64
   patience: 5000
+notes: "Match decode as separate projection (no extra tokens)"
+# ! This achieved parity with `maze_large`

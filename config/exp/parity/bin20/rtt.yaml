@@ -11,6 +11,10 @@ dataset:
   - DataKey.spikes
   - DataKey.heldout_spikes
   bin_size_ms: 20
+  nlb_maze:
+    heldout_neurons: 0
+  nlb_rtt:
+    heldout_neurons: 32
 model:
   dropout: 0.7
   transformer:

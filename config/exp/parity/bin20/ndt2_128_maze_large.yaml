@@ -23,7 +23,10 @@ model:
   transformer:
     dropout: 0.6
     n_heads: 2
+    debug_force_nonlearned_position: True
+    debug_override_dropout_io: True
   task:
+    mask_ratio: 0.25
     query_heldout: 45
 train:
   autoscale_batch_size: false
