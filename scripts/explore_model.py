@@ -25,16 +25,39 @@ query = "indy_single-bw25v0ci"
 query = "rtt_f32_v2-7alicf5z"
 query = "med_f32_b-vozm3zip"
 query = "maze_large-wuawcvls"
-# query = "maze_med-5v08a4oy"
-# query = "maze_small-hr4prtoe"
+query = "maze_med-5v08a4oy"
+query = "maze_small-hr4prtoe"
+# query = "rtt-1maz3ea5"
+
+# query = "ndt2_128_maze_med_2a-kvuo6q15" # Minor drop, qualitatively smooth.
+# query = "ndt2_128_maze_small-tnnvmdkv"
+# query = "ndt2_32_rtt-05dqi05j"
+
+# query = "m3_150k_large-sweep-simple_lr_sweep-axzvm22s"
+# query = "m3_150k_med-sweep-simple_lr_sweep-81fvl2ws"
+query = "m3_150k_small-sweep-simple_lr_sweep-rpqx4bpq"
+# query = "m3_150k_rtt-sweep-simple_lr_sweep-81saz29y"
+
+# query = "m3_150k_proj-7vt5c4dr"
+# query = "maze_nlb_ref_03-rypos2lo"
+# query = "maze_nlb_ref_14d-h1p5a86g"
+# query = "m3_150k_proj_lpft_unsup-swnrji4l"
+# query = "m3_150k-03eat4mn"
+# query = "m5_150k_b-xia8dehq"
+# query = "m3_150k-hodo53b1"
+# query = "drop2-5ap51v0v"
+# query = "drop4-d1qombxf"
+query = "m3_150k_proj_lpft-cu3pjkjx"
+query = "single_time_nlb-nnnow3uw"
+query = "f32-wi0xe1mn"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
 # src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co-bps')
 src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.dataset.datasets = cfg.dataset.datasets[:1]
 # cfg.model.task.tasks = [ModelTask.infill]
@@ -42,16 +65,16 @@ src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 # cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [
     Output.logrates,
-    Output.heldout_logrates,
+    # Output.heldout_logrates,
     Output.spikes
 ]
 print(cfg.dataset.datasets)
+# cfg.dataset.datasets = ['odoherty_rtt-Indy-20161005_06']
 # cfg.dataset.datasets = cfg.dataset.datasets[-1:]
 # cfg.dataset.datasets = ['mc_maze$']
 # cfg.dataset.datasets = ['mc_maze_large']
 # cfg.dataset.datasets = ['mc_maze_medium']
 # cfg.dataset.datasets = ['mc_maze_small']
-# cfg.dataset.datasets = ['churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI']
 # cfg.dataset.datasets = ['churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170215_02']
 # cfg.dataset.datasets = ['odoherty_rtt-Loco-20170214_02']
@@ -68,17 +91,20 @@ print(cfg.dataset.datasets)
 #     cfg.dataset.datasets = ['churchland_misc_nitschke-1D8KYfy5IwMmEZaKOEv-7U6-4s-7cKINK']
 # if 'pitt' in query:
 #     cfg.dataset.datasets = ['CRS02bHome.data.00437']
-
 # cfg.dataset.eval_datasets = []
 print(cfg.dataset.datasets)
+
 dataset = SpikingDataset(cfg.dataset)
 if cfg.dataset.eval_datasets:
     dataset.subset_split(splits=['eval'])
 else:
+    # dataset.subset_by_key(['test'], key='split')
     dataset.subset_split() # remove data-native test trials etc
 dataset.build_context_index()
-train, val = dataset.create_tv_datasets()
-dataset = val
+if not cfg.dataset.eval_datasets:
+    train, val = dataset.create_tv_datasets()
+    dataset = val
+
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
 # data_attrs.context.session = ['ExperimentalTask.odoherty_rtt-Indy-20161014_04'] # definitely using..
@@ -106,15 +132,23 @@ heldin_metrics = stack_batch(trainer.test(model, dataloader))
 # import pdb;pdb.set_trace()
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 #%%
-# print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())
-# test = heldin_outputs[Output.heldout_rates]
-# rates = heldin_outputs[Output.rates] # b t c
-rates = heldin_outputs[Output.heldout_rates] # b t c
-print(rates.size())
+# load submission.h5
+# import h5py
+
+# payload = h5py.File('submission.h5', 'r')
+# test_rates = payload['mc_maze_small_20']
+# heldin_rates = test_rates['eval_rates_heldin']
+# heldout_rates = test_rates['eval_rates_heldout']
+
+heldin_rates = heldin_outputs[Output.rates] # b t c
+heldout_rates = heldin_rates.clone() # b t c
+# heldout_rates = heldin_outputs[Output.heldout_rates] # b t c
+
+# print(rates.size())
 
 if not data_attrs.serve_tokens_flat:
     spikes = [rearrange(x, 't a c -> t (a c)') for x in heldin_outputs[Output.spikes]]
-ax = prep_plt()
+# ax = prep_plt()
 
 num = 20
 num = 5
@@ -125,39 +159,56 @@ colors = sns.color_palette("husl", num)
 # for trial in range(num):
 #     ax.plot(rates[trial][:,channel], color=colors[trial])
 
-y_lim = ax.get_ylim()[1]
+# y_lim = ax.get_ylim()[1]
 
 # trial = 10
-trial = 15
+# trial = 15
 # trial = 17
 # trial = 18
 # trial = 80
 # trial = 85
-for channel in range(num):
-    # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
-    ax.plot(rates[trial][:,channel * 2], color=colors[channel])
-    # ax.plot(rates[trial][:,channel * 3], color=colors[channel])
+# trials = [0, 1, 2]
+trials = [3, 4, 5]
+# trials = [5, 6, 7]
 
-    # smooth the signal with a gaussian kernel
+def plot_trial(rates, trial, ax):
+    ax = prep_plt(ax)
+    for channel in range(num):
+        # ax.scatter(np.arange(test.shape[1]), test[0,:,channel], color=colors[channel], s=1)
+        # ax.plot(rates[trial][:,channel * 2], color=colors[channel])
+        ax.plot(rates[trial][:,channel * 3], color=colors[channel])
 
-# from scipy import signal
-# peaks, _ = signal.find_peaks(test[trial,:,2], distance=4)
-# print(peaks)
-# print(len(peaks))
-# for p in peaks:
-#     ax.axvline(p, color='k', linestyle='--')
+        # smooth the signal with a gaussian kernel
+
+    # from scipy import signal
+    # peaks, _ = signal.find_peaks(test[trial,:,2], distance=4)
+    # print(peaks)
+    # print(len(peaks))
+    # for p in peaks:
+    #     ax.axvline(p, color='k', linestyle='--')
+    # print(rates[trial].size())
 
 
+    ax.set_ylabel('FR (Hz)')
+    ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
+    # relabel xtick unit from 5ms to ms
+    # ax.set_xlim(0, 50)
+    # print(ax.get_xtick)
+    # ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
+    # ax.set_xlabel('Time (ms)')
+    # ax.set_title()
 
-ax.set_ylabel('FR (Hz)')
-ax.set_yticklabels((ax.get_yticks() * 1000 / cfg.dataset.bin_size_ms).round())
-# relabel xtick unit from 5ms to ms
-# ax.set_xlim(0, 50)
-ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
-ax.set_xlabel('Time (ms)')
-# plt.plot(test[0,:,0])
-ax.set_title(f'FR Inference: {query} {"(All encoded)" if data_attrs.serve_tokens_flat else ""}')
+f, axes = plt.subplots(len(trials), 2, figsize=(10, 7.5), sharex=True)
+for i, trial in enumerate(trials):
+    plot_trial(heldin_rates, trial, axes[i, 0])
+    plot_trial(heldout_rates, trial, axes[i, 1])
+# axes[-1, 0].set_xticklabels(axes[-1, 0].get_xticks() * cfg.dataset.bin_size_ms)
+# axes[-1, 1].set_xticklabels(axes[-1, 0].get_xticks() * cfg.dataset.bin_size_ms)
 
+plt.suptitle(
+    f'Out ({heldin_metrics["test_co-bps"].item():.4f}) : {query} {"(All enc)" if data_attrs.serve_tokens_flat else ""}'
+)
+plt.tight_layout()
 #%%
 # Debugging (for mc_maze dataset)
 pl.seed_everything(0)

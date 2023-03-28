@@ -18,13 +18,19 @@ model:
   hidden_size: 384
 
   task:
-    task_weights: [0, 1.]
+    task_weights: [1., 1.]
     mask_ratio: 0.3
     query_heldout: 45
+    decode_time_pool: 'mean'
+    decode_strategy: EmbedStrat.project
+    decode_use_shuffle_backbone: True
   neurons_per_token: 32
 
-  lr_init: 8e-5 # happened to run this... and know it's better
+  lr_init: 1e-5
+  accelerate_new_params: 1.0
   lr_schedule: 'fixed' # per chinchilla...
+  # tune_decay: 0.75
+
 dataset:
   neurons_per_token: 32
   max_tokens: 8192
@@ -40,11 +46,9 @@ dataset:
 train:
   autoscale_batch_size: false
   batch_size: 64
-  patience: 100
+  patience: 500 # could maybe be tweaked higher, idk, or this may be a blessing anyway
+  epochs: 10000
 init_from_id: m3_150k-hodo53b1
 init_tag: val_loss
 probe_finetune: true
-notes: "Probe -> FT test"
-
-# sweep_cfg: 'simple_lr_sweep'
-# sweep_mode: 'grid'
+notes: "trying constant LR probing on novel test set"

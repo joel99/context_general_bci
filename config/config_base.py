@@ -150,6 +150,7 @@ class TaskConfig:
 
     # Held-out neuron prediction - for integration into `ShuffleInfill` (rather than separate task)
     query_heldout: int = 0 # number of heldout neurons to query
+    detach_decode_context: bool = False # reduce gradients from decoding tasks to context
 
 @dataclass
 class TransformerConfig:

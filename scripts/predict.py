@@ -26,23 +26,9 @@ from analyze_utils import get_wandb_run, load_wandb_run
 # dataset_name = 'mc_rtt'
 # dataset_name = 'mc_maze$'
 
-wandb_id = "maze_nlb_ft-umbki5uw"
-wandb_id = "maze_jenkins_only_to_med_ft-ihy0h4yv"
-wandb_id = "maze_all_med_ft-2iln5gpm"
-wandb_id = "maze_med_ft-qetjfh2b"
-
-wandb_id = "maze_med_ft_lowerlr-143pvgo3"
-wandb_id = "maze_all_large_ft-fswsqcx3"
-wandb_id = "maze_all_med_ft-1uwtb7qc" # note a previous run did substantially better than this, and had higher LR?
 wandb_id = "maze_all_small_ft-23vu306p"
 
 ids = [
-    # Failed init finetuning of base 150k acausal f32
-    # "large_f32_b-58p5em1j",
-    # "med_f32_b-vozm3zip",
-    # "small_f32_b-565cpbdm",
-    # "rtt_f32_b-wfu1df8l"
-
     # Parity check (joint NDT1 settings)
     # "rtt-1maz3ea5",
     # "maze_small-hr4prtoe",
@@ -50,10 +36,16 @@ ids = [
     # "maze_large-wuawcvls",
 
     # Not-quite parity NDT2 check (cf heldin)
-    "ndt2_32_rtt-05dqi05j",
-    "ndt2_128_maze_small-tnnvmdkv",
-    "ndt2_128_maze_med_2a-kvuo6q15",
-    "ndt2_128_maze_large_1a-irc57zhv",
+    # "ndt2_32_rtt-05dqi05j",
+    # "ndt2_128_maze_small-tnnvmdkv",
+    # "ndt2_128_maze_med_2a-kvuo6q15",
+    # "ndt2_128_maze_large_1a-irc57zhv",
+
+    # Scale init
+    "m3_150k_large-sweep-simple_lr_sweep-axzvm22s",
+    "m3_150k_med-sweep-simple_lr_sweep-81fvl2ws",
+    "m3_150k_small-sweep-simple_lr_sweep-rpqx4bpq",
+    "m3_150k_rtt-sweep-simple_lr_sweep-81saz29y",
 ]
 # wandb_run = get_wandb_run(wandb_id)
 # heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val-')
@@ -91,7 +83,8 @@ HELDIN = {
 }
 def create_submission_dict(wandb_run):
     print(f"creating submission for {wandb_run.id}")
-    heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+    heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='co-bps')
+    # heldout_model, cfg, data_attrs = load_wandb_run(wandb_run, tag='val_loss')
     heldout_model.cfg.task.outputs = [Output.heldout_logrates, Output.spikes]
     cfg.dataset.data_keys = [DataKey.spikes, DataKey.heldout_spikes]
     cfg.dataset.heldout_key_spoof_shape = SPOOFS[cfg.dataset.datasets[0]]

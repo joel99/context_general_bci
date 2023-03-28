@@ -580,7 +580,9 @@ class ShuffleInfill(RatePrediction):
             trial_context = []
             for key in ['session', 'subject', 'task']:
                 if key in batch and batch[key] is not None:
-                    trial_context.append(batch[key])
+                    ctx = batch[key] # unsup always gets fastpath
+                    # ctx = batch[key].detach() if getattr(self.cfg, 'detach_decode_context') else batch[key]
+                    trial_context.append(ctx)
             temporal_padding_mask = create_temporal_padding_mask(None, batch, truncate_shuffle=False)
             if self.joint_heldout:
                 temporal_padding_mask = torch.cat([

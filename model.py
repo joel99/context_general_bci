@@ -86,6 +86,7 @@ class BrainBertInterface(pl.LightningModule):
 
         self.token_proc_approx = 0
         self.token_seen_approx = 0
+        self.detach_backbone_for_task = False
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
@@ -268,7 +269,7 @@ class BrainBertInterface(pl.LightningModule):
                 self.cfg
             )
             # like PC readout
-        elif getattr(self.cfg, 'readout_strategy', EmbedStrat.none) == EmbedStrat.contextual_mlp:
+        elif self.cfg.readout_strategy == EmbedStrat.contextual_mlp:
             self.readout = ContextualMLP(self.cfg.hidden_size, self.cfg.hidden_size, self.cfg)
             # for simplicity, project out to hidden size - task IO will take care of the other items
 
@@ -286,7 +287,7 @@ class BrainBertInterface(pl.LightningModule):
             return channel_count
         self.task_pipelines = nn.ModuleDict({
             k.value: task_modules[k](
-                self.cfg.hidden_size if task_modules[k].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none \
+                self.cfg.hidden_size if task_modules[k].unique_space and self.cfg.readout_strategy is not EmbedStrat.none \
                     else self.backbone.out_size,
                 get_target_size(k),
                 self.cfg,
@@ -633,7 +634,6 @@ class BrainBertInterface(pl.LightningModule):
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
-        # import pdb;pdb.set_trace()
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
             batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
@@ -668,6 +668,8 @@ class BrainBertInterface(pl.LightningModule):
                     task_order.append(t)
         for i, task in enumerate(task_order):
             pipeline_features = unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none else features
+            if 'infill' not in task.value and self.detach_backbone_for_task:
+                pipeline_features = pipeline_features.detach()
             update = self.task_pipelines[task.value](
                 batch,
                 pipeline_features,
@@ -927,7 +929,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def configure_optimizers(self):
         scheduler = None
-        if getattr(self.cfg, 'tune_decay', 0.0) > 0.0: # layer-wise LR decay
+        if self.cfg.tune_decay > 0.0: # layer-wise LR decay
             # fix readin
             # accelerate context
             # decay decoder, encoder (Kaiming MAE strategy https://arxiv.org/abs/2111.06377)
@@ -976,7 +978,9 @@ class BrainBertInterface(pl.LightningModule):
                 {"params": [p for n, p in params if not accel_flag(n)], 'lr': self.cfg.lr_init},
             ]
         else:
-            grouped_params = self.parameters()
+            # grouped_params = self.parameters()
+            # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.BaseFinetuning.html#lightning.pytorch.callbacks.BaseFinetuning
+            grouped_params = filter(lambda p: p.requires_grad, self.parameters())
         try:
             # from apex.optimizers import FusedAdam
             # optimizer_cls = FusedAdam # In JY's experience, about 5% speedup on 3090 in PT 1.13

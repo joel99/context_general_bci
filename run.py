@@ -3,6 +3,9 @@ import sys
 from pathlib import Path
 import copy
 import subprocess
+import functools
+
+from typing import Dict, Any
 
 from pprint import pformat
 import logging # we use top level logging since most actual diagnostic info is in libs
@@ -27,6 +30,7 @@ import wandb
 from config import RootConfig, Metric, hp_sweep_space
 from data import SpikingDataset, SpikingDataModule
 from model import BrainBertInterface, load_from_checkpoint
+from callbacks import ProbeToFineTuneEarlyStopping
 from analyze_utils import get_best_ckpt_from_wandb_id
 from utils import generate_search, grid_search
 
@@ -145,17 +149,21 @@ def run_exp(cfg : RootConfig) -> None:
     ]
 
     if cfg.train.patience > 0:
+        early_stop_cls = ProbeToFineTuneEarlyStopping if cfg.probe_finetune else EarlyStopping
         callbacks.append(
-            EarlyStopping(
+            early_stop_cls(
                 monitor='val_loss',
                 patience=cfg.train.patience, # Learning can be fairly slow, larger patience should allow overfitting to begin (which is when we want to stop)
                 min_delta=1e-5,
             )
         )
-        if reset_early_stop:
-            def null_load(*args):
-                return
-        callbacks[-1].load_state_dict = null_load
+        if not cfg.probe_finetune and reset_early_stop:
+            def patient_load(self, state_dict: Dict[str, Any]): # would use something more subtle but IDK how to access self
+                self.wait_count = 0
+                self.stopped_epoch = state_dict["stopped_epoch"]
+                self.best_score = state_dict["best_score"]
+                self.patience = state_dict["patience"]
+            callbacks[-1].load_state_dict = functools.partial(patient_load, callbacks[-1])
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
     if cfg.model.lr_schedule != "fixed":
