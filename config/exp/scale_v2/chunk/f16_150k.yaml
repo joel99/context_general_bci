@@ -36,5 +36,8 @@ dataset:
   - gallego_co.*
   eval_datasets:
   - mc_maze$
+train:
+  accumulate_batches: 2 # assumed to be running on 40G A100, base size 128 (using 80G doesn't reliably get 256)
+  autoscale_batch_size: false
+  batch_size: 128
 notes: "vs m3_150k for 32"
-# autoscale = 128 on 40G, 256 on 80g
