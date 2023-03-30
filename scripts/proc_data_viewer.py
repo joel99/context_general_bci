@@ -44,7 +44,11 @@ from tasks import ExperimentalTask
 # dataset_name = 'odoherty_rtt-Loco-20170210_03'
 
 # dataset_name = 'odoherty_rtt-Indy.*'
-# dataset_name = 'odoherty_rtt-Indy-20160627_01'
+dataset_name = 'odoherty_rtt-Indy-20160627_01'
+dataset_name = 'odoherty_rtt-Indy-20160407_02'
+dataset_name = 'odoherty_rtt-Indy-20161005_06'
+dataset_name = 'odoherty_rtt-Indy-20161026_03'
+dataset_name = 'odoherty_rtt-Indy-20170131_02'
 # dataset_name = 'odoherty_rtt-Indy-20161005_06'
 # dataset_name = 'odoherty_rtt-Indy-20160630_01'
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
@@ -58,9 +62,9 @@ from tasks import ExperimentalTask
 # dataset_name = 'dyer_co_mihi_2'
 # dataset_name = 'Chewie_CO_20161021'
 # dataset_name = 'churchland_misc_nitschke-.*'
-dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
+# dataset_name = 'churchland_misc_jenkins-10cXhCDnfDlcwVJc_elZwjQLLsb_d7xYI'
 # dataset_name = 'churchland_misc_reggie-1413W9XGLJ2gma1CCXpg1DRDGpl4-uxkG'
-dataset_name = 'mc_rtt'
+# dataset_name = 'mc_rtt'
 # dataset_name = 'gallego_co_Chewie_CO_20160510'
 # dataset_name = 'unstructured_CRS02bLab_session_5_set_4_type_free_play'
 # dataset_name = 'observation'
@@ -77,8 +81,8 @@ print(context)
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 # default_cfg.data_keys = [DataKey.spikes]
 # default_cfg.data_keys = [DataKey.spikes]
-default_cfg.data_keys = [DataKey.spikes, DataKey.heldout_spikes, DataKey.bhvr_vel]
-# default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+# default_cfg.data_keys = [DataKey.spikes, DataKey.heldout_spikes, DataKey.bhvr_vel]
+default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 20
 default_cfg.max_channels = 288
 # default_cfg.bin_size_ms = 30
@@ -92,12 +96,13 @@ dataset = SpikingDataset(default_cfg)
 dataset.build_context_index()
 dataset.subset_split()
 print(context.alias)
+print(f'Length: {len(dataset)}')
 
+#%%
 lengths = []
 for t in range(len(dataset)):
     lengths.append(dataset[t][DataKey.spikes].size(0))
 trial = 1
-print(f'Length: {len(dataset)}')
 print(f'Spike shape (padded): {dataset[trial][DataKey.spikes].size()}')
 print(f'Channels: {dataset[trial]["channel_counts"].sum(1)[0]}')
 print(f'Timerange: {min(lengths) * dataset.cfg.bin_size_ms, max(lengths) * dataset.cfg.bin_size_ms}')

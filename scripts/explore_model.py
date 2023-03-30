@@ -17,8 +17,9 @@ from model import transfer_model, logger
 from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
 from analyze_utils import prep_plt
 
+pl.seed_everything(0)
+
 # wandb_run = get_wandb_run("maze_med-1j0loymb")
-query = "indy_causal-stmn13ew"
 query = "indy_causal-4i8yc4bc"
 query = "loco_causal-ctkuwqpl"
 query = "indy_single-bw25v0ci"
@@ -49,7 +50,23 @@ query = "m3_150k_small-sweep-simple_lr_sweep-rpqx4bpq"
 # query = "drop4-d1qombxf"
 query = "m3_150k_proj_lpft-cu3pjkjx"
 query = "single_time_nlb-nnnow3uw"
-query = "f32-wi0xe1mn"
+query = "single_time-mvrzxhxs"
+# query = "single_time_nlb_r300-vj268v03" # 0.6 drop # gold standard
+# query = "single_time_nlb_r300-hu9vxleg" # 2x, worse, but still very smooth
+# query = "single_time_nlb_r300-qyhfrt06"
+# query = "single_time_nlb_r300_full-2iwg032a"
+# query = "f32-wi0xe1mn"
+# query = "single_ndt2_nlb_r300-a0tv97b3"
+# query = "f32_10x-824eizh4"
+
+# query = "m3_150k-91lyoz89"
+# query = "m3_150k-hodo53b1"
+# query = "m3_150k_small-km6s6yuw"
+
+query = "f32_5ho-tsntbsci"
+
+# query = "f32_nlb-b4rz44ou"
+# query = "mc_rtt-i0n8o24x"
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
@@ -92,6 +109,10 @@ print(cfg.dataset.datasets)
 # if 'pitt' in query:
 #     cfg.dataset.datasets = ['CRS02bHome.data.00437']
 # cfg.dataset.eval_datasets = []
+cfg.dataset.eval_datasets = [
+    'odoherty_rtt-Indy-20160407_02'
+]
+
 print(cfg.dataset.datasets)
 
 dataset = SpikingDataset(cfg.dataset)
@@ -130,8 +151,8 @@ dataloader = get_dataloader(dataset)
 print(query)
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
 # import pdb;pdb.set_trace()
-heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 #%%
+heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # load submission.h5
 # import h5py
 
@@ -141,8 +162,7 @@ heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # heldout_rates = test_rates['eval_rates_heldout']
 
 heldin_rates = heldin_outputs[Output.rates] # b t c
-heldout_rates = heldin_rates.clone() # b t c
-# heldout_rates = heldin_outputs[Output.heldout_rates] # b t c
+heldout_rates = heldin_outputs[Output.heldout_rates] if Output.heldout_rates in heldin_outputs else None
 
 # print(rates.size())
 
@@ -197,16 +217,20 @@ def plot_trial(rates, trial, ax):
     # ax.set_xticklabels(ax.get_xticks() * cfg.dataset.bin_size_ms)
     # ax.set_xlabel('Time (ms)')
     # ax.set_title()
-
-f, axes = plt.subplots(len(trials), 2, figsize=(10, 7.5), sharex=True)
+size = (len(trials), 1 if heldout_rates is None else 2)
+f, axes = plt.subplots(*size, figsize=(5 if heldout_rates is None else 10, 7.5), sharex=True)
 for i, trial in enumerate(trials):
-    plot_trial(heldin_rates, trial, axes[i, 0])
-    plot_trial(heldout_rates, trial, axes[i, 1])
+    if heldout_rates is None:
+        plot_trial(heldin_rates, trial, axes[i])
+    else:
+        plot_trial(heldin_rates, trial, axes[i, 0])
+        plot_trial(heldout_rates, trial, axes[i, 1])
 # axes[-1, 0].set_xticklabels(axes[-1, 0].get_xticks() * cfg.dataset.bin_size_ms)
 # axes[-1, 1].set_xticklabels(axes[-1, 0].get_xticks() * cfg.dataset.bin_size_ms)
 
 plt.suptitle(
-    f'Out ({heldin_metrics["test_co-bps"].item():.4f}) : {query} {"(All enc)" if data_attrs.serve_tokens_flat else ""}'
+    f'{query} ({heldin_metrics["test_loss"].item():.3f}) {"(All enc)" if data_attrs.serve_tokens_flat else ""}'
+    # f'Out ({heldin_metrics["test_co-bps"].item():.4f}) : {query} {"(All enc)" if data_attrs.serve_tokens_flat else ""}'
 )
 plt.tight_layout()
 #%%

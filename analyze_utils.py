@@ -139,7 +139,7 @@ def wandb_query_latest(
     # Default sort order is newest to oldest, which is what we want.
     api = wandb.Api()
     target = name_kw if exact else {"$regex": name_kw}
-    states = ["finished", "crashed"]
+    states = ["finished", "crashed", "failed"]
     if allow_running:
         states.append("running")
     filters = {

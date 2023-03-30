@@ -377,7 +377,8 @@ class DatasetConfig:
     # Datasets to hold a _subset_ of from training. (some exposure still required)
     # These datasets are used for evaluation (in analysis, and possibly during training), separate from validation step.
     eval_datasets: List[str] = field(default_factory=lambda: [])
-    eval_ratio: float = 0.5 # ratio of eval dataset to use for eval
+    eval_ratio: float = 0.5 # ratio of eval dataset to reserve for eval
+    eval_force_limit: bool = False # if true, ignore eval ratio, and simply reserve reserve the above `scale_limit_per_session``.
     eval_seed: int = 0 # for shuffling/splitting etc
 
     r"""

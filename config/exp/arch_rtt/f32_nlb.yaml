@@ -7,6 +7,7 @@ model:
   hidden_size: 384
   transformer:
     n_layers: 12
+    debug_force_nonlearned_position: True
   causal: false
   subject_embed_strategy: EmbedStrat.token
   task:
@@ -27,9 +28,9 @@ dataset:
   eval_datasets:
   - mc_rtt
 
-# train:
+train:
   # accumulate_batches: 4 # auto = 128 (12G GPUs), effective = 256
-  # autoscale_batch_size: false
-  # batch_size: 64
+  autoscale_batch_size: false
+  batch_size: 64
 
 notes: "If 300 trials deserves 128 (0.5M params), this 30k = 128 * 100 -> 12800, ~50M params. Except now we kill dropout, so more like "
