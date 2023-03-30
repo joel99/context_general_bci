@@ -183,6 +183,8 @@ class TransformerConfig:
     debug_force_nonlearned_position: bool = False
     debug_override_dropout_io: bool = False
 
+    context_integration: str = "in_context" # in_context, cross_attn, or adaptive_norm (see https://arxiv.org/pdf/2212.09748.pdf)
+
 @dataclass
 class ModelConfig:
     hidden_size: int = 256 # For parts outside of backbones

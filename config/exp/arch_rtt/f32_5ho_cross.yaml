@@ -7,7 +7,7 @@ model:
   causal: false
   subject_embed_strategy: EmbedStrat.token
   transformer:
-    # context_integration: cross_attn
+    context_integration: cross_attn
     debug_force_nonlearned_position: True
   task:
     mask_ratio: 0.25 # for efficiency

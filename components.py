@@ -241,7 +241,11 @@ class SpaceTimeTransformer(nn.Module):
         super().__init__()
         self.cfg = config
         # self.encoder = torch.jit.script( # In a basic timing test, this didn't appear faster. Built-in transformer likely already very fast.
-        enc_layer = nn.TransformerEncoderLayer(
+        layer_cls = nn.TransformerEncoderLayer if getattr(self.cfg,'context_integration', 'in_context') == 'in_context' else nn.TransformerDecoderLayer
+        enc_cls = nn.TransformerEncoder if getattr(self.cfg,'context_integration', 'in_context') == 'in_context' else nn.TransformerDecoder
+        self.cross_attn_enabled = getattr(self.cfg,'context_integration', 'in_context') == 'cross_attn'
+
+        enc_layer = layer_cls(
             self.cfg.n_state,
             self.cfg.n_heads,
             dim_feedforward=int(self.cfg.n_state * self.cfg.feedforward_factor),
@@ -254,11 +258,12 @@ class SpaceTimeTransformer(nn.Module):
             self.final_norm = nn.LayerNorm(self.cfg.n_state) # per Kaiming's MAE for vision
         n_layers = n_layers or self.cfg.n_layers
         if self.cfg.factorized_space_time:
+            assert enc_cls == nn.TransformerEncoder, "Factorized space time only supported with encoder"
             assert not self.cfg.flat_encoder, "Flat encoder not supported with factorized space time"
             self.space_transformer_encoder = nn.TransformerEncoder(enc_layer, round(n_layers / 2))
             self.time_transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers - round(n_layers / 2))
         else:
-            self.transformer_encoder = nn.TransformerEncoder(enc_layer, n_layers)
+            self.transformer_encoder = enc_cls(enc_layer, n_layers)
         if not getattr(self.cfg, 'debug_force_nonlearned_position', False) and (self.cfg.flat_encoder or self.cfg.learnable_position):
             if allow_embed_padding:
                 self.time_encoder = nn.Embedding(self.cfg.max_trial_length + 1, self.cfg.n_state, padding_idx=self.cfg.max_trial_length)
@@ -408,6 +413,7 @@ class SpaceTimeTransformer(nn.Module):
             # Trial Context is allowed to attend to self acausally, but that's it.
             # Somewhat redundant code structure is to play nice with typing
             if temporal_context is not None: # introduce t * context_num tokens
+                assert not self.cross_attn_enabled, "Temporal context not supported in cross attention"
                 assert not self.cfg.flat_encoder, "Temporal context not supported in flat encoder"
                 if src_mask is None:
                     src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
@@ -421,7 +427,7 @@ class SpaceTimeTransformer(nn.Module):
                 )
                 src_mask = F.pad(src_mask, (0, 0, 0, t * context_num), value=float('-inf'))
                 src_mask = torch.cat([src_mask, temporal_mask], dim=1)
-            if trial_context is not None:
+            if trial_context is not None and not self.cross_attn_enabled:
                 if src_mask is None:
                     src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
                 src_mask = F.pad(src_mask, (0, 0, 0, trial_context.size(1)), value=float('-inf'))
@@ -538,10 +544,11 @@ class SpaceTimeTransformer(nn.Module):
             output = rearrange(time_src, '(b s) t h -> b t s h', b=b)
         else:
             contextualized_src = [src]
-            if temporal_context is not None:
-                contextualized_src.append(temporal_context)
-            if trial_context is not None:
-                contextualized_src.append(trial_context)
+            if not self.cross_attn_enabled:
+                if temporal_context is not None:
+                    contextualized_src.append(temporal_context)
+                if trial_context is not None:
+                    contextualized_src.append(trial_context)
             contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
             src_mask = make_src_mask(src, temporal_context, trial_context, t, s)
@@ -557,7 +564,7 @@ class SpaceTimeTransformer(nn.Module):
                     padding_mask = torch.zeros((b, t, s), dtype=torch.bool, device=src.device)
                 padding_mask = rearrange(padding_mask, 'b t s -> b (t s)')
             # Trial context is never padded
-            if trial_context is not None:
+            if trial_context is not None and not self.cross_attn_enabled:
                 padding_mask = F.pad(padding_mask, (0, trial_context.size(-2)), value=False)
             # import pdb;pdb.set_trace()
             # print(t, s, contextualized_src.size(), src_mask.size(), padding_mask.size())
@@ -570,9 +577,10 @@ class SpaceTimeTransformer(nn.Module):
             # 4. all timestep 0 tokens are padding (no other tokens in sequence that can be attended to)
             # Suggested fix: pad value set to something nonzero. (IDR why we didn't set that in the first place, I think concerns about attending to sub-chunk padding?)
             # import pdb;pdb.set_trace()
-            output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
-            # if output.isnan().any():
-                # import pdb;pdb.set_trace()
+            if self.cross_attn_enabled:
+                output = self.transformer_encoder(contextualized_src, trial_context, tgt_mask=src_mask, tgt_key_padding_mask=padding_mask)
+            else:
+                output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
             output = output[:, : t * s]
             if not self.cfg.flat_encoder:
                 output = rearrange(output, 'b (t s) h -> b t s h', t=t, s=s)
