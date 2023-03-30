@@ -23,18 +23,37 @@ pl.seed_everything(0)
 # query = "f32_5ho-tsntbsci"
 
 queries = {
-    ('mc_rtt', 'single'): "mc_rtt-i0n8o24x",
-    ('mc_rtt', 'multi'): "f32_nlb-b4rz44ou",
-    ('odoherty_rtt-Indy-20160407_02', 'single'): 'v20160407_02-f4amdka7',
-    ('odoherty_rtt-Indy-20160407_02', 'multi'): 'f32_5ho-tsntbsci',
-    ('odoherty_rtt-Indy-20160627_01', 'single'): 'v20160627_01-s3ayyo36',
-    ('odoherty_rtt-Indy-20160627_01', 'multi'): 'f32_5ho-tsntbsci',
-    ('odoherty_rtt-Indy-20161005_06', 'single'): 'v20161005_06-46q14zbe',
-    ('odoherty_rtt-Indy-20161005_06', 'multi'): 'f32_5ho-tsntbsci',
-    ('odoherty_rtt-Indy-20161026_03', 'single'): 'v20161026_03-yc2110p0',
-    ('odoherty_rtt-Indy-20161026_03', 'multi'): 'f32_5ho-tsntbsci',
-    ('odoherty_rtt-Indy-20170131_02', 'single'): 'v20170131_02-qfhl1ckj',
-    ('odoherty_rtt-Indy-20170131_02', 'multi'): 'f32_5ho-tsntbsci',
+    # ('mc_rtt', 'single'): "mc_rtt-i0n8o24x",
+    # ('mc_rtt', 'multi'): "f32_nlb-b4rz44ou",
+    # ('odoherty_rtt-Indy-20160407_02', 'single_125'): 'v20160407_02-bd2mecm7',
+    # ('odoherty_rtt-Indy-20160627_01', 'single_125'): 'v20160627_01-f6uausza',
+    # ('odoherty_rtt-Indy-20161005_06', 'single_125'): 'v20161005_06-y7boucqc',
+    # ('odoherty_rtt-Indy-20161026_03', 'single_125'): 'v20161026_03-jhqdpzfn',
+    # ('odoherty_rtt-Indy-20170131_02', 'single_125'): 'v20170131_02-mzob9ju8',
+
+    ('odoherty_rtt-Indy-20160407_02', 'single_300'): 'v20160407_02-f4amdka7',
+    ('odoherty_rtt-Indy-20160627_01', 'single_300'): 'v20160627_01-s3ayyo36',
+    ('odoherty_rtt-Indy-20161005_06', 'single_300'): 'v20161005_06-46q14zbe',
+    ('odoherty_rtt-Indy-20161026_03', 'single_300'): 'v20161026_03-yc2110p0',
+    ('odoherty_rtt-Indy-20170131_02', 'single_300'): 'v20170131_02-qfhl1ckj',
+
+    # ('odoherty_rtt-Indy-20160407_02', 'sess30_125'): 'f32_5ho_125-f4psegt5',
+    # ('odoherty_rtt-Indy-20160627_01', 'sess30_125'): 'f32_5ho_125-f4psegt5',
+    # ('odoherty_rtt-Indy-20161005_06', 'sess30_125'): 'f32_5ho_125-f4psegt5',
+    # ('odoherty_rtt-Indy-20161026_03', 'sess30_125'): 'f32_5ho_125-f4psegt5',
+    # ('odoherty_rtt-Indy-20170131_02', 'sess30_125'): 'f32_5ho_125-f4psegt5',
+
+    # ('odoherty_rtt-Indy-20160407_02', 'sess30_300'): 'f32_5ho-tsntbsci',
+    # ('odoherty_rtt-Indy-20160627_01', 'sess30_300'): 'f32_5ho-tsntbsci',
+    # ('odoherty_rtt-Indy-20161005_06', 'sess30_300'): 'f32_5ho-tsntbsci',
+    # ('odoherty_rtt-Indy-20161026_03', 'sess30_300'): 'f32_5ho-tsntbsci',
+    # ('odoherty_rtt-Indy-20170131_02', 'sess30_300'): 'f32_5ho-tsntbsci',
+
+    # ('odoherty_rtt-Indy-20160407_02', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
+    # ('odoherty_rtt-Indy-20160627_01', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
+    # ('odoherty_rtt-Indy-20161005_06', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
+    # ('odoherty_rtt-Indy-20161026_03', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
+    # ('odoherty_rtt-Indy-20170131_02', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
 }
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
@@ -67,7 +86,7 @@ def get_model_and_dataloader(query, eval_datasets=[]):
     # print(data_attrs)
     model = transfer_model(src_model, cfg.model, data_attrs)
     print(f'{len(dataset)} examples')
-    def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwargs) -> DataLoader:
+    def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=4, **kwargs) -> DataLoader:
         return DataLoader(dataset,
             batch_size=batch_size,
             num_workers=num_workers,
@@ -83,7 +102,7 @@ def get_evals(model, dataloader, runs=10):
     evals = []
     for i in range(runs):
         pl.seed_everything(i)
-        heldin_metrics = stack_batch(trainer.test(model, dataloader))
+        heldin_metrics = stack_batch(trainer.test(model, dataloader, verbose=False))
         test_nll = heldin_metrics['test_infill_loss'] if 'test_infill_loss' in heldin_metrics else heldin_metrics['test_shuffle_infill_loss']
         test_nll = test_nll.mean().item()
         evals.append({
@@ -98,15 +117,19 @@ for data_model in queries:
     evals = get_evals(model, dataloader)
     evals = pd.DataFrame(evals)
     evals['dataset'] = data_model[0]
-    evals['model_type'] = data_model[1]
+    model_tag, cali_trials = data_model[1].split('_')
+    evals['model_type'] = model_tag
+    evals['model_cali'] = cali_trials
     all_evals.append(evals)
 all_evals = pd.concat(all_evals)
 
 #%%
+
 ax = prep_plt()
 ax = sns.stripplot(
     x='dataset',
     hue='model_type',
+    style='model_cali',
     y='test_nll',
     dodge=True,
     data=all_evals,

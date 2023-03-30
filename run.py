@@ -158,11 +158,11 @@ def run_exp(cfg : RootConfig) -> None:
             )
         )
         if not cfg.probe_finetune and reset_early_stop:
-            def patient_load(self, state_dict: Dict[str, Any]): # would use something more subtle but IDK how to access self
+            def patient_load(self, state_dict: Dict[str, Any]):
                 self.wait_count = 0
-                self.stopped_epoch = state_dict["stopped_epoch"]
+                # self.stopped_epoch = state_dict["stopped_epoch"]
                 self.best_score = state_dict["best_score"]
-                self.patience = state_dict["patience"]
+                self.patience = cfg.train.patience
             callbacks[-1].load_state_dict = functools.partial(patient_load, callbacks[-1])
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
