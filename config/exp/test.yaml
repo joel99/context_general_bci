@@ -32,9 +32,9 @@ dataset:
   - odoherty_rtt-Indy-20170131_02 # Last indy sesison
   eval_ratio: 0.1 # used smaller since not all sessions have (1/0.5) * 300 trials
 
-train:
-  accumulate_batches: 2 # auto = 128 (12G GPUs), effective = 2048
-  autoscale_batch_size: false
-  batch_size: 128
+# train:
+  # accumulate_batches: 2 # auto = 128 (12G GPUs), effective = 2048
+  # autoscale_batch_size: false
+  # batch_size: 128
 
 notes: "Sorted, Patch size 32"

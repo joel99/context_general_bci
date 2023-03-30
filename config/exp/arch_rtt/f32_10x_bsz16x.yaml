@@ -23,8 +23,10 @@ dataset:
 
   datasets:
   - odoherty_rtt-Indy.*
+  - mc_rtt
   eval_datasets:
-  - odoherty_rtt-Indy-20160627_01
+  # - odoherty_rtt-Indy-20160627_01
+  - mc_rtt
 
 train:
   accumulate_batches: 2
