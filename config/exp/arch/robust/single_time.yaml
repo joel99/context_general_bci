@@ -3,6 +3,7 @@
 defaults:
   - /model: pretrain_2x
   - /dataset: base
+  - /train: single_session_exp1
 model:
   # size down appropriately
   hidden_size: 128
@@ -23,8 +24,4 @@ dataset:
   - odoherty_rtt-Indy-20161005_06
   - odoherty_rtt-Indy-20161026_03
   - odoherty_rtt-Indy-20170131_02 # Last indy sesison
-train:
-  patience: 250 # Generous patience.
-  autoscale_batch_size: False
-  batch_size: 64
 fragment_datasets: True

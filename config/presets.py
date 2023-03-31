@@ -353,3 +353,13 @@ class RTTDataConfig(DatasetConfig):
 
 cs.store(group="dataset", name="rtt", node=RTTDataConfig)
 
+r"""
+    Some experiment specific presets
+"""
+@dataclass
+class SingleSessionTrainConfigExp1(TrainConfig):
+    patience: int = 250
+    autoscale_batch_size: bool = False
+    batch_size: int = 64
+
+cs.store(group="train", name="single_session_exp1", node=SingleSessionTrainConfigExp1)

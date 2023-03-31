@@ -499,13 +499,19 @@ class RootConfig:
     dataset: DatasetConfig = DatasetConfig()
     train: TrainConfig = TrainConfig()
 
+    # Initialization
+
     # wandb ids
     init_from_id: str = "" # for initializing weights
-    # use_ckpt_model_cfg: bool = False
-    init_tag: str = "val_loss"
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
+    init_tag: str = "val_loss"
+
+    inherit_exp: str = "" # hunt wandb for the relevant experiment, presumed same tag name.
+    # use_ckpt_model_cfg: bool = False
+
+
     probe_finetune: bool = False # If true, fit probe (novel params unlocked and trained), and then unfreeze, reset to best val, and train the rest of the model. Same training params are used in both instanced.
-    # See https://arxiv.org/pdf/2202.10054.pdf
+    # See https://arxiv.org/pdf/2202.10054.pdf (In pilots, not useful, deprecated)
 
     exp: Any = MISSING # delta config, provide via yaml and on CLI as `+exp=<test>.yaml`
     slurm_id: int = 0 # for experiment tracking...
