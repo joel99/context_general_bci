@@ -31,8 +31,7 @@ from config import RootConfig, Metric, hp_sweep_space, propagate_config
 from data import SpikingDataset, SpikingDataModule
 from model import BrainBertInterface, load_from_checkpoint
 from callbacks import ProbeToFineTuneEarlyStopping
-from analyze_utils import get_best_ckpt_from_wandb_id
-from utils import generate_search, grid_search
+from utils import generate_search, grid_search, get_best_ckpt_from_wandb_id
 
 r"""
     For this script

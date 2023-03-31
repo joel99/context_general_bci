@@ -1,0 +1,107 @@
+r"""
+Wandb helpers - interaction of wandb API and local files
+"""
+from typing import NamedTuple, Union, Dict, List, Tuple, Any, Optional
+from typing import get_type_hints, get_args
+from pathlib import Path
+import os.path as osp
+import numpy as np
+
+import wandb
+
+def wandb_query_experiment(
+    experiment: str | List[str],
+    wandb_user="joelye9",
+    wandb_project="context_general_bci",
+    **kwargs,
+):
+    if not isinstance(experiment, list):
+        experiment = [experiment]
+    api = wandb.Api()
+    filters = {
+        'config.experiment_set': {"$in": experiment},
+        **kwargs
+    }
+    runs = api.runs(f"{wandb_user}/{wandb_project}", filters=filters)
+    return runs
+
+def get_best_ckpt_in_dir(ckpt_dir: Path, tag="val_loss", higher_is_better=False):
+    if 'bps' in tag:
+        higher_is_better = True
+    # Newest is best since we have early stopping callback, and modelcheckpoint only saves early stopped checkpoints (not e.g. latest)
+    res = sorted(ckpt_dir.glob("*.ckpt"), key=osp.getmtime)
+    res = [r for r in res if tag in r.name]
+    if tag:
+        # names are of the form {key1}={value1}-{key2}={value2}-...-{keyn}={valuen}.ckpt
+        # write regex that parses out the value associated with the tag key
+        values = []
+        for r in res:
+            start = r.stem.find(f'{tag}=')
+            end = r.stem.find('-', start+len(tag)+2) # ignore negative
+            if end == -1:
+                end = len(r.stem)
+            values.append(float(r.stem[start+len(tag)+1:end].split('=')[-1]))
+        if higher_is_better:
+            return res[np.argmax(values)]
+        return res[np.argmin(values)]
+    return res[-1] # default to newest
+
+# TODO update these
+def wandb_query_latest(
+    name_kw,
+    wandb_user='joelye9',
+    wandb_project='context_general_bci',
+    exact=False,
+    allow_running=False,
+    use_display=False, # use exact name
+    **filter_kwargs
+) -> List[Any]: # returns list of wandb run objects
+    # One can imagine moving towards a world where we track experiment names in config and query by experiment instead of individual variants...
+    # But that's for the next project...
+    # Default sort order is newest to oldest, which is what we want.
+    api = wandb.Api()
+    target = name_kw if exact else {"$regex": name_kw}
+    states = ["finished", "crashed", "failed"]
+    if allow_running:
+        states.append("running")
+    filters = {
+        "display_name" if use_display else "config.tag": target,
+        "state": {"$in": states}, # crashed == timeout
+        **filter_kwargs
+    }
+    runs = api.runs(
+        f"{wandb_user}/{wandb_project}",
+        filters=filters
+    )
+    return runs
+
+def wandb_query_several(
+    strings,
+    min_time=None,
+    latest_for_each_seed=True,
+):
+    runs = []
+    for s in strings:
+        runs.extend(wandb_query_latest(
+            s, exact=True, latest_for_each_seed=latest_for_each_seed,
+            created_at={
+                "$gt": min_time if min_time else "2022-01-01"
+                }
+            ,
+            allow_running=True # ! NOTE THIS
+        ))
+    return runs
+
+def get_best_ckpt_from_wandb_id(
+        wandb_project,
+        wandb_id,
+        tag = "val_loss"
+    ):
+    wandb_id = wandb_id.split('-')[-1]
+    ckpt_dir = Path('./data/runs/') / wandb_project / wandb_id / "checkpoints" # curious, something about checkpoint dumping isn't right
+    return get_best_ckpt_in_dir(ckpt_dir, tag=tag)
+
+def get_wandb_run(wandb_id, wandb_project='context_general_bci', wandb_user="joelye9"):
+    wandb_id = wandb_id.split('-')[-1]
+    api = wandb.Api()
+    return api.run(f"{wandb_user}/{wandb_project}/{wandb_id}")
