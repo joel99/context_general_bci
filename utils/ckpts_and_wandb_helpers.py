@@ -9,6 +9,8 @@ import numpy as np
 
 import wandb
 
+from config import RootConfig
+
 def wandb_query_experiment(
     experiment: str | List[str],
     wandb_user="joelye9",
@@ -105,3 +107,28 @@ def get_wandb_run(wandb_id, wandb_project='context_general_bci', wandb_user="joe
     wandb_id = wandb_id.split('-')[-1]
     api = wandb.Api()
     return api.run(f"{wandb_user}/{wandb_project}/{wandb_id}")
+
+
+r"""
+    For experiment auto-inheritance.
+    Look in wandb lineage with pointed experiment set for a run sharing the tag. Use that run's checkpoint.
+"""
+def get_wandb_lineage(cfg: RootConfig):
+    assert cfg.inherit_exp, "Must specify experiment set to inherit from"
+    api = wandb.Api()
+    runs = api.runs(
+        f"{cfg.wandb_user}/{cfg.wandb_project}",
+        filters={
+            "config.experiment_set": cfg.inherit_exp,
+            "config.tag": cfg.tag,
+            "state": {"$in": ["finished"]}
+        }
+    )
+    if len(runs) == 0:
+        raise ValueError(f"No wandb runs found for experiment set {cfg.experiment_set} and tag {cfg.tag}")
+    # Basic sanity checks on the loaded checkpoint
+    # check runtime
+    if runs[0].summary.get("_runtime", 0) < 5 * 60: # (seconds)
+        raise ValueError(f"InheritError: Run {runs[0].id} abnormal runtime {runs[0].summary.get('_runtime', 0)}")
+
+    return runs[0] # auto-sorts to newest

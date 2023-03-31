@@ -31,7 +31,7 @@ from config import RootConfig, Metric, hp_sweep_space, propagate_config
 from data import SpikingDataset, SpikingDataModule
 from model import BrainBertInterface, load_from_checkpoint
 from callbacks import ProbeToFineTuneEarlyStopping
-from utils import generate_search, grid_search, get_best_ckpt_from_wandb_id
+from utils import generate_search, grid_search, get_best_ckpt_from_wandb_id, get_wandb_lineage
 
 r"""
     For this script
@@ -96,11 +96,25 @@ def run_exp(cfg : RootConfig) -> None:
             for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
                 run_cfg(cfg_trial)
         exit(0)
+
+    # Fragment and inherit
+    # Note the order of operations. If we fragment first, we are assuming runs exist on fragmented datasets.
+    # If we inherit first, we are assuming runs exist on the full dataset. try/catch full-first.
+    if cfg.inherit_exp:
+        inherit_succeeded = False
+        try:
+            lineage_run = get_wandb_lineage(cfg)
+            cfg.init_from_id = lineage_run.name
+            cfg.inherit_exp = ""
+            inherit_succeeded = True
+        except:
+            logging.info(f"Initial inherit for {cfg.inherit_exp} not found, pushed to post-fragment.")
+
     if cfg.fragment_datasets:
         def run_cfg(cfg_trial):
             init_call = sys.argv
             init_args = init_call[init_call.index('run.py')+1:]
-            additional_cli_flags = [f"'{k}={v}'" for k, v in cfg_trial.items()]
+            additional_cli_flags = [f"{k}={v}" for k, v in cfg_trial.items()] # note escaping
             meta_flags = [
                 'fragment_datasets=False',
                 f'tag={cfg.tag}-frag-{cfg_trial["dataset.datasets"][0]}',
@@ -111,6 +125,12 @@ def run_exp(cfg : RootConfig) -> None:
             cfg_trial = {'dataset.datasets': [dataset], 'dataset.eval_datasets': [dataset]}
             run_cfg(cfg_trial)
         exit(0)
+
+    # Load lineage if available. Note it is essential to keep this after tag overrides above as we match with tags.
+    # This is not compatible with sweeps, but should be compatible with fragment_datasets.
+    if cfg.inherit_exp and not inherit_succeeded:
+        lineage_run = get_wandb_lineage(cfg)
+        cfg.init_from_id = lineage_run.name
 
     propagate_config(cfg)
     logger = logging.getLogger(__name__)

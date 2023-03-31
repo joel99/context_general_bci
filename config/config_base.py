@@ -493,6 +493,7 @@ class RootConfig:
     fragment_datasets: bool = False # splits run into multiple runs, one per dataset. For single-session baselines
 
     default_root_dir: Path = Path("./data/runs").resolve()
+    wandb_user: str = "joelye9"
     wandb_project: str = "context_general_bci"
     wandb_api_key_path: Path = Path("/home/joelye/.wandb_api").resolve()
     model: ModelConfig = ModelConfig()
