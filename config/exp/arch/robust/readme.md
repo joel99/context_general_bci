@@ -8,5 +8,7 @@ Each test dataset needs its own probe, etc, the logistics of tracking more varia
 `tune` folder adapts multi-context models to each test session.
 `probe` folder velocity decodes from adapted or single-session models.
 
-Some other assumptions:
-- TAPT performs on par with in-pretraining (seemed to be the case in pilots)
+Some other notes:
+- We assume TAPT performs on par with in-pretraining (seemed to be the case in pilots)
+- We also cannot run single-session baselines on the 20-40 trial Pitt datasets.
+- We do not outperform NLB models, but that is not explored in this particular experiment.

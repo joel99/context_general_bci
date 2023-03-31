@@ -3,11 +3,12 @@
 defaults:
   - /train: single_session_exp1
 dataset:
+  eval_ratio: 0.1
   datasets:
   - odoherty_rtt-Indy-20160407_02 # First indy session
   - odoherty_rtt-Indy-20160627_01 # Original
   - odoherty_rtt-Indy-20161005_06
   - odoherty_rtt-Indy-20161026_03
-  - odoherty_rtt-Indy-20170131_02 # Last indy sesison
+  - odoherty_rtt-Indy-20170131_02
 inherit_exp: arch/robust
 fragment_datasets: True

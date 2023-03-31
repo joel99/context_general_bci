@@ -73,29 +73,6 @@ def run_exp(cfg : RootConfig) -> None:
         if len(exp_arg) > 0:
             cfg.tag = exp_arg[0].split('=')[1]
             cfg.experiment_set = exp_arg[0].split('=')[0][len('+exp/'):]
-    if cfg.sweep_cfg and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
-        sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
-        def run_cfg(cfg_trial):
-            init_call = sys.argv
-            init_args = init_call[init_call.index('run.py')+1:]
-            additional_cli_flags = [f'{k}={v}' for k, v in cfg_trial.items()]
-            meta_flags = [
-                'sweep_cfg=""',
-                f'sweep_tag={cfg.sweep_cfg}',
-                f'tag={cfg.tag}-sweep-{cfg.sweep_cfg}',
-                f'experiment_set={cfg.experiment_set}'
-            ]
-            # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
-            # subprocess.run(['sbatch', './crc_scripts/launch.sh', *init_args, *additional_cli_flags, *meta_flags])
-            subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
-        if cfg.sweep_mode == 'grid':
-            # Create a list of dicts from the cross product of the sweep config
-            for cfg_trial in grid_search(sweep_cfg):
-                run_cfg(cfg_trial)
-        else:
-            for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
-                run_cfg(cfg_trial)
-        exit(0)
 
     # Fragment and inherit
     # Note the order of operations. If we fragment first, we are assuming runs exist on fragmented datasets.
@@ -118,7 +95,9 @@ def run_exp(cfg : RootConfig) -> None:
             meta_flags = [
                 'fragment_datasets=False',
                 f'tag={cfg.tag}-frag-{cfg_trial["dataset.datasets"][0]}',
-                f'experiment_set={cfg.experiment_set}'
+                f'experiment_set={cfg.experiment_set}',
+                f'inherit_exp={cfg.inherit_exp}', # propagate the following sensitive pieces
+                f'init_from_id={cfg.init_from_id}' # propagate the following sensitive pieces
             ]
             subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
         for dataset in cfg.dataset.datasets:
@@ -131,6 +110,30 @@ def run_exp(cfg : RootConfig) -> None:
     if cfg.inherit_exp and not inherit_succeeded:
         lineage_run = get_wandb_lineage(cfg)
         cfg.init_from_id = lineage_run.name
+
+    if cfg.sweep_cfg: # and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
+        sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
+        def run_cfg(cfg_trial):
+            init_call = sys.argv
+            init_args = init_call[init_call.index('run.py')+1:]
+            additional_cli_flags = [f'{k}={v}' for k, v in cfg_trial.items()]
+            meta_flags = [
+                'sweep_cfg=""',
+                f'sweep_tag={cfg.sweep_cfg}',
+                f'tag={cfg.tag}-sweep-{cfg.sweep_cfg}',
+                f'experiment_set={cfg.experiment_set}'
+            ]
+            # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
+            # subprocess.run(['sbatch', './crc_scripts/launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+            subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+        if cfg.sweep_mode == 'grid':
+            # Create a list of dicts from the cross product of the sweep config
+            for cfg_trial in grid_search(sweep_cfg):
+                run_cfg(cfg_trial)
+        else:
+            for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
+                run_cfg(cfg_trial)
+        exit(0)
 
     propagate_config(cfg)
     logger = logging.getLogger(__name__)

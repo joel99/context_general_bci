@@ -112,7 +112,6 @@ class SpikingDataset(Dataset):
         assert DataKey.spikes in cfg.data_keys, "Must have spikes"
         if self.cfg.serve_tokenized_flat:
             assert self.cfg.serve_tokenized, 'codepaths assume serve_tokenized is true if serve_tokenized_flat is true'
-
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
             if getattr(self.cfg, 'data_blacklist', ''):
