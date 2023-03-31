@@ -220,27 +220,16 @@ cs.store(group="train", name="finetune", node=FineTuneConfig)
 @dataclass
 class BaseDataConfig(DatasetConfig):
     """
-        Base configuration for all datasets
+        Base configuration for all datasets.
+        We tend to only use M1.
     """
     bin_size_ms: int = 20
+    max_tokens: int = 8192
+    max_length_ms: int = 4000 # most data is much shorter, though.
     data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
     meta_keys: List[MetaKey] = field(default_factory=lambda: [
         MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session, MetaKey.task
     ])
-cs.store(group="dataset", name="base", node=BaseDataConfig)
-
-@dataclass
-class FlatDataConfig(DatasetConfig):
-    serve_tokenized: bool = True
-    serve_tokenized_flat: bool = True
-    bin_size_ms: int = 20 # typically 20
-    max_tokens: int = 4096
-    max_length_ms: int = 2000 # most data is much shorter though
-    data_keys: List[DataKey] = field(default_factory=lambda: [DataKey.spikes])
-    meta_keys: List[MetaKey] = field(default_factory=lambda: [
-        MetaKey.unique, MetaKey.array, MetaKey.subject, MetaKey.session, MetaKey.task
-    ])
-    # M1 only
     odoherty_rtt: RTTConfig = field(default_factory=lambda: RTTConfig(
         arrays=['Indy-M1_all', 'Loco-M1_all'],
         # arrays=['Indy-M1', 'Loco-M1'],
@@ -255,6 +244,16 @@ class FlatDataConfig(DatasetConfig):
     pitt_co: PittConfig = field(default_factory=lambda: PittConfig(
         arrays=["CRS02b-lateral_m1", "CRS02b-medial_m1", "CRS07-lateral_m1", "CRS07-medial_m1"]
     ))
+
+cs.store(group="dataset", name="base", node=BaseDataConfig)
+
+@dataclass
+class FlatDataConfig(BaseDataConfig):
+    serve_tokenized: bool = True
+    serve_tokenized_flat: bool = True
+    # Liberally set upper bound, since flat models only use this to determine position encoder capacity.
+    max_arrays: int = 2
+    max_channels: int = 288
 
 cs.store(group="dataset", name="flat", node=FlatDataConfig)
 
@@ -353,3 +352,4 @@ class RTTDataConfig(DatasetConfig):
     odoherty_rtt: ODohertyExpConfig = field(default_factory=ODohertyExpConfig)
 
 cs.store(group="dataset", name="rtt", node=RTTDataConfig)
+

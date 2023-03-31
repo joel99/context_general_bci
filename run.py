@@ -97,6 +97,22 @@ def run_exp(cfg : RootConfig) -> None:
             for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
                 run_cfg(cfg_trial)
         exit(0)
+    if cfg.fragment_datasets:
+        def run_cfg(cfg_trial):
+            init_call = sys.argv
+            init_args = init_call[init_call.index('run.py')+1:]
+            additional_cli_flags = [f"'{k}={v}'" for k, v in cfg_trial.items()]
+            meta_flags = [
+                'fragment_datasets=False',
+                f'tag={cfg.tag}-frag-{cfg_trial["dataset.datasets"][0]}',
+                f'experiment_set={cfg.experiment_set}'
+            ]
+            subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+        for dataset in cfg.dataset.datasets:
+            cfg_trial = {'dataset.datasets': [dataset], 'dataset.eval_datasets': [dataset]}
+            run_cfg(cfg_trial)
+        exit(0)
+
     propagate_config(cfg)
     logger = logging.getLogger(__name__)
     pl.seed_everything(seed=cfg.seed)

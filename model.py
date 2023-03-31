@@ -45,18 +45,6 @@ class BrainBertInterface(pl.LightningModule):
         super().__init__() # store cfg
         self.save_hyperparameters(logger=False)
         self.cfg = cfg
-
-        # Manual patch for hidden sizes - we use a single value for all embeddings. Increase embedding bandwidth by adding more tokens
-        self.cfg.transformer.n_state = cfg.hidden_size
-        self.cfg.session_embed_size = cfg.hidden_size
-        self.cfg.subject_embed_size = cfg.hidden_size
-        self.cfg.array_embed_size = cfg.hidden_size
-        self.cfg.task_embed_size = cfg.hidden_size
-        self.cfg.readin_dim = cfg.hidden_size
-        self.cfg.readout_dim = cfg.hidden_size
-        self.cfg.transformer.dropout = cfg.dropout
-        self.cfg.transformer.transform_space = cfg.transform_space
-
         self.data_attrs = data_attrs
         assert self.data_attrs.max_channel_count % self.cfg.neurons_per_token == 0, "Neurons per token must divide max channel count"
         if self.data_attrs.serve_tokens:

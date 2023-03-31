@@ -2,7 +2,7 @@
 
 defaults:
   - /model: pretrain_2x # equivalent to flat_enc_dec without flattening
-  - /dataset: flat
+  - /dataset: base
 model:
   causal: true
   subject_embed_strategy: EmbedStrat.token
@@ -11,30 +11,15 @@ model:
   readin_strategy: EmbedStrat.unique_project
   readout_strategy: EmbedStrat.unique_project
   readin_compress: False
-  readin_dim: 256
-  readout_dim: 256
-
 dataset:
-  serve_tokenized: False
-  serve_tokenized_flat: False
-
   max_arrays: 1
   max_channels: 288
-
-  scale_ratio: 1.0
-  scale_limit_per_eval_session: 300 # no limit
-
   datasets:
   - mc_maze.*
   - dyer_co.*
   - gallego_co.*
-  # - odoherty_rtt-Indy-20160627_01
-  # eval_datasets:
-  # - odoherty_rtt-Indy-20160627_01
-
 train:
   patience: 250
   autoscale_batch_size: false
   batch_size: 256
-
 notes: "Sorted, transfer task."

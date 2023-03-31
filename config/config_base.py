@@ -227,14 +227,14 @@ class ModelConfig:
     # "" - ignore context
 
     init_flags: bool = True
-    # init_flags: bool = False # TODO legacy make true
+
     # Trial level
     session_embed_strategy: EmbedStrat = EmbedStrat.token
-    session_embed_size: int = 256 # TODO can we bind this?
+    session_embed_size: int = 256 # Bound in `propagate_config`
     session_embed_token_count: int = 1 # we'd like to increase custom capacity
 
-    subject_embed_strategy: EmbedStrat = EmbedStrat.none # TODO update this once we consider mixed batches
-    subject_embed_size: int = 256 # TODO can we bind this?
+    subject_embed_strategy: EmbedStrat = EmbedStrat.none
+    subject_embed_size: int = 256 # Bound in `propagate_config`
 
     task_embed_strategy: EmbedStrat = EmbedStrat.none # * we're not planning on going multitask in near future, so please hold.
     task_embed_size: int = 256
@@ -242,7 +242,7 @@ class ModelConfig:
 
     # This needs a separate API from the rest, likely, tied to readin.
     array_embed_strategy: EmbedStrat = EmbedStrat.none # ? maybe subsumed by subject
-    array_embed_size: int = 256 # TODO can we bind this?
+    array_embed_size: int = 256 # Bound in `propagate_config`
 
     # Closely related to, but not quite, array embed strategy.
     # Array embed strategy describes how we should provide information about array
@@ -484,10 +484,13 @@ class RootConfig:
     experiment_set: str = ""
     notes: str = "" # for wandb
 
+    # Meta config - will initiate multiple derivative runs, all handled in `run.py`
     sweep_cfg: str = "" # See `hp_sweep_space.py`
     sweep_trials: int = 8
     sweep_mode: str = 'random' # or grid, which is implicitly exhaustive
     sweep_tag: str = "" # * don't specify this, we use this to track in wandb
+
+    fragment_datasets: bool = False # splits run into multiple runs, one per dataset. For single-session baselines
 
     default_root_dir: Path = Path("./data/runs").resolve()
     wandb_project: str = "context_general_bci"
@@ -517,3 +520,13 @@ def propagate_config(config: RootConfig):
         This step only needs to happen when we read from a YAML, i.e. wandb should only store propagated versions.
     """
     config.dataset.neurons_per_token = config.model.neurons_per_token
+
+    config.model.transformer.n_state = config.model.hidden_size
+    config.model.transformer.dropout = config.model.dropout
+    config.model.transformer.transform_space = config.model.transform_space
+    config.model.session_embed_size = config.model.hidden_size
+    config.model.subject_embed_size = config.model.hidden_size
+    config.model.array_embed_size = config.model.hidden_size
+    config.model.task_embed_size = config.model.hidden_size
+    config.model.readin_dim = config.model.hidden_size
+    config.model.readout_dim = config.model.hidden_size
