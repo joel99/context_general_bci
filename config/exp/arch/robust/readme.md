@@ -1,0 +1,1 @@
+It's exhaustive + exhausting to run single-session baselines and then plot the average test likelihood using several different models. We get that qualitative sense from 1 session; we then compare only multisession models across a number of new datasets.

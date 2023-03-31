@@ -13,13 +13,21 @@ from omegaconf import OmegaConf
 import wandb
 import scipy.signal as signal
 import torch
+from torch.utils.data import DataLoader
 import itertools
 from dacite import from_dict
 
 from model import BrainBertInterface, load_from_checkpoint
-from data import DataAttrs
+from data import DataAttrs, SpikingDataset
 from config import RootConfig
 
+def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=4, **kwargs) -> DataLoader:
+    return DataLoader(dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        persistent_workers=num_workers > 0,
+        collate_fn=dataset.collater_factory()
+    )
 
 # Wandb management
 def wandb_query_experiment(

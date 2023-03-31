@@ -27,7 +27,7 @@ from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 import wandb
 
-from config import RootConfig, Metric, hp_sweep_space
+from config import RootConfig, Metric, hp_sweep_space, propagate_config
 from data import SpikingDataset, SpikingDataModule
 from model import BrainBertInterface, load_from_checkpoint
 from callbacks import ProbeToFineTuneEarlyStopping
@@ -97,7 +97,7 @@ def run_exp(cfg : RootConfig) -> None:
             for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
                 run_cfg(cfg_trial)
         exit(0)
-
+    propagate_config(cfg)
     logger = logging.getLogger(__name__)
     pl.seed_everything(seed=cfg.seed)
 

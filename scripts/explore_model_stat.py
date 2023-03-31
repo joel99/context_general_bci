@@ -16,39 +16,43 @@ from data import SpikingDataset, DataAttrs
 from model import transfer_model, logger
 
 from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
-from analyze_utils import prep_plt
+from analyze_utils import prep_plt, get_dataloader
 
 pl.seed_everything(0)
 
 # query = "f32_5ho-tsntbsci"
 
 queries = {
-    # ('mc_rtt', 'single'): "mc_rtt-i0n8o24x",
-    # ('mc_rtt', 'multi'): "f32_nlb-b4rz44ou",
+    ('mc_rtt', 'single_125'): "mc_rtt-acvg1rx4",
     # ('odoherty_rtt-Indy-20160407_02', 'single_125'): 'v20160407_02-bd2mecm7',
     # ('odoherty_rtt-Indy-20160627_01', 'single_125'): 'v20160627_01-f6uausza',
     # ('odoherty_rtt-Indy-20161005_06', 'single_125'): 'v20161005_06-y7boucqc',
     # ('odoherty_rtt-Indy-20161026_03', 'single_125'): 'v20161026_03-jhqdpzfn',
     # ('odoherty_rtt-Indy-20170131_02', 'single_125'): 'v20170131_02-mzob9ju8',
 
-    ('odoherty_rtt-Indy-20160407_02', 'single_300'): 'v20160407_02-f4amdka7',
-    ('odoherty_rtt-Indy-20160627_01', 'single_300'): 'v20160627_01-s3ayyo36',
-    ('odoherty_rtt-Indy-20161005_06', 'single_300'): 'v20161005_06-46q14zbe',
-    ('odoherty_rtt-Indy-20161026_03', 'single_300'): 'v20161026_03-yc2110p0',
-    ('odoherty_rtt-Indy-20170131_02', 'single_300'): 'v20170131_02-qfhl1ckj',
+    ('mc_rtt', 'single_300'): "mc_rtt-i0n8o24x",
+    # ('odoherty_rtt-Indy-20160407_02', 'single_300'): 'v20160407_02-f4amdka7',
+    # ('odoherty_rtt-Indy-20160627_01', 'single_300'): 'v20160627_01-s3ayyo36',
+    # ('odoherty_rtt-Indy-20161005_06', 'single_300'): 'v20161005_06-46q14zbe',
+    # ('odoherty_rtt-Indy-20161026_03', 'single_300'): 'v20161026_03-yc2110p0',
+    # ('odoherty_rtt-Indy-20170131_02', 'single_300'): 'v20170131_02-qfhl1ckj',
 
+    ('mc_rtt', 'sess30_125'): "f32_5ho_125-d01ki8cu",
     # ('odoherty_rtt-Indy-20160407_02', 'sess30_125'): 'f32_5ho_125-f4psegt5',
     # ('odoherty_rtt-Indy-20160627_01', 'sess30_125'): 'f32_5ho_125-f4psegt5',
     # ('odoherty_rtt-Indy-20161005_06', 'sess30_125'): 'f32_5ho_125-f4psegt5',
     # ('odoherty_rtt-Indy-20161026_03', 'sess30_125'): 'f32_5ho_125-f4psegt5',
     # ('odoherty_rtt-Indy-20170131_02', 'sess30_125'): 'f32_5ho_125-f4psegt5',
 
+    ('mc_rtt', 'sess30_300'): "f32_nlb-b4rz44ou",
     # ('odoherty_rtt-Indy-20160407_02', 'sess30_300'): 'f32_5ho-tsntbsci',
     # ('odoherty_rtt-Indy-20160627_01', 'sess30_300'): 'f32_5ho-tsntbsci',
     # ('odoherty_rtt-Indy-20161005_06', 'sess30_300'): 'f32_5ho-tsntbsci',
     # ('odoherty_rtt-Indy-20161026_03', 'sess30_300'): 'f32_5ho-tsntbsci',
     # ('odoherty_rtt-Indy-20170131_02', 'sess30_300'): 'f32_5ho-tsntbsci',
 
+    ('mc_rtt', 'ks150_125'): "ks_150-y5dlcktw",
+    ('mc_rtt', 'ks150_300'): "ks_150-39avas64",
     # ('odoherty_rtt-Indy-20160407_02', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
     # ('odoherty_rtt-Indy-20160627_01', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
     # ('odoherty_rtt-Indy-20161005_06', 'ks150_300'): 'm3_150k_5ho_cross-gu7m10s8',
@@ -85,15 +89,7 @@ def get_model_and_dataloader(query, eval_datasets=[]):
     data_attrs = dataset.get_data_attrs()
     # print(data_attrs)
     model = transfer_model(src_model, cfg.model, data_attrs)
-    print(f'{len(dataset)} examples')
-    def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=4, **kwargs) -> DataLoader:
-        return DataLoader(dataset,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            persistent_workers=num_workers > 0,
-            collate_fn=dataset.collater_factory()
-        )
-
+    # print(f'{len(dataset)} examples')
     dataloader = get_dataloader(dataset)
     return model, dataloader
 
@@ -124,22 +120,49 @@ for data_model in queries:
 all_evals = pd.concat(all_evals)
 
 #%%
+# make facet grid with model cali
+g = sns.FacetGrid(
+    all_evals,
+    col='dataset',
+    col_wrap=3,
+    sharey=False,
+    sharex=False,
+    height=3,
+    aspect=1.5,
+)
 
-ax = prep_plt()
-ax = sns.stripplot(
-    x='dataset',
+
+# # plot test nll
+g.map_dataframe(
+    sns.stripplot,
+    x='model_cali',
     hue='model_type',
-    style='model_cali',
     y='test_nll',
     dodge=True,
-    data=all_evals,
-    ax=ax
 )
-ax.set_title('Test NLL across eval seeds')
+
+# add legend
+g.add_legend()
+# Set xlabel to calibation trials
+g.set_axis_labels('Calibration trials', 'Test NLL')
+
+# ax = prep_plt()
+
+# ax = sns.scatterplot(
+# ax = sns.stripplot(
+    # x='dataset',
+    # x='model_cali',
+    # hue='model_type',
+    # y='test_nll',
+    # dodge=True,
+    # data=all_evals,
+    # ax=ax
+# )
+# ax.set_title('Test NLL across eval seeds')
 
 # rotate xlabels
-for item in ax.get_xticklabels():
-    item.set_rotation(45)
+# for item in ax.get_xticklabels():
+    # item.set_rotation(45)
 
 
 

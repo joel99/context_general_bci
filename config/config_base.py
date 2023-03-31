@@ -499,7 +499,7 @@ class RootConfig:
     # wandb ids
     init_from_id: str = "" # for initializing weights
     # use_ckpt_model_cfg: bool = False
-    init_tag: str = "bps"
+    init_tag: str = "val_loss"
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
     probe_finetune: bool = False # If true, fit probe (novel params unlocked and trained), and then unfreeze, reset to best val, and train the rest of the model. Same training params are used in both instanced.
     # See https://arxiv.org/pdf/2202.10054.pdf
@@ -508,3 +508,12 @@ class RootConfig:
     slurm_id: int = 0 # for experiment tracking...
     effective_bsz: int = 0 # for experiment tracking...
     nodes: int = 1
+
+
+def propagate_config(config: RootConfig):
+    r"""
+        There wasn't an obvious way to bind configuration across sub-nodes (even if that has bad code-smell, we often use it).
+        We patch that here.
+        This step only needs to happen when we read from a YAML, i.e. wandb should only store propagated versions.
+    """
+    config.dataset.neurons_per_token = config.model.neurons_per_token

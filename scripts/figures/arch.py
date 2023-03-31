@@ -15,13 +15,42 @@ from einops import rearrange
 
 from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey
 from data import SpikingDataset, DataAttrs
+from model import transfer_model
 
-from analyze_utils import get_run_config, load_wandb_run, wandb_query_latest, wandb_query_experiment
-from analyze_utils import prep_plt
+from analyze_utils import load_wandb_run, wandb_query_experiment
+from analyze_utils import prep_plt, get_dataloader, stack_batch
 
 from matplotlib.colors import LogNorm, Normalize
 
-def get_run_dict(run):
+def eval_run(run, trials, eval_datasets=[]):
+    trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
+    src_model, cfg, run = load_wandb_run(run, tag='val_loss')
+    if eval_datasets:
+        cfg.dataset.eval_datasets = eval_datasets
+    dataset = SpikingDataset(cfg.dataset)
+    if cfg.dataset.eval_datasets:
+        dataset.subset_split(splits=['eval'])
+    else:
+        dataset.subset_split()
+    dataset.build_context_index()
+    if not cfg.dataset.eval_datasets:
+        _, dataset = dataset.create_tv_datasets()
+    data_attrs = dataset.get_data_attrs()
+    model = transfer_model(src_model, cfg.model, data_attrs)
+    dataloader = get_dataloader(dataset, batch_size=32)
+    evals = []
+    for i in range(trials):
+        pl.seed_everything(i)
+        heldin_metrics = stack_batch(trainer.test(model, dataloader, verbose=False))
+        test_nll = heldin_metrics['test_infill_loss'] if 'test_infill_loss' in heldin_metrics else heldin_metrics['test_shuffle_infill_loss']
+        evals.append(test_nll.mean().item())
+    return torch.tensor(evals).mean()
+
+def get_run_dict(
+    run,
+    eval_trials=3, # if 0, take from wandb. else run N trials
+    # eval_trials=0, # if 0, take from wandb. else run N trials
+):
     keys = [
         'trainer/global_step',
         'eval_loss',
@@ -37,7 +66,10 @@ def get_run_dict(run):
     out = {}
     # out['test_loss'] = [df.loc[df['eval_loss'].idxmin()]['eval_loss']]
     out['val_loss'] = [df.loc[df['val_loss'].idxmin()]['val_loss']]
-    out['test_loss'] = [df.loc[df['val_loss'].idxmin()]['eval_loss']]
+    if eval_trials == 0 or 'eval_kinematic_r2' in keys: # ignore eval if doing decoding, that's deterministic
+        out['test_loss'] = [df.loc[df['val_loss'].idxmin()]['eval_loss']]
+    else:
+        out['test_loss'] = [eval_run(run, eval_trials)]
     # Be wary of the different stories the above items tell. Using latter to be correct, former is usually what eye sees on wandb.
     out['id'] = [run.id]
     out['tag'] = [run.config['tag']]
