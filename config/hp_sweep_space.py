@@ -5,6 +5,11 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    "simpler_lr_sweep": {
+        "model.lr_init": {
+            'feasible_points': [4e-5, 7e-5, 1e-4]
+        }
+    },
     "simple_lr_sweep": {
         "model.lr_init": {
             'feasible_points': [1e-5, 3e-5, 5e-5, 1e-4]

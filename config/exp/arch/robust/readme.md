@@ -12,3 +12,6 @@ Some other notes:
 - We assume TAPT performs on par with in-pretraining (seemed to be the case in pilots)
 - We also cannot run single-session baselines on the 20-40 trial Pitt datasets.
 - We do not outperform NLB models, but that is not explored in this particular experiment.
+
+Note that with running these many experiments, the wandb service will sometimes not initialize in time. I'm not sure how to set timeouts, so I relaunch the desired runs manually (you can leave `frag` settings on, and just update the datasets that need to be relaunched.)
+TODO figure out timeout setting.

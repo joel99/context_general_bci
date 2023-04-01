@@ -4,6 +4,8 @@ defaults:
   - /train: single_session_exp1
 dataset:
   eval_ratio: 0.1
+  scale_limit_per_eval_session: 300
+
   datasets:
   - odoherty_rtt-Indy-20160407_02 # First indy session
   - odoherty_rtt-Indy-20160627_01 # Original

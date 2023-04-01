@@ -2,34 +2,22 @@
 
 defaults:
   - /model: flat_enc_dec
+  - /model/task:
+    - bhvr_decode_flat
   - /dataset: flat
+  - /train: single_session_exp1
 model:
-  causal: false
+  causal: true
   subject_embed_strategy: EmbedStrat.token
-  transformer:
-    # context_integration: cross_attn
-    debug_force_nonlearned_position: True
   task:
-    mask_ratio: 0.25 # for efficiency
+    mask_ratio: 0.5
   neurons_per_token: 32
 dataset:
-  neurons_per_token: 32
-
-  max_arrays: 1
-  max_channels: 288
-
-  scale_ratio: 1.0
-  scale_limit_per_eval_session: 300
-
+  scale_limit_per_eval_session: 100
   datasets:
-  - odoherty_rtt-Indy.*
+  - odoherty_rtt-Indy-20160407_02
   eval_datasets:
-  # just taking the first row of each colum in my terminal :)
   - odoherty_rtt-Indy-20160407_02 # First indy session
-  - odoherty_rtt-Indy-20160627_01 # Original
-  - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161026_03
-  - odoherty_rtt-Indy-20170131_02 # Last indy sesison
   eval_ratio: 0.1 # used smaller since not all sessions have (1/0.5) * 300 trials
 
 # train:

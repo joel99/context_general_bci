@@ -15,6 +15,7 @@ def wandb_query_experiment(
     experiment: str | List[str],
     wandb_user="joelye9",
     wandb_project="context_general_bci",
+    order='created_at',
     **kwargs,
 ):
     if not isinstance(experiment, list):
@@ -24,7 +25,7 @@ def wandb_query_experiment(
         'config.experiment_set': {"$in": experiment},
         **kwargs
     }
-    runs = api.runs(f"{wandb_user}/{wandb_project}", filters=filters)
+    runs = api.runs(f"{wandb_user}/{wandb_project}", filters=filters, order=order)
     return runs
 
 def get_best_ckpt_in_dir(ckpt_dir: Path, tag="val_loss", higher_is_better=False):
@@ -116,11 +117,15 @@ r"""
 def get_wandb_lineage(cfg: RootConfig):
     assert cfg.inherit_exp, "Must specify experiment set to inherit from"
     api = wandb.Api()
+    lineage_query = cfg.tag
+    if 'sweep' in lineage_query:
+        # find sweep and truncate
+        lineage_query = lineage_query[:lineage_query.find('sweep')-1] # - m-dash
     runs = api.runs(
         f"{cfg.wandb_user}/{cfg.wandb_project}",
         filters={
             "config.experiment_set": cfg.inherit_exp,
-            "config.tag": cfg.tag,
+            "config.tag": lineage_query,
             "state": {"$in": ["finished"]}
         }
     )

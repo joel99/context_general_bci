@@ -23,7 +23,7 @@ pl.seed_everything(0)
 # query = "f32_5ho-tsntbsci"
 
 queries = {
-    ('mc_rtt', 'single_125'): "mc_rtt-acvg1rx4",
+    # ('mc_rtt', 'single_125'): "mc_rtt-acvg1rx4",
     # ('odoherty_rtt-Indy-20160407_02', 'single_125'): 'v20160407_02-bd2mecm7',
     # ('odoherty_rtt-Indy-20160627_01', 'single_125'): 'v20160627_01-f6uausza',
     # ('odoherty_rtt-Indy-20161005_06', 'single_125'): 'v20161005_06-y7boucqc',
