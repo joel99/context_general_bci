@@ -5,8 +5,6 @@ defaults:
   - /dataset: flat
   - _default
 model:
-  hidden_size: 128 # size down appropriately
   causal: true
   subject_embed_strategy: EmbedStrat.token
   neurons_per_token: 32
-inherit_exp: arch/robust

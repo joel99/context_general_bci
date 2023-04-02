@@ -133,7 +133,7 @@ def get_wandb_lineage(cfg: RootConfig):
         raise ValueError(f"No wandb runs found for experiment set {cfg.experiment_set} and tag {cfg.tag}")
     # Basic sanity checks on the loaded checkpoint
     # check runtime
-    if runs[0].summary.get("_runtime", 0) < 5 * 60: # (seconds)
+    if runs[0].summary.get("_runtime", 0) < 1 * 60: # (seconds)
         raise ValueError(f"InheritError: Run {runs[0].id} abnormal runtime {runs[0].summary.get('_runtime', 0)}")
 
     return runs[0] # auto-sorts to newest

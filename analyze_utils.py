@@ -2,6 +2,7 @@
 from typing import NamedTuple, Union, Dict, List, Tuple, Any, Optional
 from typing import get_type_hints, get_args
 from collections import defaultdict
+from copy import deepcopy
 import re
 from enum import Enum
 import os.path as osp
@@ -58,8 +59,9 @@ def create_typed_cfg(cfg: Dict) -> RootConfig:
 
 def load_wandb_run(run: WandbRun, tag="val_loss") -> Tuple[BrainBertInterface, RootConfig, DataAttrs]:
     run_data_attrs = from_dict(data_class=DataAttrs, data=run.config['data_attrs'])
-    del run.config['data_attrs']
-    cfg: RootConfig = OmegaConf.create(create_typed_cfg(run.config)) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
+    config_copy = deepcopy(run.config)
+    del config_copy['data_attrs']
+    cfg: RootConfig = OmegaConf.create(create_typed_cfg(config_copy)) # Note, unchecked cast, but we often fiddle with irrelevant variables and don't want to get caught up
     ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag=tag)
     print(f"Loading {ckpt}")
     model = load_from_checkpoint(ckpt)
