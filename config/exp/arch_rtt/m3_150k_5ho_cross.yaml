@@ -16,6 +16,7 @@ model:
     n_heads: 4
     pre_norm: true
     debug_force_nonlearned_position: true
+    context_integration: cross_attn
   hidden_size: 512
 
   task:
