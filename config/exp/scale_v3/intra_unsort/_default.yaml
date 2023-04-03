@@ -1,0 +1,24 @@
+# @package _global_
+
+defaults:
+  - /model: flat_enc_dec
+  - /dataset: flat
+  - /train: single_session_exp1
+
+model:
+  hidden_size: 128
+  causal: true
+  task:
+    mask_ratio: 0.5
+  neurons_per_token: 32
+
+dataset:
+  eval_ratio: 0.05
+  datasets:
+  - odoherty_rtt-Indy-20160426_01 # 1764s
+  - odoherty_rtt-Indy-20160622_01 # 2451s
+  - odoherty_rtt-Indy-20160627_01 # 3364s
+  odoherty_rtt:
+    arrays: ['Indy-M1', 'Loco-M1']
+    include_sorted: False
+fragment_datasets: True

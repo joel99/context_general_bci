@@ -4,6 +4,7 @@ from pathlib import Path
 import copy
 import subprocess
 import functools
+import socket
 
 from typing import Dict, Any
 
@@ -61,6 +62,13 @@ def init_wandb(cfg, wandb_logger):
     #     wandb.init(project=cfg.wandb_project) # for some reason wandb changed and now I need a declaration
     _ = wandb_logger.experiment # force experiment recognition so that id is initialized
 
+def launcher(init_args, additional_cli_flags, meta_flags):
+    if 'mind' in socket.gethostname():
+        launch_script = 'launch.sh'
+    else:
+        launch_script = './crc_scripts/launch_1080.sh' # assumed tiny runs if on crc?
+    subprocess.run(['sbatch', launch_script, *init_args, *additional_cli_flags, *meta_flags])
+
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
     # Check for sweeping. Note we process data above because I never intend to sweep over data config.
@@ -99,7 +107,8 @@ def run_exp(cfg : RootConfig) -> None:
                 f'inherit_exp={cfg.inherit_exp}', # propagate the following sensitive pieces
                 f'init_from_id={cfg.init_from_id}' # propagate the following sensitive pieces
             ]
-            subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+            launcher(init_args, additional_cli_flags, meta_flags)
+
         for dataset in cfg.dataset.datasets:
             cfg_trial = {'dataset.datasets': [dataset], 'dataset.eval_datasets': [dataset]}
             run_cfg(cfg_trial)
@@ -125,7 +134,7 @@ def run_exp(cfg : RootConfig) -> None:
             ]
             # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
             # subprocess.run(['sbatch', './crc_scripts/launch.sh', *init_args, *additional_cli_flags, *meta_flags])
-            subprocess.run(['sbatch', 'launch.sh', *init_args, *additional_cli_flags, *meta_flags])
+            launcher(init_args, additional_cli_flags, meta_flags)
         if cfg.sweep_mode == 'grid':
             # Create a list of dicts from the cross product of the sweep config
             for cfg_trial in grid_search(sweep_cfg):
