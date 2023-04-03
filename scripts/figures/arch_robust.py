@@ -4,6 +4,7 @@ import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print
 from matplotlib import pyplot as plt
 import seaborn as sns
+import numpy as np
 import torch
 import pandas as pd
 import pytorch_lightning as pl
@@ -101,9 +102,32 @@ kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant
 nll_df = build_df(runs_nll, mode='nll')
 
 # merge on variant and dataset, filling empty with 0s
+df = pd.merge(kin_df, nll_df, on=['variant', 'dataset'], how='outer').fillna(0)
 
 #%%
-df = pd.merge(kin_df, nll_df, on=['variant', 'dataset'], how='outer').fillna(0)
+source_map = {
+    'task_f32': 'task',
+    'task_stitch': 'task',
+    'subject_f32': 'subject',
+    'subject_stitch': 'subject',
+    'f32': 'session',
+    'stitch': 'session',
+    'single_f32': 'single',
+    'single_time': 'single',
+}
+arch_map = {
+    'task_f32': 'f32',
+    'task_stitch': 'stitch',
+    'subject_f32': 'f32',
+    'subject_stitch': 'stitch',
+    'f32': 'f32',
+    'stitch': 'stitch',
+    'single_f32': 'f32',
+    'single_time': 'time',
+}
+# Meta-annotation
+df['source'] = df['variant'].apply(lambda x: source_map[x])
+df['arch'] = df['variant'].apply(lambda x: arch_map[x])
 #%%
 # print(df)
 # print(kin_df.columns)
@@ -125,27 +149,59 @@ for item in ax.get_xticklabels():
     item.set_rotation(45)
 
 #%%
+# https://docs.google.com/spreadsheets/d/1WpmhgttDJY09IxHzZqfHh5e8vozeI9c42o8xLfibEng/edit?usp=sharing
+eRFH_baseline_kin = {
+    'odoherty_rtt-Indy-20160407_02': 0.64575,
+    'odoherty_rtt-Indy-20160627_01': 0.53125,
+    'odoherty_rtt-Indy-20161005_06': 0.484,
+    'odoherty_rtt-Indy-20161026_03': 0.5955,
+    'odoherty_rtt-Indy-20170131_02': 0.5113,
+}
+
+#%%
 ax = prep_plt()
-aggr_variant = df.groupby(['variant']).mean().reset_index()
+aggr_variant = df.groupby(['variant', 'source', 'arch']).mean().reset_index()
+palette = sns.color_palette('colorblind', len(aggr_variant))
 ax = sns.scatterplot(
     x='nll',
     y='kin_r2',
-    hue='variant',
-    style='variant',
+    hue='arch',
+    # hue='variant',
+    style='source',
     s=100,
     data=aggr_variant,
+    palette=palette,
+    legend=True,
+)
+
+# Annotate the individual datapoints
+# for i, row in aggr_variant.iterrows():
+#     ax.text(
+#         row.nll, row.kin_r2 + 0.005, row.variant, color=palette[i], ha='center', va='bottom',
+#         fontsize=14,
+#     )
+
+mean_baseline = np.mean([eRFH_baseline_kin[k] for k in eRFH_baseline_kin if k in df.dataset.unique()])
+ax.axhline(mean_baseline, ls='--', color='black', label='mean across variants')
+# Annotate the horizontal line
+ax.text(
+    ax.get_xlim()[0] + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.01, mean_baseline, 'rEFH', color='black', ha='left', va='bottom',
+    fontsize=14,
 )
 
 #%%
 # make facet grid with model cali
 sorted_datasets = sorted(df.variant.unique())
+palette = sns.color_palette('colorblind', len(aggr_variant))
 g = sns.relplot(
     data=df,
     col='dataset',
     x='nll',
     y='kin_r2',
-    hue='variant',
-    style='variant',
+    # hue='variant',
+    hue='arch',
+    # style='variant',
+    style='source',
     s=100,
     col_wrap=3,
     facet_kws={'sharey': False, 'sharex': False}
@@ -153,4 +209,13 @@ g = sns.relplot(
 def deco(data, **kws):
     ax = plt.gca()
     ax = prep_plt(ax)
+
+    # Annotate the horizontal line
+    mean_baseline = eRFH_baseline_kin[data.dataset.unique()[0]]
+    ax.axhline(mean_baseline, ls='--', color='black', label='mean across variants')
+    # annotate rEFH position
+    ax.text(
+        ax.get_xlim()[0] + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.01, mean_baseline, 'rEFH', color='black', ha='left', va='bottom',
+        fontsize=14,
+    )
 g.map_dataframe(deco)
