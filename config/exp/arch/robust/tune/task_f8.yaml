@@ -13,3 +13,6 @@ model:
 dataset:
   max_arrays: 1
   max_channels: 288
+train:
+  batch_size: 16
+  accumulate_batches: 4
