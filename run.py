@@ -15,7 +15,6 @@ from omegaconf import OmegaConf
 import dataclasses
 
 import torch
-from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,

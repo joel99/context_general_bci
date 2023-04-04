@@ -22,15 +22,22 @@ from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
 pl.seed_everything(0)
 
 PLOT_DECODE = False
+USE_SORTED = True
+# USE_SORTED = False
+exp_tag = f'robust{"" if USE_SORTED else "_unsort"}'
 EXPERIMENTS_KIN = [
-    'arch/robust/probe',
+    f'arch/{exp_tag}/probe',
 ]
 EXPERIMENTS_NLL = [
-    'arch/robust',
-    'arch/robust/tune',
+    f'arch/{exp_tag}',
+    f'arch/{exp_tag}/tune',
 ]
 
 queries = [
+    'single_f8',
+    'f8',
+    'subject_f8',
+    'task_f8',
     'single_time',
     'single_f32',
     'f32',
@@ -44,12 +51,18 @@ queries = [
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
     "config.dataset.scale_limit_per_eval_session": 300,
+    "state": {"$in": ['finished']},
 })
 runs_nll = wandb_query_experiment(EXPERIMENTS_NLL, order='created_at', **{
     "config.dataset.scale_limit_per_eval_session": 300,
+    "state": {"$in": ['finished']},
 })
-#%%
-# print([r.name for r in runs])
+# %%
+runs_kin = [r for r in runs_kin if r.name.split('-')[0] in queries]
+runs_nll = [r for r in runs_nll if r.name.split('-')[0] in queries]
+print([r.name for r in runs_nll])
+print(len(runs_nll))
+print(len(runs_kin)) # 4 * 5 * 3
 # runs_kin = runs_kin[:10]
 # runs_nll = runs_nll[:10]
 #%%
@@ -86,10 +99,11 @@ def build_df(runs, mode='nll'):
         dataset.build_context_index()
         data_attrs = dataset.get_data_attrs()
         model = transfer_model(src_model, cfg.model, data_attrs)
-        dataloader = get_dataloader(dataset)
+        dataloader = get_dataloader(dataset, batch_size=16 if cfg.model.neurons_per_token == 8 else 100)
         payload = {
             'variant': variant,
             'dataset': dataset_name,
+            'chunk': run.config['model']['neurons_per_token'],
             'lr': run.config['model']['lr_init'], # swept
         }
         payload[mode] = get_evals(model, dataloader, mode=mode, runs=1 if mode != 'nll' else 8)
@@ -105,7 +119,13 @@ nll_df = build_df(runs_nll, mode='nll')
 df = pd.merge(kin_df, nll_df, on=['variant', 'dataset'], how='outer').fillna(0)
 
 #%%
+# Meta-annotation
+
 source_map = {
+    'single_f8': 'single',
+    'f8': 'session',
+    'subject_f8': 'subject',
+    'task_f8': 'task',
     'task_f32': 'task',
     'task_stitch': 'task',
     'subject_f32': 'subject',
@@ -116,6 +136,10 @@ source_map = {
     'single_time': 'single',
 }
 arch_map = {
+    'single_f8': 'f8',
+    'f8': 'f8',
+    'subject_f8': 'f8',
+    'task_f8': 'f8',
     'task_f32': 'f32',
     'task_stitch': 'stitch',
     'subject_f32': 'f32',
@@ -125,9 +149,18 @@ arch_map = {
     'single_f32': 'f32',
     'single_time': 'time',
 }
-# Meta-annotation
 df['source'] = df['variant'].apply(lambda x: source_map[x])
 df['arch'] = df['variant'].apply(lambda x: arch_map[x])
+
+# https://docs.google.com/spreadsheets/d/1WpmhgttDJY09IxHzZqfHh5e8vozeI9c42o8xLfibEng/edit?usp=sharing
+eRFH_baseline_kin = {
+    'odoherty_rtt-Indy-20160407_02': 0.64575,
+    'odoherty_rtt-Indy-20160627_01': 0.53125,
+    'odoherty_rtt-Indy-20161005_06': 0.484,
+    'odoherty_rtt-Indy-20161026_03': 0.5955,
+    'odoherty_rtt-Indy-20170131_02': 0.5113,
+}
+
 #%%
 # print(df)
 # print(kin_df.columns)
@@ -147,16 +180,6 @@ ax = sns.barplot(
 # rotate x labels
 for item in ax.get_xticklabels():
     item.set_rotation(45)
-
-#%%
-# https://docs.google.com/spreadsheets/d/1WpmhgttDJY09IxHzZqfHh5e8vozeI9c42o8xLfibEng/edit?usp=sharing
-eRFH_baseline_kin = {
-    'odoherty_rtt-Indy-20160407_02': 0.64575,
-    'odoherty_rtt-Indy-20160627_01': 0.53125,
-    'odoherty_rtt-Indy-20161005_06': 0.484,
-    'odoherty_rtt-Indy-20161026_03': 0.5955,
-    'odoherty_rtt-Indy-20170131_02': 0.5113,
-}
 
 #%%
 ax = prep_plt()
