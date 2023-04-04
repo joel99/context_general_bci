@@ -1,5 +1,6 @@
 from typing import Optional, List, Any, Dict, Mapping
 import torch
+from torch import Tensor
 import torch.nn as nn
 from torch.nn import init
 import torch.nn.functional as F
@@ -11,6 +12,43 @@ from config import TransformerConfig, ModelConfig
 from data import DataAttrs, MetaKey
 
 logger = logging.getLogger(__name__)
+
+class FlippedDecoderLayer(nn.TransformerDecoderLayer):
+    r"""
+        We perform cross-attn then self-attn rather than self-attn then cross-attn.
+        Intuition is that the initial self-attn in a non-sequential decode is useless (no information to change...)
+        And these decoder layers are often thin in our experiments.
+        So don't waste like 25 or 50% of the parameters.
+    """
+    def forward(self, tgt: Tensor, memory: Tensor, tgt_mask: Optional[Tensor] = None, memory_mask: Optional[Tensor] = None,
+                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
+        r"""Pass the inputs (and mask) through the decoder layer.
+
+        Args:
+            tgt: the sequence to the decoder layer (required).
+            memory: the sequence from the last layer of the encoder (required).
+            tgt_mask: the mask for the tgt sequence (optional).
+            memory_mask: the mask for the memory sequence (optional).
+            tgt_key_padding_mask: the mask for the tgt keys per batch (optional).
+            memory_key_padding_mask: the mask for the memory keys per batch (optional).
+
+        Shape:
+            see the docs in Transformer class.
+        """
+        # see Fig. 1 of https://arxiv.org/pdf/2002.04745v1.pdf
+
+        x = tgt
+        if self.norm_first:
+            x = x + self._mha_block(self.norm2(x), memory, memory_mask, memory_key_padding_mask)
+            x = x + self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask)
+            x = x + self._ff_block(self.norm3(x))
+        else:
+            x = self.norm2(x + self._mha_block(x, memory, memory_mask, memory_key_padding_mask))
+            x = self.norm1(x + self._sa_block(x, tgt_mask, tgt_key_padding_mask))
+            x = self.norm3(x + self._ff_block(x))
+
+        return x
+
 
 class ReadinMatrix(nn.Module):
     r"""
@@ -244,7 +282,7 @@ class SpaceTimeTransformer(nn.Module):
         super().__init__()
         self.cfg = config
         # self.encoder = torch.jit.script( # In a basic timing test, this didn't appear faster. Built-in transformer likely already very fast.
-        layer_cls = nn.TransformerEncoderLayer if context_integration == 'in_context' else nn.TransformerDecoderLayer
+        layer_cls = nn.TransformerEncoderLayer if context_integration == 'in_context' else FlippedDecoderLayer
         enc_cls = nn.TransformerEncoder if context_integration == 'in_context' else nn.TransformerDecoder
         self.cross_attn_enabled = context_integration == 'cross_attn'
 

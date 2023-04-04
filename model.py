@@ -90,6 +90,7 @@ class BrainBertInterface(pl.LightningModule):
 
         for safe_attr in [
             'decoder_layers', # ! assuming we're freshly initializing, this is kind of not safe
+            'decoder_context_integration', # ^
             'dropout',
             'weight_decay',
             'causal',

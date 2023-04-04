@@ -12,4 +12,4 @@ model:
   task:
     decode_time_pool: ""
   decoder_layers: 1
-inherit_exp: f32
+inherit_tag: f32

@@ -7,11 +7,11 @@ defaults:
   - /dataset: flat
   - /train: single_session_exp1
 model:
-  decoder_context_integration: 'cross_attn'
+  # decoder_context_integration: 'cross_attn'
   causal: true
   subject_embed_strategy: EmbedStrat.token
   task:
-    decode_time_pool: ""
+    # decode_time_pool: ""
     mask_ratio: 0.5
   neurons_per_token: 32
 dataset:
