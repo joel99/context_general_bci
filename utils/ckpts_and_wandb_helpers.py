@@ -117,7 +117,10 @@ r"""
 def get_wandb_lineage(cfg: RootConfig):
     assert cfg.inherit_exp, "Must specify experiment set to inherit from"
     api = wandb.Api()
-    lineage_query = cfg.tag
+    if cfg.inherit_tag:
+        lineage_query = cfg.inherit_tag
+    else:
+        lineage_query = cfg.tag
     if 'sweep' in lineage_query:
         # find sweep and truncate
         lineage_query = lineage_query[:lineage_query.find('sweep')-1] # - m-dash

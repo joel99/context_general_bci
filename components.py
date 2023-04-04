@@ -233,17 +233,20 @@ class SpaceTimeTransformer(nn.Module):
         self,
         config: TransformerConfig,
         max_spatial_tokens: int = 0,
+        # Several of these later parameters are here bc they are different in certain decode flows
         n_layers: int = 0, # override
         allow_embed_padding=False,
         debug_override_dropout_in=False,
         debug_override_dropout_out=False,
+        context_integration='in_context',
+        embed_space=True,
     ):
         super().__init__()
         self.cfg = config
         # self.encoder = torch.jit.script( # In a basic timing test, this didn't appear faster. Built-in transformer likely already very fast.
-        layer_cls = nn.TransformerEncoderLayer if getattr(self.cfg,'context_integration', 'in_context') == 'in_context' else nn.TransformerDecoderLayer
-        enc_cls = nn.TransformerEncoder if getattr(self.cfg,'context_integration', 'in_context') == 'in_context' else nn.TransformerDecoder
-        self.cross_attn_enabled = getattr(self.cfg,'context_integration', 'in_context') == 'cross_attn'
+        layer_cls = nn.TransformerEncoderLayer if context_integration == 'in_context' else nn.TransformerDecoderLayer
+        enc_cls = nn.TransformerEncoder if context_integration == 'in_context' else nn.TransformerDecoder
+        self.cross_attn_enabled = context_integration == 'cross_attn'
 
         enc_layer = layer_cls(
             self.cfg.n_state,
@@ -282,7 +285,8 @@ class SpaceTimeTransformer(nn.Module):
         # And implement token level etc.
         # if self.cfg.fixup_init:
         #     self.fixup_initialization()
-        if self.cfg.transform_space and self.cfg.embed_space:
+        self.embed_space = embed_space
+        if self.cfg.transform_space and self.embed_space:
             n_space = max_spatial_tokens if max_spatial_tokens else self.cfg.max_spatial_tokens
             if allow_embed_padding:
                 self.space_encoder = nn.Embedding(n_space + 1, self.cfg.n_state, padding_idx=n_space)
@@ -312,7 +316,7 @@ class SpaceTimeTransformer(nn.Module):
         return self.cfg.n_state
 
     @staticmethod
-    def generate_square_subsequent_mask_from_times(times: torch.Tensor) -> torch.Tensor:
+    def generate_square_subsequent_mask_from_times(times: torch.Tensor, ref_times: Optional[torch.Tensor] = None) -> torch.Tensor:
         r"""
             Generate a square mask for the sequence. The masked positions are filled with float('-inf').
             Unmasked positions are filled with float(0.0).
@@ -321,8 +325,10 @@ class SpaceTimeTransformer(nn.Module):
 
             out: B x T x T
         """
+        if ref_times is None:
+            ref_times = times
         return torch.where(
-            times[:, :, None] >= times[:, None, :],
+            times[:, :, None] >= ref_times[:, None, :],
             0.0, float('-inf')
         )
 
@@ -336,6 +342,9 @@ class SpaceTimeTransformer(nn.Module):
         causal: bool=True,
         times: Optional[torch.Tensor] = None, # for flat spacetime path, B x Token
         positions: Optional[torch.Tensor] = None, # for flat spacetime path
+        memory: Optional[torch.Tensor] = None, # memory as other context if needed for covariate decoder flow
+        memory_times: Optional[torch.Tensor] = None, # solely for causal masking, not for re-embedding
+        memory_padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor: # T B H
         r"""
             Each H is a token to be transformed with other T x A tokens.
@@ -349,7 +358,7 @@ class SpaceTimeTransformer(nn.Module):
         # === Embeddings ===
         if self.cfg.flat_encoder:
             src = src + self.time_encoder(times)
-            if self.cfg.embed_space:
+            if self.embed_space:
                 src = src + self.space_encoder(positions)
             b, t, s = src.size(0), src.size(1), 1 # it's implied that codepaths get that "space" is not really 1, but it's not used
             has_array_dim = False
@@ -372,7 +381,7 @@ class SpaceTimeTransformer(nn.Module):
             else:
                 time_embed = rearrange(self.time_encoder(src), 'b t h -> b t 1 h')
             src = src + time_embed
-            if self.cfg.transform_space and self.cfg.embed_space:
+            if self.cfg.transform_space and self.embed_space:
                 # likely space will soon be given as input or pre-embedded, for now assume range
                 if self.space_encoder is not None:
                     if positions is not None:
@@ -397,6 +406,7 @@ class SpaceTimeTransformer(nn.Module):
                 if self.cfg.flat_encoder:
                     src_mask = SpaceTimeTransformer.generate_square_subsequent_mask_from_times(times)
                 else:
+                    assert not self.cross_attn_enabled, "Causal non-flat not supported with cross attention"
                     src_mask = nn.Transformer.generate_square_subsequent_mask(t, device=src.device)
                     # Add array dimension
                     # this tiles such that the flat (t x a) tokens should be t1a1, t1a2, t2a1, t2a2, etc.
@@ -578,7 +588,35 @@ class SpaceTimeTransformer(nn.Module):
             # Suggested fix: pad value set to something nonzero. (IDR why we didn't set that in the first place, I think concerns about attending to sub-chunk padding?)
             # import pdb;pdb.set_trace()
             if self.cross_attn_enabled:
-                output = self.transformer_encoder(contextualized_src, trial_context, tgt_mask=src_mask, tgt_key_padding_mask=padding_mask)
+                if memory is None:
+                    memory = trial_context
+                else:
+                    memory = torch.cat([memory, trial_context], dim=1)
+                if memory_times is None: # No mask needed for context only
+                    memory_mask = None
+                else: # This is the covariate decode path
+                    memory_mask = SpaceTimeTransformer.generate_square_subsequent_mask_from_times(
+                        times, memory_times
+                    )
+                    memory_mask = torch.cat([memory_mask, torch.zeros(
+                        (memory_mask.size(0), contextualized_src.size(1), trial_context.size(1)),
+                        dtype=torch.float, device=memory_mask.device
+                    )], dim=-1)
+                    memory_mask = repeat(memory_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
+                    if memory_padding_mask is not None:
+                        memory_padding_mask = torch.cat([
+                            memory_padding_mask,
+                            torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)
+                        ], 1)
+
+                output = self.transformer_encoder(
+                    contextualized_src,
+                    memory,
+                    tgt_mask=src_mask,
+                    tgt_key_padding_mask=padding_mask,
+                    memory_mask=memory_mask,
+                    memory_key_padding_mask=memory_padding_mask
+                )
             else:
                 output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
             output = output[:, : t * s]

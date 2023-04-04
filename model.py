@@ -62,7 +62,9 @@ class BrainBertInterface(pl.LightningModule):
             self.backbone = SpaceTimeTransformer(
                 self.cfg.transformer,
                 max_spatial_tokens=data_attrs.max_spatial_tokens,
-                debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
+                debug_override_dropout_out=cfg.transformer.debug_override_dropout_io,
+                context_integration=getattr(cfg.transformer, 'context_integration', 'in_context'),
+                embed_space=cfg.transformer.embed_space,
             )
         self.bind_io()
         self.novel_params: List[str] = [] # for fine-tuning

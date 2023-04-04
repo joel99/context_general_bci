@@ -7,9 +7,11 @@ defaults:
   - /dataset: flat
   - /train: single_session_exp1
 model:
+  decoder_context_integration: 'cross_attn'
   causal: true
   subject_embed_strategy: EmbedStrat.token
   task:
+    decode_time_pool: ""
     mask_ratio: 0.5
   neurons_per_token: 32
 dataset:
@@ -18,6 +20,9 @@ dataset:
   - odoherty_rtt-Indy-20160407_02
   eval_datasets:
   - odoherty_rtt-Indy-20160407_02 # First indy session
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
   eval_ratio: 0.1 # used smaller since not all sessions have (1/0.5) * 300 trials
 
 # train:

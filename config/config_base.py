@@ -195,6 +195,7 @@ class ModelConfig:
     encode_decode: bool = False # If true, split model into encode-decode pathways per Kaiming's scaling vision/video papers.
     # This is a master flag, and changes a few pathways
     decoder_layers: int = 2
+    decoder_context_integration: str = "in_context" # only implemented for behavior atm
     # 1. makes masking shuffle-based
 
     half_precision: bool = True
@@ -508,6 +509,7 @@ class RootConfig:
     init_tag: str = "val_loss"
 
     inherit_exp: str = "" # hunt wandb for the relevant experiment, presumed same tag name.
+    inherit_tag: str = "" # override same tag inheritance
     # use_ckpt_model_cfg: bool = False
 
 

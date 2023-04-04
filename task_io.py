@@ -469,7 +469,9 @@ class ShuffleInfill(RatePrediction):
             cfg.transformer,
             max_spatial_tokens=data_attrs.max_spatial_tokens,
             n_layers=cfg.decoder_layers,
-            debug_override_dropout_in=getattr(cfg.transformer, 'debug_override_dropout_io', False)
+            debug_override_dropout_in=getattr(cfg.transformer, 'debug_override_dropout_io', False),
+            context_integration=getattr(cfg.transformer, 'context_integration', 'in_context'),
+            embed_space=cfg.transformer.embed_space,
         )
         self.max_spatial = data_attrs.max_spatial_tokens
         self.causal = cfg.causal
@@ -483,7 +485,7 @@ class ShuffleInfill(RatePrediction):
             self.mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
 
         # * Redundant implementation with decode_separate: False path in HeldoutPrediction... scrap at some point
-        self.joint_heldout = getattr(self.cfg, 'query_heldout', 0) and not ModelTask.heldout_decoding in self.cfg.tasks
+        self.joint_heldout = self.cfg.query_heldout and not ModelTask.heldout_decoding in self.cfg.tasks
         if self.joint_heldout:
             self.heldout_mask_token = nn.Parameter(torch.randn(cfg.hidden_size))
             self.query_readout = RatePrediction.create_linear_head(cfg, cfg.hidden_size, self.cfg.query_heldout)
@@ -749,11 +751,11 @@ class TemporalTokenInjector(nn.Module):
         In held-out case, I'm routing update in `ShuffleInfill` update
     """
     def __init__(
-        self, cfg: ModelConfig, data_attrs: DataAttrs, reference: DataKey
+        self, cfg: ModelConfig, data_attrs: DataAttrs, reference: DataKey, force_zero_mask=False
     ):
         super().__init__()
         self.reference = reference
-        if getattr(cfg, 'force_zero_mask', False):
+        if force_zero_mask:
             self.register_buffer('cls_token', torch.zeros(cfg.hidden_size))
         else:
             self.cls_token = nn.Parameter(torch.randn(cfg.hidden_size))
@@ -845,9 +847,12 @@ class HeldoutPrediction(RatePrediction):
                     cfg.transformer,
                     max_spatial_tokens=0, # Assume pooling
                     n_layers=cfg.decoder_layers,
-                    allow_embed_padding=True
+                    allow_embed_padding=True,
+                    # TODO update these, deprecate allow_embed_padding
+                    context_integration=getattr(cfg.transformer, 'context_integration', 'in_context'),
+                    embed_space=cfg.transformer.embed_space,
                 )
-            self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes)
+            self.injector = TemporalTokenInjector(cfg, data_attrs, DataKey.heldout_spikes, force_zero_mask=cfg.force_zero_mask)
             self.out = RatePrediction.create_linear_head(cfg, cfg.hidden_size, cfg.task.query_heldout)
 
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
@@ -982,7 +987,8 @@ class BehaviorRegression(TaskPipeline):
                     nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)
                 )
         elif self.cfg.decode_strategy == EmbedStrat.token:
-            self.injector = TemporalTokenInjector(cfg, data_attrs, self.cfg.behavior_target)
+            self.decode_cross_attn = getattr(cfg, 'decoder_context_integration', 'in_context') == 'cross_attn'
+            self.injector = TemporalTokenInjector(cfg, data_attrs, self.cfg.behavior_target, force_zero_mask=cfg.force_zero_mask or self.decode_cross_attn)
             self.time_pad = cfg.transformer.max_trial_length
             if self.cfg.decode_separate:
                 # This is more aesthetic flow, but both encode-only and this strategy seems to overfit.
@@ -991,6 +997,8 @@ class BehaviorRegression(TaskPipeline):
                     max_spatial_tokens=0,
                     n_layers=cfg.decoder_layers,
                     allow_embed_padding=True,
+                    context_integration=getattr(cfg, 'decoder_context_integration', 'in_context'),
+                    embed_space=not self.decode_cross_attn
                 )
             self.out = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
         self.causal = cfg.causal
@@ -1121,31 +1129,45 @@ class BehaviorRegression(TaskPipeline):
                     else:
                         src_space = torch.zeros_like(batch[DataKey.position])
                 if self.causal and self.cfg.behavior_lag_lookahead:
-                    decode_time = decode_time + self.bhvr_lag_bins # allow-looking N bins of neural data into the future -- which is technically still the present
-
+                    # allow looking N-bins of neural data into the "future"; we back-shift during the actual decode comparison.
+                    decode_time = decode_time + self.bhvr_lag_bins
                 if self.spacetime:
-                    decoder_input = torch.cat([backbone_features, decode_tokens], dim=1)
-                    # Ok, this is subtle
-                    # We need to pass in actual times to dictate the attention mask
-                    # But we don't want to trigger position embedding (per se)
-                    # This is ANNOYING!!!
-                    # Simple solution is to just re-allow position embedding.
-                    times = torch.cat([src_time, decode_time], dim=1)
-                    # times = torch.cat([torch.full_like(batch[DataKey.time], self.time_pad), decode_time], dim=1)
-                    positions = torch.cat([src_space, decode_space], dim=1)
-                    if temporal_padding_mask is not None:
-                        extra_padding_mask = create_temporal_padding_mask(decode_tokens, batch, length_key=COVARIATE_LENGTH_KEY)
-                        temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
+                    if self.decode_cross_attn:
+                        decoder_input = decode_tokens
+                        times = decode_time
+                        positions = decode_space
+                        other_kwargs = {
+                            'memory': backbone_features,
+                            'memory_times': src_time,
+                            'memory_padding_mask': temporal_padding_mask,
+                        }
+                        if temporal_padding_mask is not None:
+                            temporal_padding_mask = create_temporal_padding_mask(decode_tokens, batch, length_key=COVARIATE_LENGTH_KEY)
+                    else:
+                        decoder_input = torch.cat([backbone_features, decode_tokens], dim=1)
+                        times = torch.cat([src_time, decode_time], dim=1)
+                        # Ok, this is subtle
+                        # We need to pass in actual times to dictate the attention mask
+                        # But we don't want to trigger position embedding (per se)
+                        # This is ANNOYING!!!
+                        # Simple solution is to just re-allow position embedding.
+                        # times = torch.cat([torch.full_like(batch[DataKey.time], self.time_pad), decode_time], dim=1)
+                        positions = torch.cat([src_space, decode_space], dim=1)
+                        if temporal_padding_mask is not None:
+                            extra_padding_mask = create_temporal_padding_mask(decode_tokens, batch, length_key=COVARIATE_LENGTH_KEY)
+                            temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
+                        other_kwargs = {}
                 else:
                     decoder_input, _ = pack([backbone_features, decode_tokens], 'b t * h') # add as another space dimension
                     # The assumptions for this path - designed for decode of non-flat models -- are brittle, only for square batches e.g. in cropped RTT.
                     times = None
                     positions = None
                     temporal_padding_mask = None
+                    other_kwargs = {}
                 trial_context = []
                 for key in ['session', 'subject', 'task']:
                     if key in batch and batch[key] is not None:
-                        trial_context.append(batch[key].detach()) # Provide context, but hey, let's not make it easier for the model to steer the unsupervised-calibrated context
+                        trial_context.append(batch[key].detach()) # Provide context, but hey, let's not make it easier for the decoder to steer the unsupervised-calibrated context
                 backbone_features: torch.Tensor = self.decoder(
                     decoder_input,
                     temporal_padding_mask=temporal_padding_mask,
@@ -1154,15 +1176,17 @@ class BehaviorRegression(TaskPipeline):
                     positions=positions,
                     space_padding_mask=None, # (low pri)
                     causal=self.causal,
+                    **other_kwargs
                 )
             # crop out injected tokens, -> B T H
             if self.spacetime:
-                backbone_features = self.injector.extract(batch, backbone_features)
+                if not self.decode_cross_attn:
+                    backbone_features = self.injector.extract(batch, backbone_features)
             else:
                 backbone_features = backbone_features[...,-1, :]
         elif self.cfg.decode_strategy == EmbedStrat.project: # linear
             temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
-            if getattr(self.cfg, 'decode_time_pool', "") and DataKey.time in batch: # B T H -> B T H
+            if self.cfg.decode_time_pool and DataKey.time in batch: # B T H -> B T H
                 backbone_features, temporal_padding_mask = temporal_pool(batch, backbone_features, temporal_padding_mask, pool=self.cfg.decode_time_pool)
         bhvr = self.out(backbone_features)
         if self.bhvr_lag_bins:
@@ -1198,7 +1222,7 @@ class BehaviorRegression(TaskPipeline):
             session_mask = batch[MetaKey.session] != self.session_blacklist[0]
             for sess in self.session_blacklist[1:]:
                 session_mask = session_mask & (batch[MetaKey.session] != sess)
-            if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
+            if self.cfg.adversarial_classify_lambda:
                 logits = self.blacklist_classifier(backbone_features)[..., 0]
                 blacklist_loss = self.blacklist_loss(logits, repeat((~session_mask).float(), 'b -> b t', t=backbone_features.shape[1]))
                 blacklist_loss = blacklist_loss[loss_mask].mean()
@@ -1208,14 +1232,14 @@ class BehaviorRegression(TaskPipeline):
                 loss = 0 # don't fail
             else:
                 loss = loss[loss_mask].mean()
-            if getattr(self.cfg, 'adversarial_classify_lambda', 0.0):
+            if self.cfg.adversarial_classify_lambda:
                 # print(f'loss: {loss:.3f}, blacklist loss: {blacklist_loss:.3f}, total = {(loss - (blacklist_loss) * self.cfg.adversarial_classify_lambda):.3f}')
                 loss += (-1 * blacklist_loss) * self.cfg.adversarial_classify_lambda # adversarial
         else:
             loss = loss[loss_mask].mean()
 
 
-        if getattr(self.cfg, 'kl_lambda', 0.0):
+        if self.cfg.kl_lambda:
             loss = loss + self.cfg.kl_lambda * batch_out['alignment_kl']
 
         batch_out['loss'] = loss
