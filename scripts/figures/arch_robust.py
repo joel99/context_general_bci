@@ -47,6 +47,8 @@ queries = [
     'subject_stitch',
     'task_f32',
     'task_stitch',
+    'time',
+    'stitch_96',
 ]
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
@@ -136,6 +138,8 @@ source_map = {
     'stitch': 'session',
     'single_f32': 'single',
     'single_time': 'single',
+    'time': 'session',
+    'stitch_96': 'session',
 }
 arch_map = {
     'single_f8': 'f8',
@@ -150,6 +154,8 @@ arch_map = {
     'stitch': 'stitch',
     'single_f32': 'f32',
     'single_time': 'time',
+    'time': 'time',
+    'stitch_96': 'stitch',
 }
 df['source'] = df['variant'].apply(lambda x: source_map[x])
 df['arch'] = df['variant'].apply(lambda x: arch_map[x])

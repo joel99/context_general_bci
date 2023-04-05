@@ -135,7 +135,7 @@ def get_wandb_lineage(cfg: RootConfig):
         }
     )
     if len(runs) == 0:
-        raise ValueError(f"No wandb runs found for experiment set {cfg.experiment_set} and tag {cfg.tag}")
+        raise ValueError(f"No wandb runs found for experiment set {cfg.inherit_exp} and tag {cfg.tag}")
     # Basic sanity checks on the loaded checkpoint
     # check runtime
     if runs[0].summary.get("_runtime", 0) < 1 * 60: # (seconds)

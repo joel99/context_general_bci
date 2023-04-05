@@ -6,6 +6,7 @@ dataset:
   scale_limit: 4000
 train:
   autoscale_batch_size: false
-  batch_size: 256
+  accumulate_batches: 2
+  batch_size: 128
 model:
   hidden_size: 256

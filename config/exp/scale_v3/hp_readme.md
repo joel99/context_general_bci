@@ -9,3 +9,6 @@ Equivalent experiments (that we can save running):
 - `session/s20k_h256`, use `exp/arch/robust_unsort/f32`
 - `subject/s20k_h256`, use `exp/arch/robust_unsort/subject_f32`
 - `task/s20k_h256`, use `exp/arch/robust_unsort/task_f32`
+
+The size incremental pretrain shows minimal benefit from scaling model size, so we jointly increase...
+- And we take the _smaller_ size for any given data scale.

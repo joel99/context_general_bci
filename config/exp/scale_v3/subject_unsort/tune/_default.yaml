@@ -19,6 +19,6 @@ dataset:
   - odoherty_rtt-Indy-20170131_02 #  814 trials
   - odoherty_rtt-Indy-20160627_01 # 3364s
 fragment_datasets: True
-inherit_exp: scale_v3/session
+inherit_exp: scale_v3/subject_unsort
 
 # ? Should I have this config outside?
