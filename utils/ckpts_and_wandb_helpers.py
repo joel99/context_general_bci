@@ -142,3 +142,18 @@ def get_wandb_lineage(cfg: RootConfig):
         raise ValueError(f"InheritError: Run {runs[0].id} abnormal runtime {runs[0].summary.get('_runtime', 0)}")
 
     return runs[0] # auto-sorts to newest
+
+def wandb_run_exists(cfg: RootConfig, experiment_set: str="", tag: str="", **other_overrides):
+    if not cfg.experiment_set:
+        return False
+    api = wandb.Api()
+    runs = api.runs(
+        f"{cfg.wandb_user}/{cfg.wandb_project}",
+        filters={
+            "config.experiment_set": experiment_set if experiment_set else cfg.experiment_set,
+            "config.tag": tag if tag else cfg.tag,
+            "state": {"$in": ["finished"]},
+            **other_overrides,
+        }
+    )
+    return len(runs) > 0

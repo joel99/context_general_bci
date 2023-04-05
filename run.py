@@ -31,7 +31,13 @@ from config import RootConfig, Metric, hp_sweep_space, propagate_config
 from data import SpikingDataset, SpikingDataModule
 from model import BrainBertInterface, load_from_checkpoint
 from callbacks import ProbeToFineTuneEarlyStopping
-from utils import generate_search, grid_search, get_best_ckpt_from_wandb_id, get_wandb_lineage
+from utils import (
+    generate_search,
+    grid_search,
+    get_best_ckpt_from_wandb_id,
+    get_wandb_lineage,
+    wandb_run_exists
+)
 
 r"""
     For this script
@@ -61,11 +67,35 @@ def init_wandb(cfg, wandb_logger):
     #     wandb.init(project=cfg.wandb_project) # for some reason wandb changed and now I need a declaration
     _ = wandb_logger.experiment # force experiment recognition so that id is initialized
 
-def launcher(init_args, additional_cli_flags, meta_flags):
+def launcher(cfg: RootConfig, init_args, additional_cli_flags, meta_flags):
     if 'mind' in socket.gethostname():
         launch_script = 'launch.sh'
     else:
         launch_script = './crc_scripts/launch_1080.sh' # assumed tiny runs if on crc?
+    assembled_flags = [*init_args, *additional_cli_flags, *meta_flags]
+    unique_flags = []
+    seen_keys = []
+    for flag in assembled_flags:
+        if "=" not in flag or flag.startswith('+'):
+            unique_flags.append(flag)
+        else:
+            flag_name = flag.split('=')[0]
+            if flag_name not in seen_keys:
+                unique_flags.append(flag)
+                seen_keys.append(flag_name)
+
+    # Check existence
+    flag_dict = {flag.split('=')[0]: flag.split('=')[1] for flag in unique_flags if '=' in flag}
+    # non_key_dict = {flag for }
+    if wandb_run_exists(
+        cfg,
+        experiment_set=flag_dict['experiment_set'] if 'experiment_set' in flag_dict else "",
+        tag=flag_dict['tag'] if 'tag' in flag_dict else "",
+    ):
+    # Check for existence of experiment set and tag in assembled flags
+    # TODO need to make unique
+    # TODO need to propagate the latest overrides to the check (i.e. those in meta_flags)
+
     subprocess.run(['sbatch', launch_script, *init_args, *additional_cli_flags, *meta_flags])
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
@@ -141,6 +171,10 @@ def run_exp(cfg : RootConfig) -> None:
         else:
             for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
                 run_cfg(cfg_trial)
+        exit(0)
+
+    if cfg.cancel_if_run_exists and wandb_run_exists(cfg):
+        logging.info(f"Wandb run {cfg.tag} already exists, aborting.")
         exit(0)
 
     propagate_config(cfg)
