@@ -108,6 +108,7 @@ def launcher(cfg: RootConfig, init_args, additional_cli_flags, meta_flags):
     ):
         logging.info(f"Skipping {flag_dict['tag']} because it already exists.")
         return
+    print('launching: ', ' '.join(unique_flags))
     subprocess.run(['sbatch', launch_script, *unique_flags])
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
@@ -362,6 +363,18 @@ def run_exp(cfg : RootConfig) -> None:
         ckpt_path=get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )
     logger.info('Run complete')
+    if cfg.successor_exp:
+        logger.info(f"Running successor experiment {cfg.successor_exp}")
+        # Find current filename, and locate in successor dir
+        init_call = sys.argv
+        init_args = init_call[init_call.index('run.py')+1:]
+        init_args = [x for x in init_args if not x.startswith('+exp/')]
+        exp_arg = f'+exp/{cfg.successor_exp}={cfg.tag}'
+        meta_flags = {
+            'successor_exp': cfg.successor_exp[1:],
+        }
+        launcher(cfg, exp_arg, init_args, meta_flags)
+
 
 if __name__ == '__main__':
     run_exp()

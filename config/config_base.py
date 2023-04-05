@@ -509,11 +509,16 @@ class RootConfig:
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
     init_tag: str = "val_loss"
 
+    # orchestration
     inherit_exp: str = "" # hunt wandb for the relevant experiment, presumed same tag name.
     inherit_tag: str = "" # override same tag inheritance
 
     cancel_if_run_exists: bool = True # since codebase is fairly stable now - if same config/tag exists on wandb, do not run.
     # Only checked if `inherit_exp` is set i.e. part of chain of runs. See `ckpts_and_wandb_helpers/wandb_run_exists`
+
+    successor_exp: List[str] = field(
+        default_factory=lambda: []
+    ) # if set, will run this experiment after this one finishes. See `ckpts_and_wandb_helpers/wandb_run_exists
 
     # use_ckpt_model_cfg: bool = False
 

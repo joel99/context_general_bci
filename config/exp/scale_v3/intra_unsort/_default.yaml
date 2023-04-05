@@ -21,7 +21,7 @@ dataset:
   # But to save us having to pretrain another set of models, we'll take 3 largest datasets of the 5 used in exp 1
   - odoherty_rtt-Indy-20160407_02 # ~816 trials
   - odoherty_rtt-Indy-20170131_02 #  814 trials
-  # - odoherty_rtt-Indy-20160627_01 # 3364s
+  - odoherty_rtt-Indy-20160627_01 # 3364s
   odoherty_rtt:
     arrays: ['Indy-M1', 'Loco-M1']
     include_sorted: False
