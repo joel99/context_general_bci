@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from pathlib import Path
 import copy
 import subprocess
@@ -358,22 +359,34 @@ def run_exp(cfg : RootConfig) -> None:
         if cfg.train.max_batch_size:
             new_bsz = min(new_bsz, cfg.train.max_batch_size)
         data_module.batch_size = new_bsz
+
     trainer.fit(
         model, datamodule=data_module,
         ckpt_path=get_best_ckpt_from_wandb_id(cfg.wandb_project, cfg.load_from_id) if cfg.load_from_id else None
     )
     logger.info('Run complete')
+
     if cfg.successor_exp:
-        logger.info(f"Running successor experiment {cfg.successor_exp}")
+        wandb.finish()
+        time.sleep(30)
+        logger.info(f"Running successor experiment {cfg.successor_exp[0]}")
         # Find current filename, and locate in successor dir
         init_call = sys.argv
         init_args = init_call[init_call.index('run.py')+1:]
-        init_args = [x for x in init_args if not x.startswith('+exp/')]
-        exp_arg = f'+exp/{cfg.successor_exp}={cfg.tag}'
-        meta_flags = {
-            'successor_exp': cfg.successor_exp[1:],
-        }
-        launcher(cfg, exp_arg, init_args, meta_flags)
+        # wipe sensitive CLI args here
+        def should_refresh(x: str):
+            return x.startswith('+exp/') or x.startswith('inherit_exp') or x.startswith('init_from_id')
+            # successors will infer the fresh exp
+        init_args = [x for x in init_args if not should_refresh(x)]
+        tag_root = cfg.tag
+        if 'frag' in tag_root:
+            tag_root = tag_root[:tag_root.index('frag') - 1]
+        exp_arg = f'+exp/{cfg.successor_exp[0]}={tag_root}'
+        meta_flags = [
+            f"experiment_set={cfg.successor_exp[0]}",
+            f'successor_exp={cfg.successor_exp[1:]}',
+        ]
+        launcher(cfg, [exp_arg], init_args, meta_flags)
 
 
 if __name__ == '__main__':

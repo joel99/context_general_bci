@@ -5,7 +5,7 @@ defaults:
   - /model/task:
     - bhvr_decode_flat
   - /dataset: flat
-  - /train: single_session_exp1
+  - /train: trial100_tune_exp2
 dataset:
   scale_limit_per_eval_session: 100
   eval_ratio: 0.05

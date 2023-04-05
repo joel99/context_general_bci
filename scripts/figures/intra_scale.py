@@ -23,10 +23,19 @@ from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
 pl.seed_everything(0)
 
 UNSORT = True
-UNSORT = False
+# UNSORT = False
+
+DATASET_WHITELIST = [
+    "odoherty_rtt-Indy-20160407_02",
+    "odoherty_rtt-Indy-20170131_02",
+    "odoherty_rtt-Indy-20160627_01",
+]
 
 EXPERIMENTS_NLL = [
     f'scale_v3/intra{"_unsort" if UNSORT else ""}',
+]
+EXPERIMENTS_KIN = [
+    f'scale_v3/intra{"_unsort" if UNSORT else ""}/probe',
 ]
 
 queries = [
@@ -38,10 +47,21 @@ queries = [
     's3200',
 ]
 
+merge_queries = [
+    f'{q}-frag-{d}' for q in queries for d in DATASET_WHITELIST
+]
+
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 runs_nll = wandb_query_experiment(EXPERIMENTS_NLL, order='created_at', **{
-    "state": {"$in": ['finished', 'failed', 'crashed', 'running']},
+    "state": {"$in": ['finished', 'failed', 'crashed']},
+    "config.tag": {"$in": merge_queries},
+    "config.dataset.odoherty_rtt.include_sorted": not UNSORT,
 })
+runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
+    "state": {"$in": ['finished', 'failed', 'crashed']},
+    "config.dataset.odoherty_rtt.include_sorted": not UNSORT,
+})
+runs_kin = [r for r in runs_kin if r.config['dataset']['datasets'][0] in DATASET_WHITELIST and r.name.split('-')[0] in queries]
 
 #%%
 def get_evals(model, dataloader, runs=8, mode='nll'):
@@ -70,16 +90,23 @@ def build_df(runs, mode='nll'):
         variant, _frag, *rest = run.name.split('-')
         src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
         dataset_name = cfg.dataset.datasets[0] # drop wandb ID
+        if dataset_name not in DATASET_WHITELIST:
+            continue
         if (variant, dataset_name, run.config['model']['lr_init']) in seen_set:
             continue
         dataset = SpikingDataset(cfg.dataset)
+        set_limit = run.config['dataset']['scale_limit_per_eval_session']
+        if set_limit == 0:
+            train_dev_dataset = SpikingDataset(cfg.dataset)
+            train_dev_dataset.subset_split()
+            set_limit = len(train_dev_dataset)
         dataset.subset_split(splits=['eval'])
         dataset.build_context_index()
         data_attrs = dataset.get_data_attrs()
         model = transfer_model(src_model, cfg.model, data_attrs)
         dataloader = get_dataloader(dataset)
         payload = {
-            'limit': run.config['dataset']['scale_limit_per_eval_session'],
+            'limit': set_limit,
             'variant': variant,
             'dataset': dataset_name,
             'lr': run.config['model']['lr_init'], # swept

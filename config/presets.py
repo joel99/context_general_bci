@@ -363,3 +363,11 @@ class SingleSessionTrainConfigExp1(TrainConfig):
     batch_size: int = 64
 
 cs.store(group="train", name="single_session_exp1", node=SingleSessionTrainConfigExp1)
+
+@dataclass
+class Trial100TuneConfigExp2(TrainConfig):
+    patience: int = 150
+    autoscale_batch_size: bool = False
+    batch_size: int = 32
+
+cs.store(group="train", name="trial100_tune_exp2", node=Trial100TuneConfigExp2)

@@ -17,6 +17,9 @@ dataset:
   - odoherty_rtt-Indy-20160407_02 # ~816 trials
   - odoherty_rtt-Indy-20170131_02 #  814 trials
   - odoherty_rtt-Indy-20160627_01 # 3364s
+  odoherty_rtt:
+    arrays: ['Indy-M1', 'Loco-M1']
+    include_sorted: False
 fragment_datasets: True
 
 # ? Should I have this config outside?
