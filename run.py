@@ -159,6 +159,8 @@ def run_exp(cfg : RootConfig) -> None:
             limit_per_eval_session=cfg.dataset.scale_limit_per_eval_session,
             keep_index=True
         )
+    elif cfg.dataset.scale_limit:
+        dataset.subset_scale(limit=cfg.dataset.scale_limit, keep_index=True)
     elif cfg.dataset.scale_ratio:
         dataset.subset_scale(ratio=cfg.dataset.scale_ratio, keep_index=True)
     train, val = dataset.create_tv_datasets()

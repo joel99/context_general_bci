@@ -4,6 +4,7 @@ defaults:
   - /model: flat_enc_dec
   - /dataset: flat
   - /train: single_session_exp1
+  - _default
 model:
   hidden_size: 128 # size down appropriately
   causal: true

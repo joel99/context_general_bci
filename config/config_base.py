@@ -374,6 +374,7 @@ class DatasetConfig:
     data_blacklist: str = '' # path to text file with one dataset alias per line to exclude (for a first pass, above is more specific)
 
     scale_ratio: float = 1. # ratio of dataset to use for training (For scaling experiments)
+    scale_limit: int = 0 # >0, limit number of trials (For scaling experiments). Mutually exclusive and override `scale_ratio`
     scale_limit_per_session: int = 0 # >0, limit number of trials per session (For scaling experiments)
     scale_limit_per_eval_session: int = 0 # >0, separately limit number of eval sessions (For scaling experiments)
 

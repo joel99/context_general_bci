@@ -12,5 +12,12 @@ dataset:
   - odoherty_rtt-Indy-20161005_06
   - odoherty_rtt-Indy-20161026_03
   - odoherty_rtt-Indy-20170131_02
+  odoherty_rtt:
+    arrays: ['Indy-M1', 'Loco-M1']
+    include_sorted: False
+model:
+  causal: true
+  task:
+    mask_ratio: 0.5
 inherit_exp: arch/robust_unsort
 fragment_datasets: True

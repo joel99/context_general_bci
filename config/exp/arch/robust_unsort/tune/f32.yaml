@@ -5,8 +5,5 @@ defaults:
   - /dataset: flat
   - _default
 model:
-  causal: true
   subject_embed_strategy: EmbedStrat.token
-  task:
-    mask_ratio: 0.5 # for efficiency
   neurons_per_token: 32

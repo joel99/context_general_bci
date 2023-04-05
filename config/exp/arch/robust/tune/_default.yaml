@@ -7,10 +7,10 @@ dataset:
   scale_limit_per_eval_session: 300
 
   datasets:
-  - odoherty_rtt-Indy-20160407_02 # First indy session
-  - odoherty_rtt-Indy-20160627_01 # Original
-  - odoherty_rtt-Indy-20161005_06
-  - odoherty_rtt-Indy-20161026_03
-  - odoherty_rtt-Indy-20170131_02
+  - odoherty_rtt-Indy-20160407_02 # ~816 trials
+  - odoherty_rtt-Indy-20160627_01 # ~3.3K trials (original)
+  - odoherty_rtt-Indy-20161005_06 # 373
+  - odoherty_rtt-Indy-20161026_03 # ~496 trials
+  - odoherty_rtt-Indy-20170131_02 #  814 trials
 inherit_exp: arch/robust
 fragment_datasets: True

@@ -11,5 +11,4 @@ model:
   readin_compress: False
 dataset:
   max_arrays: 1
-  max_channels: 288
-inherit_exp: arch/robust # task unsort == task sort
+  max_channels: 96

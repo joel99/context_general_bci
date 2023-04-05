@@ -15,7 +15,11 @@ model:
 dataset:
   eval_ratio: 0.05
   datasets:
-  - odoherty_rtt-Indy-20160426_01 # 1764s
-  - odoherty_rtt-Indy-20160622_01 # 2451s
-  - odoherty_rtt-Indy-20160627_01 # 3364s
+  # These two are the biggest and we ran them and it's good to know that they have stable power laws as well
+  # - odoherty_rtt-Indy-20160426_01 # 1764s
+  # - odoherty_rtt-Indy-20160622_01 # 2451s
+  # But to save us having to pretrain another set of models, we'll take 3 largest datasets of the 5 used in exp 1
+  - odoherty_rtt-Indy-20160407_02 # ~816 trials
+  - odoherty_rtt-Indy-20170131_02 #  814 trials
+  # - odoherty_rtt-Indy-20160627_01 # 3364s
 fragment_datasets: True

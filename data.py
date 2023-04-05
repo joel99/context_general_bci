@@ -598,7 +598,7 @@ class SpikingDataset(Dataset):
         else:
             logger.warning("No split column found, assuming all data is train.")
 
-    def subset_scale(self, limit_per_session=0, limit_per_eval_session=0, ratio=1.0, keep_index=False):
+    def subset_scale(self, limit_per_session=0, limit_per_eval_session=0, ratio=1.0, limit=0, keep_index=False):
         # Random scale-down of data
         if limit_per_session > 0 or limit_per_eval_session > 0:
             keys = None
@@ -624,7 +624,13 @@ class SpikingDataset(Dataset):
                 keep_index=keep_index,
                 message_prefix=f"Scale {limit_per_session} per session"
             )
-        if ratio < 1:
+        elif limit > 0:
+            self.subset_by_key(
+                key_values=self.meta_df.sample(limit)[MetaKey.unique],
+                keep_index=keep_index,
+                message_prefix=f"Scale {limit}"
+            )
+        elif ratio < 1:
             self.subset_by_key(
                 key_values=self.meta_df.sample(frac=ratio)[MetaKey.unique],
                 keep_index=keep_index,

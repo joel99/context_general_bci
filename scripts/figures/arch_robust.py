@@ -23,7 +23,8 @@ pl.seed_everything(0)
 
 PLOT_DECODE = False
 USE_SORTED = True
-# USE_SORTED = False
+USE_SORTED = False
+
 exp_tag = f'robust{"" if USE_SORTED else "_unsort"}'
 EXPERIMENTS_KIN = [
     f'arch/{exp_tag}/probe',
@@ -34,10 +35,10 @@ EXPERIMENTS_NLL = [
 ]
 
 queries = [
-    'single_f8',
-    'f8',
-    'subject_f8',
-    'task_f8',
+    # 'single_f8',
+    # 'f8',
+    # 'subject_f8',
+    # 'task_f8',
     'single_time',
     'single_f32',
     'f32',
@@ -51,16 +52,17 @@ queries = [
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
     "config.dataset.scale_limit_per_eval_session": 300,
+    "config.dataset.odoherty_rtt.include_sorted": USE_SORTED,
     "state": {"$in": ['finished']},
 })
 runs_nll = wandb_query_experiment(EXPERIMENTS_NLL, order='created_at', **{
     "config.dataset.scale_limit_per_eval_session": 300,
+    "config.dataset.odoherty_rtt.include_sorted": USE_SORTED,
     "state": {"$in": ['finished']},
 })
 # %%
 runs_kin = [r for r in runs_kin if r.name.split('-')[0] in queries]
 runs_nll = [r for r in runs_nll if r.name.split('-')[0] in queries]
-print([r.name for r in runs_nll])
 print(len(runs_nll))
 print(len(runs_kin)) # 4 * 5 * 3
 # runs_kin = runs_kin[:10]
@@ -211,6 +213,7 @@ ax.text(
     ax.get_xlim()[0] + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.01, mean_baseline, 'rEFH', color='black', ha='left', va='bottom',
     fontsize=14,
 )
+ax.set_title(f'Vel R2 vs NLL ({"Sorted" if USE_SORTED else "Unsorted"})')
 
 #%%
 # make facet grid with model cali
@@ -242,3 +245,5 @@ def deco(data, **kws):
         fontsize=14,
     )
 g.map_dataframe(deco)
+g.fig.suptitle(f'Arch. approaches - Vel R2, NLL ({"Sorted" if USE_SORTED else "Unsorted"})', y=1.05, fontsize=28)
+sns.move_legend(g, "upper left", bbox_to_anchor=(.7, .5), fontsize=20)

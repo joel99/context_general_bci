@@ -11,5 +11,12 @@ model:
   readin_compress: False
 dataset:
   max_arrays: 1
-  max_channels: 288
-inherit_exp: arch/robust # task unsort == task sort
+  max_channels: 96
+  datasets:
+  - odoherty_rtt-Indy.*
+  exclude_datasets:
+  - odoherty_rtt-Indy-20160407_02 # First indy session
+  - odoherty_rtt-Indy-20160627_01 # Original
+  - odoherty_rtt-Indy-20161005_06
+  - odoherty_rtt-Indy-20161026_03
+  - odoherty_rtt-Indy-20170131_02 # Last indy sesison

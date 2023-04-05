@@ -17,7 +17,8 @@ from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStra
 from data import SpikingDataset, DataAttrs
 from model import transfer_model
 
-from analyze_utils import load_wandb_run, wandb_query_experiment
+from analyze_utils import load_wandb_run
+from utils import wandb_query_experiment
 from analyze_utils import prep_plt, get_dataloader, stack_batch
 
 from matplotlib.colors import LogNorm, Normalize
