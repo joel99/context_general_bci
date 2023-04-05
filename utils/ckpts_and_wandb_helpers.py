@@ -143,10 +143,15 @@ def get_wandb_lineage(cfg: RootConfig):
 
     return runs[0] # auto-sorts to newest
 
-def wandb_run_exists(cfg: RootConfig, experiment_set: str="", tag: str="", **other_overrides):
+def wandb_run_exists(cfg: RootConfig, experiment_set: str="", tag: str="", other_overrides: Dict[str, Any] = {}):
+    r"""
+        Intended to do be used within the scope of an auto-launcher.
+        Only as specific as the overrides specify, will be probably too liberal with declaring a run exists if you don't specify enough.
+    """
     if not cfg.experiment_set:
         return False
     api = wandb.Api()
+    print(other_overrides)
     runs = api.runs(
         f"{cfg.wandb_user}/{cfg.wandb_project}",
         filters={

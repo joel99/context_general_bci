@@ -75,7 +75,7 @@ def launcher(cfg: RootConfig, init_args, additional_cli_flags, meta_flags):
     assembled_flags = [*init_args, *additional_cli_flags, *meta_flags]
     unique_flags = []
     seen_keys = []
-    for flag in assembled_flags:
+    for flag in reversed(assembled_flags): # keep latest
         if "=" not in flag or flag.startswith('+'):
             unique_flags.append(flag)
         else:
@@ -83,20 +83,32 @@ def launcher(cfg: RootConfig, init_args, additional_cli_flags, meta_flags):
             if flag_name not in seen_keys:
                 unique_flags.append(flag)
                 seen_keys.append(flag_name)
+    unique_flags = list(reversed(unique_flags)) # back to normal order
 
-    # Check existence
-    flag_dict = {flag.split('=')[0]: flag.split('=')[1] for flag in unique_flags if '=' in flag}
-    # non_key_dict = {flag for }
-    if wandb_run_exists(
+    # Check existence on wandb
+    flag_dict = {flag.split('=')[0]: flag.split('=')[1] for flag in unique_flags if '=' in flag and not flag.startswith('+')}
+    def ignore_key(k): # remove sensitive keys
+        return k in ['experiment_set', 'tag', 'sweep_cfg', 'dataset.datasets', 'dataset.eval_datasets', 'inherit_exp']
+    def sanitize_value(v: str):
+        # Cast if possible
+        try:
+            return float(v)
+        except:
+            if v in ['True', 'False']:
+                return v == 'True'
+            else:
+                return v
+
+    config_dict = {f'config.{k}': sanitize_value(v) for k, v in flag_dict.items() if not ignore_key(k)}
+    if cfg.cancel_if_run_exists and wandb_run_exists(
         cfg,
         experiment_set=flag_dict['experiment_set'] if 'experiment_set' in flag_dict else "",
         tag=flag_dict['tag'] if 'tag' in flag_dict else "",
+        other_overrides=config_dict
     ):
-    # Check for existence of experiment set and tag in assembled flags
-    # TODO need to make unique
-    # TODO need to propagate the latest overrides to the check (i.e. those in meta_flags)
-
-    subprocess.run(['sbatch', launch_script, *init_args, *additional_cli_flags, *meta_flags])
+        logging.info(f"Skipping {flag_dict['tag']} because it already exists.")
+        return
+    subprocess.run(['sbatch', launch_script, *unique_flags])
 
 @hydra.main(version_base=None, config_path='config', config_name="config")
 def run_exp(cfg : RootConfig) -> None:
@@ -136,7 +148,7 @@ def run_exp(cfg : RootConfig) -> None:
                 f'inherit_exp={cfg.inherit_exp}', # propagate the following sensitive pieces
                 f'init_from_id={cfg.init_from_id}' # propagate the following sensitive pieces
             ]
-            launcher(init_args, additional_cli_flags, meta_flags)
+            launcher(cfg, init_args, additional_cli_flags, meta_flags)
 
         for dataset in cfg.dataset.datasets:
             cfg_trial = {'dataset.datasets': [dataset], 'dataset.eval_datasets': [dataset]}
@@ -163,7 +175,7 @@ def run_exp(cfg : RootConfig) -> None:
             ]
             # subprocess.run(['./launch_dummy.sh', *init_args, *additional_cli_flags, *meta_flags])
             # subprocess.run(['sbatch', './crc_scripts/launch.sh', *init_args, *additional_cli_flags, *meta_flags])
-            launcher(init_args, additional_cli_flags, meta_flags)
+            launcher(cfg, init_args, additional_cli_flags, meta_flags)
         if cfg.sweep_mode == 'grid':
             # Create a list of dicts from the cross product of the sweep config
             for cfg_trial in grid_search(sweep_cfg):
@@ -171,10 +183,6 @@ def run_exp(cfg : RootConfig) -> None:
         else:
             for cfg_trial in generate_search(sweep_cfg, cfg.sweep_trials):
                 run_cfg(cfg_trial)
-        exit(0)
-
-    if cfg.cancel_if_run_exists and wandb_run_exists(cfg):
-        logging.info(f"Wandb run {cfg.tag} already exists, aborting.")
         exit(0)
 
     propagate_config(cfg)
