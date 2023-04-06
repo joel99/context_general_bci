@@ -33,9 +33,15 @@ DATASET_WHITELIST = [
 
 EXPERIMENTS_NLL = [
     f'scale_v3/intra{"_unsort" if UNSORT else ""}',
+    f'scale_v3/session{"_unsort" if UNSORT else ""}/tune',
+    f'scale_v3/subject{"_unsort" if UNSORT else ""}/tune',
+    f'scale_v3/task{"_unsort" if UNSORT else ""}/tune',
 ]
 EXPERIMENTS_KIN = [
     f'scale_v3/intra{"_unsort" if UNSORT else ""}/probe',
+    f'scale_v3/session{"_unsort" if UNSORT else ""}/probe',
+    f'scale_v3/subject{"_unsort" if UNSORT else ""}/probe',
+    f'scale_v3/task{"_unsort" if UNSORT else ""}/probe',
 ]
 
 queries = [
@@ -45,6 +51,12 @@ queries = [
     's800',
     's1600',
     's3200',
+    's800_h128',
+    's4k_h192',
+    'f32',
+    'subject_f32',
+    'task_f32',
+    's90k_l8',
 ]
 
 merge_queries = [
@@ -63,7 +75,17 @@ runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
 })
 runs_kin = [r for r in runs_kin if r.config['dataset']['datasets'][0] in DATASET_WHITELIST and r.name.split('-')[0] in queries]
 
+print(f'Found {len(runs_nll)} NLL runs and {len(runs_kin)} kin runs')
+
 #%%
+def extract_exp(exp_str: str):
+    # if ends with '/probe' or '/tune', remove it
+    if exp_str.endswith('/probe'):
+        exp_str = exp_str[:-6]
+    if exp_str.endswith('/tune'):
+        exp_str = exp_str[:-5]
+    return exp_str.split('/')[-1]
+
 def get_evals(model, dataloader, runs=8, mode='nll'):
     evals = []
     for i in range(runs):
@@ -92,7 +114,8 @@ def build_df(runs, mode='nll'):
         dataset_name = cfg.dataset.datasets[0] # drop wandb ID
         if dataset_name not in DATASET_WHITELIST:
             continue
-        if (variant, dataset_name, run.config['model']['lr_init']) in seen_set:
+        series = extract_exp(run.config['experiment_set'])
+        if (variant, dataset_name, series, run.config['model']['lr_init']) in seen_set:
             continue
         dataset = SpikingDataset(cfg.dataset)
         set_limit = run.config['dataset']['scale_limit_per_eval_session']
@@ -108,34 +131,57 @@ def build_df(runs, mode='nll'):
         payload = {
             'limit': set_limit,
             'variant': variant,
+            'series': extract_exp(run.config['experiment_set']),
             'dataset': dataset_name,
             'lr': run.config['model']['lr_init'], # swept
         }
         payload[mode] = get_evals(model, dataloader, mode=mode, runs=1 if mode != 'nll' else 8)
         df.append(payload)
-        seen_set[(variant, dataset_name, run.config['model']['lr_init'])] = True
+        seen_set[(variant, dataset_name, series, run.config['model']['lr_init'])] = True
     return pd.DataFrame(df)
 
 kin_df = build_df(runs_kin, mode='kin_r2')
-kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'dataset'])
+kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'dataset', 'series'])
 
 nll_df = build_df(runs_nll, mode='nll')
 
 # merge on variant and dataset, filling empty with 0s
-df = pd.merge(kin_df, nll_df, on=['variant', 'dataset'], how='outer').fillna(0)
 
 # df = build_df(runs_nll, mode='nll')
+df = pd.merge(kin_df, nll_df, on=['variant', 'dataset', 'series'], how='outer').fillna(0)
 #%%
+# Recast variant - if s100, s200, s400, s800, s1600, s3200, label as "single"
 df['limit'] = df['limit_y']
+df['variant_remap'] = df['variant'].apply(
+    lambda x: 'single' if x in [
+        's100', 's200', 's400', 's800', 's1600', 's3200'
+    ] else x
+)
+inferred_limits = {
+    's4k_h192': 4000,
+    's800_h128': 800,
+    'f32': 23308, # pulled from slurm log https://wandb.ai/joelye9/context_general_bci/runs/zxpveqo1/overview?workspace=user-joelye9
+    'subject_f32': 20265, # from https://wandb.ai/joelye9/context_general_bci/runs/ltd2ms0d/overview?workspace=user-joelye9
+    'task_f32': 18304, # roughly calculated from https://wandb.ai/joelye9/context_general_bci/runs/0574z9md/overview?workspace=user-joelye9
+    's90k_l8': 85218,
+}
+df['inferred_limit'] = df.apply(
+    lambda x: inferred_limits.get(x['variant'], x['limit']),
+    axis=1
+)
+
+#%%
+print(df[['variant', 'limit_y']])
 #%%
 # Show just NLL in logscale
 palette = sns.color_palette('colorblind', n_colors=len(df['dataset'].unique()))
 dataset_order = df.groupby(['dataset']).mean().sort_values('nll').index
 ax = prep_plt()
 ax = sns.scatterplot(
-    x='limit',
+    x='inferred_limit',
     y='nll',
     hue='dataset',
+    style='series',
     hue_order=dataset_order,
     data=df,
     palette=palette,
@@ -150,10 +196,9 @@ from scipy.optimize import curve_fit
 def power_law(x, a, b):
     return a * x**b
 
-def plot_dataset_power_law(df, dataset, ax, **kwargs):
-    sub_df = df[df['dataset'] == dataset]
-    popt, pcov = curve_fit(power_law, sub_df['limit'], sub_df['nll'])
-    x = torch.linspace(sub_df['limit'].min(), sub_df['limit'].max(), 100)
+def plot_dataset_power_law(sub_df, ax, **kwargs):
+    popt, pcov = curve_fit(power_law, sub_df['inferred_limit'], sub_df['nll'])
+    x = torch.linspace(sub_df['inferred_limit'].min(), sub_df['inferred_limit'].max(), 100)
     y = power_law(x, *popt)
     ax.plot(x, y, linestyle='--', **kwargs)
     # annotate with power law
@@ -161,9 +206,39 @@ def plot_dataset_power_law(df, dataset, ax, **kwargs):
 
 
 for i, dataset in enumerate(dataset_order):
-    plot_dataset_power_law(df, dataset, ax, color=palette[i])
+    sub_df = df[df['dataset'] == dataset]
+    plot_dataset_power_law(sub_df, ax, color=palette[i])
 
 ax.set_title(f'Intra-session scaling ({"unsorted" if UNSORT else "sorted"})')
+
+
+#%%
+palette = sns.color_palette('colorblind', n_colors=len(df['series'].unique()))
+hue_order = list(df.groupby(['series']).mean().sort_values('nll').index)
+g = sns.relplot(
+    x='inferred_limit',
+    y='nll',
+    hue='series',
+    style='series',
+    hue_order=hue_order,
+    data=df,
+    palette=palette,
+    kind='scatter',
+    facet_kws={'sharex': False, 'sharey': False},
+    col='dataset',
+)
+
+def deco(data, **kws):
+    ax = plt.gca()
+    ax = prep_plt(ax)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    for i, series in enumerate(hue_order):
+        sub_df = data[data['series'] == series]
+        plot_dataset_power_law(sub_df, ax, color=palette[i])
+
+g.map_dataframe(deco)
+g.fig.suptitle(f'100 Trial Transfer NLL ({"Unsorted" if UNSORT else "Sorted"})', y=1.05, fontsize=28)
 
 #%%
 
@@ -171,9 +246,10 @@ ax.set_title(f'Intra-session scaling ({"unsorted" if UNSORT else "sorted"})')
 dataset_order = df.groupby(['dataset']).mean().sort_values('kin_r2').index
 ax = prep_plt()
 ax = sns.scatterplot(
-    x='limit',
+    x='inferred_limit',
     y='kin_r2',
     hue='dataset',
+    style='variant_remap',
     hue_order=dataset_order,
     data=df,
     palette=palette,
@@ -185,3 +261,32 @@ ax.set_xlabel('Pretraining set size')
 ax.set_title('Supervised probe (100 trials)')
 ax.set_ylabel('Vel R2')
 # ax.set_yscale('log')
+
+#%%
+# convert to relplot
+palette = sns.color_palette('colorblind', n_colors=len(df['series'].unique()))
+hue_order = df.groupby(['series']).mean().sort_values('nll').index
+
+g = sns.relplot(
+    x='inferred_limit',
+    y='kin_r2',
+    style='series',
+    hue='series',
+    hue_order=hue_order,
+    data=df,
+    palette=palette,
+    kind='scatter',
+    facet_kws={'sharex': False, 'sharey': False},
+    col='dataset',
+    # row='dataset',
+)
+def deco(data, **kws):
+    ax = plt.gca()
+    ax = prep_plt(ax)
+    ax.set_xscale('log')
+    ax.set_xlabel('Pretraining set size')
+    ax.set_ylabel('Vel R2')
+    # ax.set_yscale('log')
+
+g.map_dataframe(deco)
+g.fig.suptitle(f'100 Trial Transfer Vel R2 ({"Unsorted" if UNSORT else "Sorted"})', y=1.05, fontsize=28)

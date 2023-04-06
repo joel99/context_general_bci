@@ -33,9 +33,7 @@ DATASET_WHITELIST = [
 
 EXPERIMENTS_NLL = [
     f'scale_v3/intra{"_unsort" if UNSORT else ""}',
-]
-EXPERIMENTS_KIN = [
-    f'scale_v3/intra{"_unsort" if UNSORT else ""}/probe',
+    f'scale_v3/session{"_unsort" if UNSORT else ""}/tune_intra',
 ]
 
 queries = [
@@ -57,13 +55,17 @@ runs_nll = wandb_query_experiment(EXPERIMENTS_NLL, order='created_at', **{
     "config.tag": {"$in": merge_queries},
     "config.dataset.odoherty_rtt.include_sorted": not UNSORT,
 })
-runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
-    "state": {"$in": ['finished', 'failed', 'crashed']},
-    "config.dataset.odoherty_rtt.include_sorted": not UNSORT,
-})
-runs_kin = [r for r in runs_kin if r.config['dataset']['datasets'][0] in DATASET_WHITELIST and r.name.split('-')[0] in queries]
+print(f'Found {len(runs_nll)} NLL runs')
 
 #%%
+def extract_exp(exp_str: str):
+    # if ends with '/probe' or '/tune', remove it
+    if exp_str.endswith('/probe'):
+        exp_str = exp_str[:-6]
+    if exp_str.endswith('/tune'):
+        exp_str = exp_str[:-5]
+    return exp_str.split('/')[-1]
+
 def get_evals(model, dataloader, runs=8, mode='nll'):
     evals = []
     for i in range(runs):
@@ -92,7 +94,8 @@ def build_df(runs, mode='nll'):
         dataset_name = cfg.dataset.datasets[0] # drop wandb ID
         if dataset_name not in DATASET_WHITELIST:
             continue
-        if (variant, dataset_name, run.config['model']['lr_init']) in seen_set:
+        series = extract_exp(run.config['experiment_set'])
+        if (variant, dataset_name, series, run.config['model']['lr_init']) in seen_set:
             continue
         dataset = SpikingDataset(cfg.dataset)
         set_limit = run.config['dataset']['scale_limit_per_eval_session']
@@ -108,25 +111,18 @@ def build_df(runs, mode='nll'):
         payload = {
             'limit': set_limit,
             'variant': variant,
+            'series': extract_exp(run.config['experiment_set']),
             'dataset': dataset_name,
             'lr': run.config['model']['lr_init'], # swept
         }
         payload[mode] = get_evals(model, dataloader, mode=mode, runs=1 if mode != 'nll' else 8)
         df.append(payload)
-        seen_set[(variant, dataset_name, run.config['model']['lr_init'])] = True
+        seen_set[(variant, dataset_name, series, run.config['model']['lr_init'])] = True
     return pd.DataFrame(df)
 
-kin_df = build_df(runs_kin, mode='kin_r2')
-kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'dataset'])
-
 nll_df = build_df(runs_nll, mode='nll')
-
-# merge on variant and dataset, filling empty with 0s
-df = pd.merge(kin_df, nll_df, on=['variant', 'dataset'], how='outer').fillna(0)
-
-# df = build_df(runs_nll, mode='nll')
+df = nll_df
 #%%
-df['limit'] = df['limit_y']
 #%%
 # Show just NLL in logscale
 palette = sns.color_palette('colorblind', n_colors=len(df['dataset'].unique()))
@@ -136,6 +132,7 @@ ax = sns.scatterplot(
     x='limit',
     y='nll',
     hue='dataset',
+    style='series',
     hue_order=dataset_order,
     data=df,
     palette=palette,
@@ -150,8 +147,7 @@ from scipy.optimize import curve_fit
 def power_law(x, a, b):
     return a * x**b
 
-def plot_dataset_power_law(df, dataset, ax, **kwargs):
-    sub_df = df[df['dataset'] == dataset]
+def plot_dataset_power_law(sub_df, ax, **kwargs):
     popt, pcov = curve_fit(power_law, sub_df['limit'], sub_df['nll'])
     x = torch.linspace(sub_df['limit'].min(), sub_df['limit'].max(), 100)
     y = power_law(x, *popt)
@@ -161,27 +157,48 @@ def plot_dataset_power_law(df, dataset, ax, **kwargs):
 
 
 for i, dataset in enumerate(dataset_order):
-    plot_dataset_power_law(df, dataset, ax, color=palette[i])
+    sub_df = df[df['dataset'] == dataset]
+    plot_dataset_power_law(sub_df, ax, color=palette[i])
 
 ax.set_title(f'Intra-session scaling ({"unsorted" if UNSORT else "sorted"})')
 
+
 #%%
 
-# Supervised (kin_r2)
-dataset_order = df.groupby(['dataset']).mean().sort_values('kin_r2').index
-ax = prep_plt()
-ax = sns.scatterplot(
+relabel = {
+    'tune_intra': 'Pretrain Session',
+    'intra_unsort': 'Scratch',
+}
+palette = sns.color_palette('colorblind', n_colors=len(df['series'].unique()))
+hue_order = list(df.groupby(['series']).mean().sort_values('nll').index)
+g = sns.relplot(
     x='limit',
-    y='kin_r2',
-    hue='dataset',
-    hue_order=dataset_order,
+    y='nll',
+    hue='series',
+    style='series',
+    hue_order=hue_order,
     data=df,
     palette=palette,
-    ax=ax,
-    legend=False
+    kind='scatter',
+    facet_kws={'sharex': False, 'sharey': False},
+    col='dataset',
 )
-ax.set_xscale('log')
-ax.set_xlabel('Pretraining set size')
-ax.set_title('Supervised probe (100 trials)')
-ax.set_ylabel('Vel R2')
-# ax.set_yscale('log')
+
+def deco(data, **kws):
+    ax = plt.gca()
+    ax = prep_plt(ax)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    for i, series in enumerate(hue_order):
+        sub_df = data[data['series'] == series]
+        plot_dataset_power_law(sub_df, ax, color=palette[i])
+
+# df['series_relabel'] = df['series'].map(relabel)
+# relabel legend
+g._legend.set_title('Pretraining')
+for t, l in zip(g._legend.texts, hue_order):
+    t.set_text(relabel[l])
+
+g.map_dataframe(deco)
+g.fig.suptitle(f'Convergence of Pretraining NLL ({"Unsorted" if UNSORT else "Sorted"})', y=1.05, fontsize=28)
+
