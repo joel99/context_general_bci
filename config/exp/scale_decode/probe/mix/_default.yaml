@@ -4,7 +4,7 @@ defaults:
   - /model/task:
     - joint_bhvr_decode_flat
   - /dataset: flat
-  - /train: single_session_exp1
+  # - /train: trial100_tune_exp2
 dataset:
   # scale_limit_per_eval_session: 100
   eval_ratio: 0.05
@@ -27,8 +27,7 @@ model:
     behavior_lag: 120
   accelerate_new_params: 10.0 # We're introducing a whole new readout layer...
   lr_schedule: 'fixed'
-inherit_exp: scale_decode
-inherit_tag: session_cross
+inherit_exp: scale_decode/probe
 fragment_datasets: True
 
 sweep_cfg: 'simpler_lr_sweep'

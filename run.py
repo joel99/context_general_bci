@@ -150,6 +150,8 @@ def run_exp(cfg : RootConfig) -> None:
                 f'inherit_exp={cfg.inherit_exp}', # propagate the following sensitive pieces
                 f'init_from_id={cfg.init_from_id}' # propagate the following sensitive pieces
             ]
+            if cfg.inherit_tag:
+                meta_flags.append(f'inherit_tag={cfg.inherit_tag}-frag-{cfg_trial["dataset.datasets"][0]}')
             launcher(cfg, init_args, additional_cli_flags, meta_flags)
 
         for dataset in cfg.dataset.datasets:

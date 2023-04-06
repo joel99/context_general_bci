@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - _default
+
+dataset:
+  scale_limit_per_eval_session: 20
+
+inherit_tag: unsup_800

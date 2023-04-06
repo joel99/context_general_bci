@@ -3,10 +3,15 @@ defaults:
   - _default
 
 dataset:
-  scale_limit_per_eval_session: 800
+  datasets:
+  - odoherty_rtt-Indy-20160627_01
+  scale_limit_per_eval_session: 3190
+
 model:
   task:
     blacklist_session_supervision:
     - odoherty_rtt-Indy-20160407_02
     - odoherty_rtt-Indy-20160627_01
     - odoherty_rtt-Indy-20170131_02
+
+sweep_cfg: "" # while testing
