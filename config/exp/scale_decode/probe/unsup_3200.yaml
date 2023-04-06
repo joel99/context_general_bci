@@ -13,5 +13,3 @@ model:
     - odoherty_rtt-Indy-20160407_02
     - odoherty_rtt-Indy-20160627_01
     - odoherty_rtt-Indy-20170131_02
-
-sweep_cfg: "" # while testing

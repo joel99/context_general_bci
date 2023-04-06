@@ -34,6 +34,8 @@ DATASET_WHITELIST = [
 EXPERIMENTS_KIN = [
     f'scale_v3/intra{"_unsort" if UNSORT else ""}/probe',
     f'scale_v3/intra{"_unsort" if UNSORT else ""}/decode',
+    f'scale_decode/probe',
+    # f'scale_decode/probe/mix',
 ]
 
 queries = [
@@ -43,6 +45,16 @@ queries = [
     's800',
     's1600',
     's3200',
+    'sup_20',
+    'sup_100',
+    'sup_200',
+    'sup_800',
+    'sup_3200',
+    'unsup_20',
+    'unsup_100',
+    'unsup_200',
+    'unsup_800',
+    'unsup_3200',
 ]
 
 merge_queries = [
@@ -88,7 +100,14 @@ def build_df(runs, mode='nll'):
         if dataset_name not in DATASET_WHITELIST:
             continue
         experiment_set = run.config['experiment_set']
-        if (variant, dataset_name, run.config['model']['lr_init'], experiment_set) in seen_set:
+        if variant.startswith('sup') or variant.startswith('unsup'):
+            experiment_set = experiment_set + '_' + variant.split('_')[0]
+        if (
+            variant,
+            dataset_name,
+            run.config['model']['lr_init'],
+            experiment_set
+        ) in seen_set:
             continue
         dataset = SpikingDataset(cfg.dataset)
         set_limit = run.config['dataset']['scale_limit_per_eval_session']
@@ -101,6 +120,7 @@ def build_df(runs, mode='nll'):
         data_attrs = dataset.get_data_attrs()
         model = transfer_model(src_model, cfg.model, data_attrs)
         dataloader = get_dataloader(dataset)
+
         payload = {
             'limit': set_limit,
             'variant': variant,
@@ -123,6 +143,16 @@ print(df[df['series'] == 'scale_v3/intra_unsort/'])
 #%%
 prescribed_limits = {
     's3200': 3190,
+    'unsup_3200': 3190,
+    'unsup_800': 770,
+    'unsup_200': 200,
+    'unsup_100': 100,
+    'unsup_20': 20,
+    'sup_3200': 3190,
+    'sup_800': 770,
+    'sup_200': 200,
+    'sup_100': 100,
+    'sup_20': 20,
     's1600': 1600,
     's800': 770, # relevant for the 2 limited datasets
     's400': 400,
@@ -143,7 +173,9 @@ g = sns.relplot(
     hue_order=hue_order,
     data=df,
     palette=palette,
-    kind='scatter',
+    # kind='scatter',
+    markers=True,
+    kind='line',
     facet_kws={'sharex': False, 'sharey': False},
     col='dataset',
     # row='dataset',
@@ -152,9 +184,20 @@ def deco(data, **kws):
     ax = plt.gca()
     ax = prep_plt(ax)
     ax.set_xscale('log')
-    ax.set_xlabel('Pretraining set size')
+    ax.set_xlabel('Target session trials')
     ax.set_ylabel('Vel R2')
     # ax.set_yscale('log')
 
+relabel = {
+    'scale_v3/intra_unsort/probe': 'Scratch (100 Trial Sup)',
+    'scale_v3/intra_unsort/decode': 'Scratch',
+    'scale_decode/probe_sup': 'Sup tune',
+    'scale_decode/probe_unsup': 'Unsup tune',
+}
+g._legend.set_title('Variant')
+for t, l in zip(g._legend.texts, hue_order):
+    t.set_text(relabel[l])
+
+
 g.map_dataframe(deco)
-g.fig.suptitle(f'100 Trial vs Full Decoder ({"Unsorted" if UNSORT else "Sorted"})', y=1.05, fontsize=28)
+g.fig.suptitle(f'Tuning a Decoder ({"Unsorted" if UNSORT else "Sorted"})', y=1.05, fontsize=28)

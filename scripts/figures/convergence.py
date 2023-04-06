@@ -189,6 +189,7 @@ def deco(data, **kws):
     ax = prep_plt(ax)
     ax.set_xscale('log')
     ax.set_yscale('log')
+    ax.set_xlabel('Target context trials')
     for i, series in enumerate(hue_order):
         sub_df = data[data['series'] == series]
         plot_dataset_power_law(sub_df, ax, color=palette[i])
