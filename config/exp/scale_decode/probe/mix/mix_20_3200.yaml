@@ -1,9 +1,0 @@
-# @package _global_
-defaults:
-  - _default
-
-dataset:
-  scale_limit_per_eval_session: 20
-
-inherit_tag: unsup_3200
-# This is not going to work due to sweep being appended after fragmentation. Make individual configs

@@ -23,7 +23,7 @@ model:
   causal: true
   neurons_per_token: 32
   task:
-    mask_ratio: 0.5 # pretty sure this is irrelevant
+    mask_ratio: 0.2
     behavior_lag: 120
   accelerate_new_params: 10.0 # We're introducing a whole new readout layer...
   lr_schedule: 'fixed'
