@@ -445,7 +445,7 @@ class BrainBertInterface(pl.LightningModule):
         else:
             subject = None
         if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            if getattr(self.cfg, 'task_embed_token_count', 1) > 1:
+            if self.cfg.task_embed_token_count > 1:
                 task: torch.Tensor = self.task_embed[batch[MetaKey.task]]
             else:
                 task: torch.Tensor = self.task_embed(batch[MetaKey.task])
@@ -502,66 +502,44 @@ class BrainBertInterface(pl.LightningModule):
         static_context = []
         project_context = [] # only for static info
         # Note we may augment padding tokens below but if attn is implemented correctly that should be fine
-        if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            if self.cfg.session_embed_strategy == EmbedStrat.token:
-                session = session + self.session_flag # B x H
-                if session.ndim == 3: # this is for multi-token sessions
-                    static_context.extend(session.unbind(1))
-                else:
-                    static_context.append(session)
-            elif self.cfg.session_embed_strategy == EmbedStrat.token_add:
+        def _add_context(context: torch.Tensor, flag: torch.Tensor, strategy: EmbedStrat):
+            if strategy is EmbedStrat.none:
+                return
+            if strategy == EmbedStrat.token:
+                context = context + flag
+                static_context.extend(context.unbind(1) if context.ndim == 3 else [context])
+            elif strategy == EmbedStrat.token_add:
                 assert not self.cfg.transform_space, 'not implemented'
-                state_in = state_in + rearrange(session, 'b h -> b 1 1 h')
-            elif self.cfg.session_embed_strategy == EmbedStrat.concat: # concat deprecated for readin strategy etc
+                state_in = state_in + rearrange(context, 'b h -> b 1 1 h')
+            elif strategy == EmbedStrat.concat:
                 assert not self.cfg.transform_space, 'not implemented'
-                session = repeat(session, 'b h -> b t 1 h', t=state_in.shape[1])
+                context = repeat(context, 'b h -> b t 1 h', t=state_in.shape[1])
                 project_context.append(session)
-
-        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
-            if self.cfg.subject_embed_strategy == EmbedStrat.token:
-                subject = subject + self.subject_flag
-                static_context.append(subject)
-            elif self.cfg.subject_embed_strategy == EmbedStrat.token_add:
-                assert not self.cfg.transform_space, 'not implemented'
-                state_in = state_in + rearrange(subject, 'b h -> b 1 1 h')
-            elif self.cfg.subject_embed_strategy == EmbedStrat.concat:
-                assert not self.cfg.transform_space, 'not implemented'
-                subject = repeat(subject, 'b h -> b t 1 h', t=state_in.shape[1])
-                project_context.append(subject)
-
-        if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            if self.cfg.task_embed_strategy == EmbedStrat.token:
-                task = task + self.task_flag
-                static_context.append(task)
-            elif self.cfg.task_embed_strategy == EmbedStrat.token_add:
-                assert not self.cfg.transform_space, 'not implemented'
-                state_in = state_in + rearrange(task, 'b h -> b 1 1 h')
-            elif self.cfg.task_embed_strategy == EmbedStrat.concat:
-                assert not self.cfg.transform_space, 'not implemented'
-                task = repeat(task, 'b h -> b t 1 h', t=state_in.shape[1])
-                project_context.append(task)
-
-        if self.cfg.array_embed_strategy is not EmbedStrat.none: # Note we check earlier that this doesn't accidentally get set for space-time, not supported yet (we need to pass/infer array metadata)
-            assert not self.cfg.transform_space, 'not implemented'
-            if self.cfg.array_embed_strategy == EmbedStrat.token:
-                array = array + self.array_flag
-                static_context.extend(array.unbind(1)) # path not yet tested
-            elif self.cfg.array_embed_strategy == EmbedStrat.token_add:
-                state_in = state_in + rearrange(array, 'b a h -> b 1 a h') # redundant op since array uses 0s for padding
-            elif self.cfg.array_embed_strategy == EmbedStrat.concat:
-                array = repeat(array, 'b a h -> b t a h', t=state_in.shape[1])
-                project_context.append(array)
-        # TODO support temporal embed + temporal project
-        # Do not concat static context - list default is easier to deal with
-        # static_context = rearrange(static_context, 't0 b h -> b t0 h') if static_context else None
-        if project_context: # someone wanted it
-            raise NotImplementedError # not tested
-            # B T' H, and we want to merge into B T A H (specifically add T' to each token)
-            augmented_tokens, ps = pack([state_in, *project_context], 'b * a h')
-            augmented_tokens = self.context_project(augmented_tokens)
-            state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
-        if self.cfg.layer_norm_input:
-            state_in = self.layer_norm_input(state_in)
+        _add_context(session, getattr(self, 'session_flag', None), self.cfg.session_embed_strategy)
+        _add_context(subject, getattr(self, 'subject_flag', None), self.cfg.subject_embed_strategy)
+        _add_context(task, getattr(self, 'task_flag', None), self.cfg.task_embed_strategy)
+        # array embed deprecated
+        # if self.cfg.array_embed_strategy is not EmbedStrat.none: # Note we check earlier that this doesn't accidentally get set for space-time, not supported yet (we need to pass/infer array metadata)
+        #     assert not self.cfg.transform_space, 'not implemented'
+        #     if self.cfg.array_embed_strategy == EmbedStrat.token:
+        #         array = array + self.array_flag
+        #         static_context.extend(array.unbind(1)) # path not yet tested
+        #     elif self.cfg.array_embed_strategy == EmbedStrat.token_add:
+        #         state_in = state_in + rearrange(array, 'b a h -> b 1 a h') # redundant op since array uses 0s for padding
+        #     elif self.cfg.array_embed_strategy == EmbedStrat.concat:
+        #         array = repeat(array, 'b a h -> b t a h', t=state_in.shape[1])
+        #         project_context.append(array)
+        # # TODO support temporal embed + temporal project
+        # # Do not concat static context - list default is easier to deal with
+        # # static_context = rearrange(static_context, 't0 b h -> b t0 h') if static_context else None
+        # if project_context: # someone wanted it
+        #     raise NotImplementedError # not tested
+        #     # B T' H, and we want to merge into B T A H (specifically add T' to each token)
+        #     augmented_tokens, ps = pack([state_in, *project_context], 'b * a h')
+        #     augmented_tokens = self.context_project(augmented_tokens)
+        #     state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
+        # if self.cfg.layer_norm_input:
+        #     state_in = self.layer_norm_input(state_in)
         return state_in, static_context, temporal_context
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -666,18 +644,16 @@ class BrainBertInterface(pl.LightningModule):
                 pipeline_features,
                 eval_mode=eval_mode
             )
-            to_del = []
             for k in update:
                 if 'update' in str(k):
+                    if k == 'update_features':
+                        features = update[k]
                     batch[k] = update[k]
-                    to_del.append(k)
-            for k in to_del:
-                del update[k]
-            features = batch.get('update_features', features)
+                else:
+                    batch_out[k] = update[k]
             if 'loss' in update and self.cfg.task.task_weights[i] > 0:
                 batch_out[f'{task.value}_loss'] = update['loss']
                 running_loss = running_loss + self.cfg.task.task_weights[i] * update['loss']
-            batch_out.update(update)
         batch_out['loss'] = running_loss
         return batch_out
 
@@ -749,19 +725,17 @@ class BrainBertInterface(pl.LightningModule):
         for task in task_order:
             update = self.task_pipelines[task.value](
                 batch,
-                unique_space_features if self.task_pipelines[task.value].unique_space and getattr(self.cfg, 'readout_strategy', EmbedStrat.none) is not EmbedStrat.none  else features,
+                unique_space_features if self.task_pipelines[task.value].unique_space and self.cfg.readout_strategy is not EmbedStrat.none  else features,
                 compute_metrics=False,
                 eval_mode=eval_mode
             )
-            to_del = []
             for k in update:
                 if 'update' in str(k):
+                    if k == 'update_features':
+                        features = update[k]
                     batch[k] = update[k]
-                    to_del.append(k)
-            for k in to_del:
-                del update[k]
-            features = batch.get('update_features', features)
-            batch_out.update(update)
+                else:
+                    batch_out[k] = update[k]
 
         if self.data_attrs.serve_tokens_flat and Output.logrates in batch_out:
             batch_out[Output.logrates] = unflatten(batch_out[Output.logrates], batch_out['time'], batch_out['position'])

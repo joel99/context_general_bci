@@ -203,7 +203,7 @@ class ContextualMLP(nn.Module):
         super().__init__()
         # self.channel_position_embeds = nn.Parameter(init.kaiming_uniform_(torch.empty(out_count, cfg.readin_dim), a=math.sqrt(5)))
         self.readout_project = nn.Sequential(
-            nn.Linear(in_count + cfg.session_embed_size * getattr(cfg, 'session_embed_token_count', 1), cfg.readin_dim),
+            nn.Linear(in_count + cfg.session_embed_size * cfg.session_embed_token_count, cfg.readin_dim),
             nn.GELU(),
             nn.Linear(cfg.readin_dim, out_count)
             # nn.Linear(cfg.readin_dim, cfg.readin_dim)

@@ -510,6 +510,7 @@ class RootConfig:
 
     # wandb ids
     init_from_id: str = "" # for initializing weights
+    init_ckpt: str = "" # fallback for above, for portable runs
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
     init_tag: str = "val_loss"
 

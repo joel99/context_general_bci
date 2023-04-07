@@ -221,6 +221,9 @@ def run_exp(cfg : RootConfig) -> None:
         )
         logger.info(f"Initializing from {init_ckpt}")
         model = load_from_checkpoint(init_ckpt, cfg=cfg.model, data_attrs=data_attrs)
+    elif cfg.init_ckpt:
+        logger.info(f"Initializing from {cfg.init_ckpt}")
+        model = load_from_checkpoint(cfg.init_ckpt, cfg=cfg.model, data_attrs=data_attrs)
     else:
         model = BrainBertInterface(cfg.model, data_attrs)
     if cfg.model.task.freeze_embed:

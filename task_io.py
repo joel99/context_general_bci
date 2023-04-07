@@ -330,7 +330,7 @@ class RatePrediction(TaskPipeline):
         cfg: ModelConfig, in_size: int, out_size: int, layers=1
     ):
         assert cfg.transform_space, 'Classification heads only supported for transformed space'
-        if getattr(cfg.task, 'spike_loss', 'poisson') == 'poisson':
+        if cfg.task.spike_loss == 'poisson':
             classes = 1
         elif cfg.task.spike_loss == 'cross_entropy':
             classes = cfg.max_neuron_count
@@ -340,7 +340,7 @@ class RatePrediction(TaskPipeline):
         if layers > 1:
             out_layers.insert(0, nn.ReLU() if cfg.activation == 'relu' else nn.GELU())
             out_layers.insert(0, nn.Linear(in_size, in_size))
-        if getattr(cfg.task, 'spike_loss', 'poisson') == 'poisson':
+        if cfg.task.spike_loss == 'poisson':
             if not cfg.lograte:
                 out_layers.append(nn.ReLU())
         else:
@@ -462,6 +462,7 @@ class ShuffleInfill(RatePrediction):
             cfg=cfg,
             data_attrs=data_attrs
         )
+        assert not Metric.bps in self.cfg.metrics, 'not supported'
         assert self.serve_tokens and self.serve_tokens_flat, 'other paths not implemented'
         assert cfg.encode_decode, 'non-symmetric evaluation not implemented (since this task crops)'
         # ! Need to figure out how to wire different parameters e.g. num layers here
@@ -629,7 +630,6 @@ class ShuffleInfill(RatePrediction):
                 batch_out['update_time'] = times
             reps = reps[:, -target.size(1):]
             rates = self.out(reps)
-        assert not Metric.bps in self.cfg.metrics, 'not supported'
         if Output.logrates in self.cfg.outputs:
             # out is B T C, we want B T' C, and then to unshuffle
             if eval_mode:
@@ -921,11 +921,11 @@ class HeldoutPrediction(RatePrediction):
         if not compute_metrics:
             return batch_out
         spikes = batch[DataKey.heldout_spikes][..., 0]
-        if getattr(self.cfg, 'query_heldout', 0):
+        if self.cfg.query_heldout:
             rates = rates[..., :spikes.size(-1)]
         loss: torch.Tensor = self.loss(rates, spikes)
         # re-expand array dimension to match API expectation for array dim
-        if getattr(self.cfg, 'query_heldout', 0):
+        if self.cfg.query_heldout:
             loss_mask, length_mask, channel_mask = self.get_masks(
                 batch, ref=spikes,
                 length_key=COVARIATE_LENGTH_KEY,
@@ -1007,7 +1007,7 @@ class BehaviorRegression(TaskPipeline):
         assert self.bhvr_lag_bins >= 0, "behavior lag must be >= 0, code not thought through otherwise"
 
         self.session_blacklist = []
-        if getattr(self.cfg, 'blacklist_session_supervision', []):
+        if self.cfg.blacklist_session_supervision:
             ctxs: List[ContextInfo] = []
             for sess in self.cfg.blacklist_session_supervision:
                 sess = context_registry.query(alias=sess)
