@@ -25,6 +25,7 @@ pl.seed_everything(0)
 UNSORT = True
 # UNSORT = False
 
+ROBUST_RUN = 'session_cross_noctx-89e73b3s'
 DATASET_WHITELIST = [
     "odoherty_rtt-Indy-20160407_02",
     "odoherty_rtt-Indy-20170131_02",
@@ -68,9 +69,10 @@ runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
 })
 runs_kin = [r for r in runs_kin if r.config['dataset']['datasets'][0] in DATASET_WHITELIST and r.name.split('-')[0] in queries]
 
+runs_kin.append(get_wandb_run(ROBUST_RUN))
+
 print(f'Found {len(runs_kin)} runs')
 #%%
-
 def get_evals(model, dataloader, runs=8, mode='nll'):
     evals = []
     for i in range(runs):
@@ -88,17 +90,49 @@ def get_evals(model, dataloader, runs=8, mode='nll'):
     return pd.DataFrame(evals)[mode].mean()
     # return evals
 
+def get_single_payload(cfg: RootConfig, src_model, run, experiment_set, mode='nll'):
+    dataset = SpikingDataset(cfg.dataset)
+    set_limit = run.config['dataset']['scale_limit_per_eval_session']
+    # if set_limit == 0:
+        # train_dev_dataset = SpikingDataset(cfg.dataset)
+        # train_dev_dataset.subset_split()
+        # set_limit = len(train_dev_dataset)
+    dataset.subset_split(splits=['eval'])
+    dataset.build_context_index()
+    data_attrs = dataset.get_data_attrs()
+    model = transfer_model(src_model, cfg.model, data_attrs)
+    dataloader = get_dataloader(dataset)
+
+    payload = {
+        'limit': set_limit,
+        'variant': run.name.split('-')[0],
+        'series': experiment_set,
+        'dataset': cfg.dataset.datasets[0],
+        'lr': run.config['model']['lr_init'], # swept
+    }
+    payload[mode] = get_evals(model, dataloader, mode=mode, runs=1 if mode != 'nll' else 8)
+    return payload
+
 def build_df(runs, mode='nll'):
     df = []
     seen_set = {}
     for run in runs:
-        if 'frag' not in run.name:
+        if 'frag' not in run.name and run.name != ROBUST_RUN:
             continue
         variant, _frag, *rest = run.name.split('-')
         src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
         dataset_name = cfg.dataset.datasets[0] # drop wandb ID
-        if dataset_name not in DATASET_WHITELIST:
+        if dataset_name not in DATASET_WHITELIST and run.name != ROBUST_RUN:
             continue
+        if run.name == ROBUST_RUN:
+            # Special patch for robust run - inject 3 evaluations
+            for dataset_name in DATASET_WHITELIST:
+                cfg.dataset.datasets = [dataset_name]
+                cfg.dataset.exclude_datasets = []
+                payload = get_single_payload(cfg, src_model, run, 'session_robust', mode=mode)
+                df.append(payload)
+            continue
+
         experiment_set = run.config['experiment_set']
         if variant.startswith('sup') or variant.startswith('unsup'):
             experiment_set = experiment_set + '_' + variant.split('_')[0]
@@ -109,26 +143,7 @@ def build_df(runs, mode='nll'):
             experiment_set
         ) in seen_set:
             continue
-        dataset = SpikingDataset(cfg.dataset)
-        set_limit = run.config['dataset']['scale_limit_per_eval_session']
-        # if set_limit == 0:
-            # train_dev_dataset = SpikingDataset(cfg.dataset)
-            # train_dev_dataset.subset_split()
-            # set_limit = len(train_dev_dataset)
-        dataset.subset_split(splits=['eval'])
-        dataset.build_context_index()
-        data_attrs = dataset.get_data_attrs()
-        model = transfer_model(src_model, cfg.model, data_attrs)
-        dataloader = get_dataloader(dataset)
-
-        payload = {
-            'limit': set_limit,
-            'variant': variant,
-            'series': experiment_set,
-            'dataset': dataset_name,
-            'lr': run.config['model']['lr_init'], # swept
-        }
-        payload[mode] = get_evals(model, dataloader, mode=mode, runs=1 if mode != 'nll' else 8)
+        payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode)
         df.append(payload)
         seen_set[(variant, dataset_name, run.config['model']['lr_init']), experiment_set] = True
     return pd.DataFrame(df)
@@ -137,6 +152,8 @@ kin_df = build_df(runs_kin, mode='kin_r2')
 kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'dataset', 'series'])
 
 df = kin_df
+#%%
+print(df)
 
 #%%
 print(df[df['series'] == 'scale_v3/intra_unsort/'])
@@ -162,8 +179,9 @@ prescribed_limits = {
 # override `limit` with `prescribed_limits` based on `variant` for `scale_v3/intra_unsort/probe` series
 df.loc[df['variant'].isin(prescribed_limits.keys()) & (df['series'] == 'scale_v3/intra_unsort/probe'), 'limit'] = df.loc[df['variant'].isin(prescribed_limits.keys()) & (df['series'] == 'scale_v3/intra_unsort/probe'), 'variant'].map(prescribed_limits)
 #%%
-palette = sns.color_palette('colorblind', n_colors=len(df['series'].unique()))
-hue_order = df['series'].unique()
+sans_robust_df = df[df['series'] != 'session_robust']
+palette = sns.color_palette('colorblind', n_colors=len(sans_robust_df['series'].unique()))
+hue_order = sans_robust_df['series'].unique()
 
 g = sns.relplot(
     x='limit',
@@ -171,7 +189,7 @@ g = sns.relplot(
     style='series',
     hue='series',
     hue_order=hue_order,
-    data=df,
+    data=sans_robust_df,
     palette=palette,
     # kind='scatter',
     markers=True,
@@ -188,11 +206,19 @@ def deco(data, **kws):
     ax.set_ylabel('Vel R2')
     # ax.set_yscale('log')
 
+    # Identify the kin r2 of the robust run which has the same dataset
+    dataset = data['dataset'].values[0]
+    robust_kin_r2 = df[(df['series'] == 'session_robust') & (df['dataset'] == dataset)]['kin_r2'].values[0]
+    ax.axhline(robust_kin_r2, color='k', linestyle='--', linewidth=1)
+    # Annotate as 'session robust'
+    ax.text(15, robust_kin_r2 - 0.01, 'Session Robust \n (Untuned)', va='top', ha='left', fontsize=16)
+
 relabel = {
     'scale_v3/intra_unsort/probe': 'Scratch (100 Trial Sup)',
     'scale_v3/intra_unsort/decode': 'Scratch',
     'scale_decode/probe_sup': 'Sup tune',
     'scale_decode/probe_unsup': 'Unsup tune',
+    'session_robust': 'Session Robust',
 }
 g._legend.set_title('Variant')
 for t, l in zip(g._legend.texts, hue_order):
