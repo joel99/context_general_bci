@@ -63,6 +63,7 @@ merge_queries = [
 ]
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
+# trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
     "state": {"$in": ['finished', 'failed', 'crashed']},
     "config.dataset.odoherty_rtt.include_sorted": not UNSORT,

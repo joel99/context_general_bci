@@ -19,3 +19,18 @@ TODO...
 `cross`:
 - `subject_loco`: Cross animal
 - `task_co`: Cross task, using Gallego CO + NLB Maze reaches (multiple, to increase trial count)
+
+
+# Env creation
+For training on cluster systems, please refer to ENV.yml, which should be sufficient.
+Not so easy to go cross platform, so consider the following steps to construct from scratch:
+
+(For Windows)
+- `conda create -n ndt2 -c conda-forge -y python==3.10.6`
+(Pytorch)
+- `conda install pytorch==1.13.1 torchvsion==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.6 -c pytorch -c nvidia`
+Other core infra
+- `conda install -y -c conda-forge dacite dandi einops hydra-core h5py pytorch-lightning pandas seaborn scikit-learn`
+- `pip install wandb`
+
+Various libs will be needed to deal with individual datasts, but those likely aren't needed if you're using a pretrained model..
