@@ -15,19 +15,23 @@ model:
     mask_ratio: 0.5
   neurons_per_token: 32
 dataset:
-  scale_limit_per_eval_session: 100
+  auto_in_memory_thresh: 4000
+  scale_limit_per_eval_session: 3000
   datasets:
-  - odoherty_rtt-Indy-20160407_02
+  - odoherty_rtt-Indy-20160627_01
   eval_datasets:
-  - odoherty_rtt-Indy-20160407_02 # First indy session
+  - odoherty_rtt-Indy-20160627_01
   data_keys:
   - DataKey.spikes
   - DataKey.bhvr_vel
   eval_ratio: 0.1 # used smaller since not all sessions have (1/0.5) * 300 trials
+  odoherty_rtt:
+    arrays: ['Indy-M1', 'Loco-M1']
+    include_sorted: False
 
-# train:
+train:
   # accumulate_batches: 2 # auto = 128 (12G GPUs), effective = 2048
-  # autoscale_batch_size: false
-  # batch_size: 128
+  autoscale_batch_size: false
+  batch_size: 512
 
 notes: "Sorted, Patch size 32"

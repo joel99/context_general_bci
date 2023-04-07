@@ -361,6 +361,10 @@ class DatasetConfig:
     root_dir: Path = Path("./data")
     preprocess_suffix: str = 'preprocessed'
 
+    # if number of trials below this, try loading into memory to accelerate tuning
+    # if 0, ignores.
+    auto_in_memory_thresh: int = 1000
+
     dataset_seed: int = 0 # for shuffling/splitting etc
     r"""
         Specifies the source datasets.

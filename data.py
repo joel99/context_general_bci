@@ -137,6 +137,7 @@ class SpikingDataset(Dataset):
         self.subsetted = False
         self.max_bins = round(self.cfg.max_length_ms / self.cfg.bin_size_ms)
         self.mark_eval_split_if_exists()
+        self.cache = {}
 
     @property
     def loaded(self):
@@ -285,7 +286,9 @@ class SpikingDataset(Dataset):
             spikes: torch.Tensor, Batch x Time x Array x Channel x H
             * we give array dim (as opposed to flattening into channel to make array embeddings possible
         """
-        trial = self.meta_df.iloc[index]
+        trial: Path = self.meta_df.iloc[index]
+        if len(self) <= self.cfg.auto_in_memory_thresh and trial.path in self.cache:
+            return self.cache[trial.path]
         # * Potential optimization point to load onto GPU directly
         meta_items = {}
         for k in self.cfg.meta_keys:
@@ -305,7 +308,9 @@ class SpikingDataset(Dataset):
             We must use the IDs to reconstruct the stack we want.
         """
         data_items = {}
+
         payload = torch.load(trial.path)
+
         channel_counts = [] # 1 value per array in base + serve_tokenized. 1 value per token for `serve_tokenized_flat`
         # Note the main reason we track channel_counts for `serve_tokenized_flat` is because we already implemented the unsplit version for `serve_tokenized` but would now like something easier.
         # while heldout channels are never provided in multiple shapes
@@ -379,6 +384,9 @@ class SpikingDataset(Dataset):
             out[CHANNEL_KEY] = torch.tensor(channel_counts) # of length arrays (subsumes array mask, hopefully)
             # if heldout_channel_counts:
                 # out[HELDOUT_CHANNEL_KEY] = torch.tensor(heldout_channel_counts)
+
+        if len(self) <= self.cfg.auto_in_memory_thresh and trial.path not in self.cache:
+            self.cache[trial.path] = out
         return out
 
     def __len__(self):
@@ -559,6 +567,7 @@ class SpikingDataset(Dataset):
         if not keep_index:
             self.build_context_index()
         self.subsetted = True
+        self.cache = {}
 
     def tv_split_by_split_key(self, train_ratio=0.8, seed=None):
         keys = self.split_keys
