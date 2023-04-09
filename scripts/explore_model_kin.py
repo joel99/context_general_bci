@@ -110,13 +110,37 @@ pred = [p[offset_bins:] for p in pred]
 true = heldin_outputs[Output.behavior]
 true = [t[offset_bins:] for t in true]
 
+#%%
+print(pred[0].shape)
+print(dataset[0][DataKey.bhvr_vel].shape)
+plt.plot(pred[0][:,0])
+plt.plot(pred[0][:,1])
+# print(model.task_pipelines[ModelTask.kinematic_decoding.value].bhvr_std)
+#%%
+print(true[0].shape)
+print(dataset[0][DataKey.bhvr_vel].shape)
+plt.plot(true[0][:,0])
+plt.plot(true[0][:,1])
+
+#%%
+
 flat_pred = np.concatenate(pred) if isinstance(pred, list) else pred.flatten()
 flat_true = np.concatenate(true) if isinstance(true, list) else true.flatten()
-print(flat_pred.shape)
+flat_pred_x = flat_pred[:,0]
+flat_pred_y = flat_pred[:,1]
+flat_true_x = flat_true[:,0]
+flat_true_y = flat_true[:,1]
+
+pad_value = 5
+flat_pred_x = flat_pred_x[flat_true_x != pad_value]
+flat_pred_y = flat_pred_y[flat_true_y != pad_value]
+flat_true_x = flat_true_x[flat_true_x != pad_value]
+flat_true_y = flat_true_y[flat_true_y != pad_value]
+
 df = pd.DataFrame({
-    'pred': flat_pred.flatten(),
-    'true': flat_true.flatten(),
-    'coord': len(flat_pred) * ['x'] + len(flat_true) * ['y'],
+    'pred': np.concatenate([flat_pred_x, flat_pred_y]),
+    'true': np.concatenate([flat_true_x, flat_true_y]),
+    'coord': len(flat_pred_x) * ['x'] + len(flat_true_y) * ['y'],
 })
 # ax = prep_plt()
 # sns.scatterplot(x='true', y='pred', hue='coord', data=df, ax=ax, s=3, alpha=0.4)
@@ -143,8 +167,15 @@ trials = torch.arange(10)
 
 colors = sns.color_palette('colorblind', len(trials))
 def plot_trial(trial, ax, color, label=False):
-    vel_true = heldin_outputs[Output.behavior][trial][6:]
-    vel_pred = heldin_outputs[Output.behavior_pred][trial][6:]
+    vel_true = heldin_outputs[Output.behavior][trial][offset_bins:]
+    vel_pred = heldin_outputs[Output.behavior_pred][trial][offset_bins:]
+    # remove padding
+    pad_index = np.where(vel_true[:,0] == 5)[0]
+    if len(pad_index) > 0:
+        # assume sequential
+        vel_pred = vel_pred[:pad_index[0]]
+        vel_true = vel_true[:pad_index[0]]
+
     pos_true = vel_true.cumsum(0)
     pos_pred = vel_pred.cumsum(0)
     ax.plot(pos_true[:,0], pos_true[:,1], label='true' if label else '', linestyle='-', color=color)

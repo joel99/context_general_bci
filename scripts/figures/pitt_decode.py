@@ -47,13 +47,16 @@ def get_clean_comp(csv_path):
     comp_df = comp_df.astype({
         'set': 'int64'
     })
-    comp_df['subject'] = 'CRS02bLab'
     comp_df['limit'] = 0
     comp_df['variant'] = 'kf_base'
     comp_df['series'] = 'kf_base'
     comp_df['data_id'] = comp_df['subject'] + '_' + comp_df['session'].astype(str) + '_' + comp_df['set'].astype(str)
     return comp_df
-comp_df = get_clean_comp('./scripts/figures/CRS02bSetInventory.csv')
+crs02b_df = get_clean_comp('./scripts/figures/CRS02bSetInventory.csv')
+crs02b_df['subject'] = 'CRS02bLab'
+
+comp_df = crs02b_df
+
 
 
 

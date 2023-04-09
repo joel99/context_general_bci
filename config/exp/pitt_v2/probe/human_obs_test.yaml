@@ -1,0 +1,5 @@
+# @package _global_
+defaults:
+  - _default
+inherit_tag: human_obs
+sweep_cfg: ""
