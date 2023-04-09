@@ -8,6 +8,7 @@ import seaborn as sns
 import numpy as np
 import torch
 import pandas as pd
+from copy import deepcopy
 import pytorch_lightning as pl
 from einops import rearrange
 
@@ -63,10 +64,11 @@ EVAL_DATASETS = [
 ]
 # expand by querying alias
 EVAL_DATASETS = SpikingDataset.list_alias_to_contexts(EVAL_DATASETS)
-EVAL_DATASETS = [x.alias for x in EVAL_DATASETS]
+EVAL_ALIASES = [x.alias for x in EVAL_DATASETS]
 
 EXPERIMENTS_KIN = [
-    f'pitt_v2/probe',
+    # f'pitt_v2/probe',
+    f'pitt_v2/probe_01',
 ]
 
 queries = [
@@ -76,11 +78,10 @@ queries = [
 ]
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
-# trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 runs_kin = wandb_query_experiment(EXPERIMENTS_KIN, order='created_at', **{
     "state": {"$in": ['finished', 'failed', 'crashed']},
 })
-print(f'Found {len(runs_kin)} runs. Evaluating on {len(EVAL_DATASETS)} datasets.')
+print(f'Found {len(runs_kin)} runs. Evaluating on {len(EVAL_ALIASES)} datasets.')
 
 #%%
 def get_evals(model, dataloader, runs=8, mode='nll'):
@@ -99,28 +100,29 @@ def get_evals(model, dataloader, runs=8, mode='nll'):
         })
     return pd.DataFrame(evals)[mode].mean()
 
-def get_single_payload(cfg: RootConfig, src_model, run, experiment_set, mode='nll'):
-    dataset = SpikingDataset(cfg.dataset)
-    set_limit = run.config['dataset']['scale_limit_per_eval_session']
-    dataset.subset_split(splits=['eval'])
+def get_single_payload(cfg: RootConfig, src_model, run, experiment_set, mode='nll', dataset=None):
+    if dataset is None:
+        dataset = SpikingDataset(cfg.dataset)
+        dataset.subset_split(splits=['eval'])
     dataset.build_context_index()
     data_attrs = dataset.get_data_attrs()
+    set_limit = run.config['dataset']['scale_limit_per_eval_session']
     cfg.model.task.tasks = [ModelTask.kinematic_decoding] # remove stochastic shuffle
     model = transfer_model(src_model, cfg.model, data_attrs)
     dataloader = get_dataloader(dataset)
 
     # the dataset name is of the for {type}_{subject}_session_{session}_set_{set}_....mat
     # parse out the variables
-    # _, subject, _, session, _, set_num, *_ = dataset.cfg.eval_datasets[0].split('_')
+    _, subject, _, session, _, set_num, *_ = dataset.cfg.eval_datasets[0].split('_')
 
     payload = {
         'limit': set_limit,
         'variant': run.name.split('-')[0],
         'series': experiment_set,
-        # 'data_id': f"{subject}_{session}_{set_num}",
-        # 'subject': subject,
-        # 'session': int(session),
-        # 'set': int(set_num),
+        'data_id': f"{subject}_{session}_{set_num}",
+        'subject': subject,
+        'session': int(session),
+        'set': int(set_num),
         'lr': run.config['model']['lr_init'], # swept
     }
     payload[mode] = get_evals(model, dataloader, mode=mode, runs=1 if mode != 'nll' else 8)
@@ -134,51 +136,54 @@ def build_df(runs, mode='nll'):
         src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
 
         experiment_set = run.config['experiment_set']
-        if (
-            variant,
-            run.config['dataset']['eval_datasets'][0],
-            run.config['model']['lr_init'],
-            experiment_set
-        ) in seen_set:
-            continue
-        payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode)
-        df.append(payload)
-        seen_set[(variant, run.config['dataset']['eval_datasets'][0], run.config['model']['lr_init']), experiment_set] = True
+        # if (
+        #     variant,
+        #     run.config['dataset']['eval_datasets'][0],
+        #     run.config['model']['lr_init'],
+        #     experiment_set
+        # ) in seen_set:
+        #     continue
+        # payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode)
+        # df.append(payload)
+        # seen_set[(variant, run.config['dataset']['eval_datasets'][0], run.config['model']['lr_init']), experiment_set] = True
 
         # Don't split into loop, we might be loading train data...
+        # In order to get the correct eval split, we need to use the same set of datasets as train (splits are not per dataset)
+        # So construct this and split it repeatedly
+        ref_df = SpikingDataset(cfg.dataset)
 
+        for i, dataset in enumerate(EVAL_ALIASES):
+            inst_df = deepcopy(ref_df)
+            inst_df.cfg.eval_datasets = [dataset]
+            inst_df.cfg.datasets = [dataset]
+            inst_df.subset_by_key([EVAL_DATASETS[i].id], key=MetaKey.session)
+            inst_df.subset_split(splits=['eval'])
 
-
-        # for dataset in EVAL_DATASETS:
-        #     cfg.dataset.datasets = [dataset]
-        #     cfg.dataset.eval_datasets = [dataset]
-        #     experiment_set = run.config['experiment_set']
-        #     if variant.startswith('sup') or variant.startswith('unsup'):
-        #         experiment_set = experiment_set + '_' + variant.split('_')[0]
-        #     if (
-        #         variant,
-        #         dataset,
-        #         run.config['model']['lr_init'],
-        #         experiment_set
-        #     ) in seen_set:
-        #         continue
-        #     payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode)
-        #     df.append(payload)
-        #     seen_set[(variant, dataset, run.config['model']['lr_init']), experiment_set] = True
+            experiment_set = run.config['experiment_set']
+            if variant.startswith('sup') or variant.startswith('unsup'):
+                experiment_set = experiment_set + '_' + variant.split('_')[0]
+            if (
+                variant,
+                dataset,
+                run.config['model']['lr_init'],
+                experiment_set
+            ) in seen_set:
+                continue
+            payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode, dataset=inst_df)
+            df.append(payload)
+            seen_set[(variant, dataset, run.config['model']['lr_init']), experiment_set] = True
     return pd.DataFrame(df)
 kin_df = build_df(runs_kin, mode='kin_r2')
 kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'series', 'data_id'])
 kin_df.drop(columns=['lr'])
+
+# # %%
+# kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'series'])
+# kin_df.drop(columns=['lr'])
+# print(kin_df)
+
+
 #%%
-
-kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'series'])
-kin_df.drop(columns=['lr'])
-print(kin_df)
-
-
-#%%
-kin_df['session'] = kin_df['session'].astype(int)
-kin_df['set'] = kin_df['set'].astype(int)
 df = pd.concat([kin_df, comp_df])
 #%%
 # Are we actually better or worse than Pitt baselines?
@@ -196,14 +201,17 @@ print(sub_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
 
 #%%
 # make pretty seaborn default
+subject = 'CRS02bLab'
+subject_df = sub_df[sub_df['subject'] == subject]
+
 sns.set_theme(style="whitegrid")
 # boxplot
-ax = sns.boxplot(data=kin_df, x='variant', y='kin_r2')
-# ax = sns.boxplot(data=sub_df, x='variant', y='kin_r2')
-ax.set_ylim(0)
+ax = sns.boxplot(data=subject_df, x='variant', y='kin_r2')
+ax.set_ylim(0, 1)
 ax.set_ylabel('Vel R2')
 ax.set_xlabel('Model variant')
-# ax.set_title('CRS07')
+ax.set_title(f'{subject} Perf ({EXPERIMENTS_KIN[0]})')
+
 #%%
 print(kin_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
 

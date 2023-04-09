@@ -1205,7 +1205,19 @@ class BehaviorRegression(TaskPipeline):
         if self.bhvr_mean is not None:
             bhvr_tgt = bhvr_tgt - self.bhvr_mean
             bhvr_tgt = bhvr_tgt / self.bhvr_std
-        loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
+        if getattr(self.cfg, 'behavior_integrate', False):
+            bhvr = bhvr.cumsum(dim=1)
+            bhvr_tgt = bhvr_tgt.cumsum(dim=1)
+            import pdb;pdb.set_trace()
+        if getattr(self.cfg, 'behavior_tolerance', 0) > 0:
+            # Calculate mse with a tolerance floor
+            loss = bhvr - bhvr_tgt
+            loss = torch.where(loss.abs() < self.cfg.behavior_tolerance, torch.zeros_like(loss), loss)
+            if getattr(self.cfg, 'behavior_tolerance_ceil', 0) > 0:
+                loss = torch.where((loss.abs() > self.cfg.behavior_tolerance_ceil).any(1, keepdim=True), torch.zeros_like(loss), loss)
+            loss = loss.pow(2)
+        else:
+            loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
         _, length_mask, _ = self.get_masks(
             batch, ref=backbone_features,
             length_key=COVARIATE_LENGTH_KEY if self.cfg.decode_strategy == EmbedStrat.token else LENGTH_KEY,

@@ -3,6 +3,8 @@ import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print
 from matplotlib import pyplot as plt
+import pandas as pd
+import numpy as np
 import seaborn as sns
 import torch
 from torch.utils.data import DataLoader
@@ -20,8 +22,11 @@ from analyze_utils import prep_plt
 from utils import get_wandb_run, wandb_query_latest
 
 
+mode = 'train'
+mode = 'test'
+
 query = "human-sweep-simpler_lr_sweep-dgnx7mn9"
-# query = 'session_cross_noctx-wc24ulkl'
+query = 'session_cross_noctx-wc24ulkl'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -39,26 +44,45 @@ if pipeline_model:
     pipeline_model = load_wandb_run(wandb_query_latest(pipeline_model, allow_running=True, use_display=True)[0], tag='val_loss')[0]
     cfg.model.task = pipeline_model.cfg.task
 
-cfg.dataset.datasets = ["observation_CRS02bLab_session_1908_set_1"]
-cfg.dataset.eval_datasets = ["observation_CRS02bLab_session_1908_set_1"]
+target_dataset = 'observation_CRS02bLab_session_1908_set_1'
+target_dataset = 'observation_CRS02bLab_session_1913_set_1'
+# target_dataset = 'observation_CRS02bLab_session_1922_set_6'
+# target_dataset = 'observation_CRS02bLab_session_1904_set_6'
+# target_dataset = 'observation_CRS02bLab_session_1925_set_3'
+
+# cfg.dataset.datasets = ["observation_CRS02bLab_session_1908_set_1"]
+# cfg.dataset.eval_datasets = ["observation_CRS02bLab_session_1908_set_1"]
 
 # cfg.dataset.datasets = ["odoherty_rtt-Indy-20160627_01"]
 # cfg.dataset.eval_datasets = ["odoherty_rtt-Indy-20160627_01"]
 
+cfg.dataset.datasets = [target_dataset]
+cfg.dataset.eval_datasets = [target_dataset]
+cfg.dataset.eval_ratio = 0.5
+# cfg.model.task.decode_normalizer = 'pitt_obs_zscore.pt'
+
 dataset = SpikingDataset(cfg.dataset)
-if cfg.dataset.eval_datasets:
+ctx = dataset.list_alias_to_contexts([target_dataset])[0]
+
+# dataset.subset_by_key([ctx.id], MetaKey.session)
+# print(len(dataset))
+if cfg.dataset.eval_datasets and mode == 'test':
     dataset.subset_split(splits=['eval'])
 else:
     # Mock training procedure to identify val data
     dataset.subset_split() # remove test data
     train, val = dataset.create_tv_datasets()
-    dataset = val
+    dataset = train
+
+dataset.subset_by_key([ctx.id], MetaKey.session)
+print(len(dataset))
 
 
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
 print(f'{len(dataset)} examples')
 cfg.model.task.tasks = [ModelTask.kinematic_decoding]
+
 model = transfer_model(src_model, cfg.model, data_attrs)
 
 if pipeline_model:
@@ -81,48 +105,18 @@ def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=1, **kwar
     )
 
 dataloader = get_dataloader(dataset)
-#%%
 heldin_metrics = stack_batch(trainer.test(model, dataloader))
 heldin_outputs = stack_batch(trainer.predict(model, dataloader))
-
 # A note on fullbatch R2 calculation - in my experience by bsz 128 the minibatch R2 ~ fullbatch R2 (within 0.01); for convenience we use minibatch R2
-# from sklearn.metrics import r2_score
-# print(r2_score(heldin_outputs[Output.behavior[:,offset_bins:]].flatten(0, 1), heldin_outputs[Output.behavior_pred[:,offset_bins:]].flatten(0, 1)), multioutput='raw_values')
+
+offset_bins = model.task_pipelines[ModelTask.kinematic_decoding.value].bhvr_lag_bins
 
 #%%
-import pandas as pd
-import numpy as np
-offset_bins = model.task_pipelines[ModelTask.kinematic_decoding.value].bhvr_lag_bins
-# B T H
-# The predictions here are definitely not correct...
-# So why do we have low error?
-# ?
-trials = 1
-# print(heldin_outputs[Output.behavior][0,:10,0])
-# print(heldin_outputs[Output.behavior_pred][0,:10,0])
-# print(heldin_outputs[Output.behavior].mean())
-# print(heldin_outputs[Output.behavior].max())
-# print(heldin_outputs[Output.behavior].min())
-# sns.histplot(heldin_outputs[Output.behavior].flatten())
-# sns.histplot(heldin_outputs[Output.behavior_pred].flatten())
 pred = heldin_outputs[Output.behavior_pred]
 pred = [p[offset_bins:] for p in pred]
 true = heldin_outputs[Output.behavior]
 true = [t[offset_bins:] for t in true]
 
-#%%
-print(pred[0].shape)
-print(dataset[0][DataKey.bhvr_vel].shape)
-plt.plot(pred[0][:,0])
-plt.plot(pred[0][:,1])
-# print(model.task_pipelines[ModelTask.kinematic_decoding.value].bhvr_std)
-#%%
-print(true[0].shape)
-print(dataset[0][DataKey.bhvr_vel].shape)
-plt.plot(true[0][:,0])
-plt.plot(true[0][:,1])
-
-#%%
 
 flat_pred = np.concatenate(pred) if isinstance(pred, list) else pred.flatten()
 flat_true = np.concatenate(true) if isinstance(true, list) else true.flatten()
@@ -146,24 +140,20 @@ df = pd.DataFrame({
 # sns.scatterplot(x='true', y='pred', hue='coord', data=df, ax=ax, s=3, alpha=0.4)
 
 # plot marginals
-sns.jointplot(x='true', y='pred', hue='coord', data=df, s=3, alpha=0.4)
-# sns.jointplot(x='true', y='pred', hue='coord', data=df, kind='hist') # Too slow
-#%%
-# print(true)
-sns.histplot(flat_true[:,0].flatten())
+g = sns.jointplot(x='true', y='pred', hue='coord', data=df, s=3, alpha=0.4)
 
+# set title
+g.fig.suptitle(f'{mode} {target_dataset} Velocity R2: {heldin_metrics["test_kinematic_r2"]:.2f}')
+
+# #%%
+# ax = prep_plt()
+# sns.histplot(heldin_outputs[Output.behavior].flatten(), ax=ax, bins=20)
+# ax.set_title('Distribution of velocity targets')
+# ax.set_yscale('log')
 #%%
 ax = prep_plt()
-# sns.histplot(heldin_outputs[Output.behavior_pred].flatten(), ax=ax, bins=20)
-# ax.set_title('Distribution of velocity predictions')
-
-sns.histplot(heldin_outputs[Output.behavior].flatten(), ax=ax, bins=20)
-ax.set_title('Distribution of velocity targets')
-ax.set_yscale('log')
-#%%
-ax = prep_plt()
-# trials = range(4)
-trials = torch.arange(10)
+trials = range(4)
+# trials = torch.arange(6)
 
 colors = sns.color_palette('colorblind', len(trials))
 def plot_trial(trial, ax, color, label=False):
@@ -185,6 +175,7 @@ def plot_trial(trial, ax, color, label=False):
 for i, trial in enumerate(trials):
     plot_trial(trial, ax, colors[i], label=i == 0)
 ax.legend()
+ax.set_title(f'{mode} {target_dataset} Trajectories')
 
 #%%
 # print(heldin_outputs[Output.rates].max(), heldin_outputs[Output.rates].mean())

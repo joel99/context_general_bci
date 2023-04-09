@@ -142,6 +142,12 @@ class TaskConfig:
     behavior_fit_thresh: float = 0.0 # exclude from loss, timesteps with values (velocities) less than this
     behavior_metric_thresh: float = 0.0001 # exclude from r2, timesteps with values (velocities) less than this
 
+    # Trying to deal with incredibly noisy behavioral labels from human observation
+    # By making supervision less prescriptive - expecting to reduce overfit
+    behavior_tolerance: float = 0.0 # if > 0, use this as a tolerance for behavior labels. If the difference between the predicted and actual behavior is less than this, don't penalize it.
+    behavior_tolerance_ceil: float = 0.0 # if > 0, use this as a tolerance for behavior labels. If the difference between the predicted and actual behavior is less than this, don't penalize it.
+    behavior_integrate: bool = False # if true, integrate the behavior labels to get a position. If false, use the velocity directly.
+
     decode_separate: bool = False # for bhvr decoding, use a separate transformer decoder? (Only compat with EmbedStrat.token)
     decode_time_pool: str = "" # none or 'mean'
     decode_strategy: EmbedStrat = EmbedStrat.project # or EmbedStrat.token
@@ -443,6 +449,10 @@ class DatasetConfig:
     dyer_co: DyerCOConfig = DyerCOConfig()
     gallego_co: ExperimentalConfig = ExperimentalConfig()
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
+
+    marino_posture_reach: ExperimentalConfig = ExperimentalConfig()
+    marino_posture_bci: ExperimentalConfig = ExperimentalConfig()
+
     pitt_co: PittConfig = PittConfig.create_with_arrays([ # This is actually the catch all for Pitt, and doesn't have any particular structure. No guarantees, might not even be CO.
         'CRS02b-lateral_m1', 'CRS02b-medial_m1',
         'CRS07-lateral_m1', 'CRS07-medial_m1',

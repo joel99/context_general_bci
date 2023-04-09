@@ -24,6 +24,9 @@ class ExperimentalTask(OrderedEnum):
     unstructured = "unstructured" # Pitt free play
     delay_reach = "delay_reach"
 
+    marino_batista_mp_bci = "marino_batista_mp_bci"
+    marino_batista_mp_reaching = "marino_batista_mp_reaching"
+
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 # Exports
 from .passive_icms import ICMSLoader
@@ -35,3 +38,4 @@ from .gallego_co import GallegoCOLoader
 from .churchland_misc import ChurchlandMiscLoader
 from .pitt_co import PittCOLoader
 from .delay_reach import DelayReachLoader
+from .marino_batista import MarinoBatistaLoader
