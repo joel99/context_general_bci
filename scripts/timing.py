@@ -42,7 +42,6 @@ src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
 dataset_name = DATASET_WHITELIST[0] # drop wandb ID
 cfg.dataset.datasets = [dataset_name]
 cfg.dataset.exclude_datasets = []
-
 dataset = SpikingDataset(cfg.dataset)
 dataset.subset_split(splits=['eval'])
 dataset.build_context_index()
@@ -70,6 +69,7 @@ if mode == 'gpu':
     model = model.to('cuda:0')
 with torch.no_grad():
     for batch in dataloader:
+        spikes = batch[DataKey.spikes]
         start = time.time()
         import pdb;pdb.set_trace()
         if mode == 'gpu':

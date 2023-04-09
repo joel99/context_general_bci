@@ -1194,6 +1194,8 @@ class BehaviorRegression(TaskPipeline):
             bhvr = F.pad(bhvr, (0, 0, self.bhvr_lag_bins, 0), value=0)
         if Output.behavior_pred in self.cfg.outputs:
             batch_out[Output.behavior_pred] = bhvr
+            if self.bhvr_mean is not None:
+                batch_out[Output.behavior_pred] = batch_out[Output.behavior_pred] * self.bhvr_std + self.bhvr_mean
         if Output.behavior in self.cfg.outputs:
             batch_out[Output.behavior] = batch[self.cfg.behavior_target]
         if not compute_metrics:

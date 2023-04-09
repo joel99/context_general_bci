@@ -70,6 +70,7 @@ dataset_name = 'odoherty_rtt-Indy-20170131_02'
 # dataset_name = 'observation'
 # dataset_name = 'ortho'
 # dataset_name = 'ortho_CRS07'
+dataset_name = "observation_CRS02bLab_session_1908_set_1"
 
 context = context_registry.query(alias=dataset_name)
 if isinstance(context, list):
@@ -110,7 +111,10 @@ print(f'Timerange: {min(lengths) * dataset.cfg.bin_size_ms, max(lengths) * datas
 #%%
 trial = 0
 trial = 1
-# trial = 5
+trial = 5
+trial = 10
+trial = 11
+
 trial_vel = dataset[trial][DataKey.bhvr_vel]
 
 # Show kinematic trace by integrating trial_vel
@@ -120,7 +124,9 @@ trial_pos = trial_pos - trial_pos[0]
 # # Plot
 fig, ax = plt.subplots(2, 1, sharex=True)
 ax[0].plot(trial_vel)
+ax[0].set_title('Velocity')
 ax[1].plot(trial_pos)
+ax[1].set_title('Position')
 
 #%%
 # Print distribution of velocities etc
@@ -141,7 +147,7 @@ trial = 2
 # trial = 10
 
 pop_spikes = dataset[trial][DataKey.spikes]
-pop_spikes = dataset[trial][DataKey.heldout_spikes]
+# pop_spikes = dataset[trial][DataKey.heldout_spikes]
 pop_spikes = pop_spikes[..., 0]
 # print diagnostics
 # print(pop_spikes[::2].sum(0))

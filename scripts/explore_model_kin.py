@@ -15,96 +15,38 @@ from data import SpikingDataset, DataAttrs
 from model import transfer_model, logger
 from contexts import context_registry
 
-from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
+from analyze_utils import stack_batch, load_wandb_run
 from analyze_utils import prep_plt
+from utils import get_wandb_run, wandb_query_latest
 
-query = "indy_base_decode"
-# query = "pitt_obs_decode"
-query = "pitt_obs_decode_scratch"
-query = "test_overfit"
-query = "pitt_obs_decode_scratch-sweep-small_wide-7ycit09t"
-# query = "pitt_obs_decode_scratch-sweep-small_wide-t1h7knvd"
-# query = "rtt_single-35cqqwnl"
-# query = "rtt_single-sweep-ft_reg-yni1txy2"
-query = "rtt_flat_indy-a25iab76"
-query = "indy_causal-stmn13ew"
-query = "indy_causal-xj392pjd"
-query = "indy_causal_v2-3w1f6vzx"
-# query = "loco_causal-rppp73zx"
-query = "mc_rtt_joint_tune_800-162hvyl4"
-query = "indy_causal_joint_0s-tne69igz"
-query = "robust_joint_unsup_tune_800-t1dtvj2p"
-# query = "mc_rtt_unsup_800-k0m5uklu"
 
-query = "rtt_stable-z4kfo8kx"
-query = "rtt_less_stable-j08z0tli"
-query = "rtt_less_stable_channel_uniform-3nwalkv6"
-query = "rtt_less_stable_channel_more_uniform-tyunypzj"
+query = "human-sweep-simpler_lr_sweep-dgnx7mn9"
+# query = 'session_cross_noctx-wc24ulkl'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='co_bps')
-# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='bps')
 src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
 
-# cfg.dataset.datasets = cfg.dataset.datasets[:1]
-# cfg.model.task.tasks = [ModelTask.infill]
 cfg.model.task.metrics = [Metric.kinematic_r2]
-# cfg.model.task.metrics = [Metric.bps, Metric.all_loss]
 cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
-# cfg.dataset.datasets = cfg.dataset.datasets[-1:]
-
-# cfg.dataset.datasets = ['odoherty_rtt-Indy-201606.*']
-# cfg.dataset.datasets = ['odoherty_rtt-Indy-20160627_01']
-# cfg.dataset.eval_datasets = []
 
 # Joint transfer exp
 pipeline_model = ""
-# pipeline_model = "indy_causal_joint_0s-tne69igz"
-# pipeline_model = "indy_causal_freeze_enc-j2lxcf6a"
 
 if pipeline_model:
     pipeline_model = load_wandb_run(wandb_query_latest(pipeline_model, allow_running=True, use_display=True)[0], tag='val_loss')[0]
     cfg.model.task = pipeline_model.cfg.task
 
-# Ahmadi 21 eval set sanity ballpark
-# TARGET_ALIASES = ['odoherty_rtt-Indy-20161005_06']
-# TARGET_ALIASES = ['odoherty_rtt-Indy-20160627_01']
+cfg.dataset.datasets = ["observation_CRS02bLab_session_1908_set_1"]
+cfg.dataset.eval_datasets = ["observation_CRS02bLab_session_1908_set_1"]
 
-# PSID-RNN eval set sanity ballpark
-# TARGET_ALIASES = ['odoherty_rtt-Indy-201606.*', 'odoherty_rtt-Indy-20160915.*', 'odoherty_rtt-Indy-20160916.*', 'odoherty_rtt-Indy-20160921.*']
-# TARGET_ALIASES = ['odoherty_rtt-Indy.*']
-TARGET_ALIASES = ['odoherty_rtt-Indy-20160426_01']
-# TARGET_ALIASES = ['odoherty_rtt-Indy-20160420_01']
-
-# TARGET_ALIASES = ['odoherty_rtt-Loco-20170215_02']
-# TARGET_ALIASES = ['odoherty_rtt-Loco.*']
-# TARGET_ALIASES = []
-
-TARGET_DATASETS = [context_registry.query(alias=td) for td in TARGET_ALIASES]
-
-FLAT_TARGET_DATASETS = []
-
-# cfg.dataset.datasets = ['mc_rtt']
-# cfg.dataset.eval_datasets = ['mc_rtt']
-
-for td in TARGET_DATASETS:
-    if td == None:
-        continue
-    if isinstance(td, list):
-        FLAT_TARGET_DATASETS.extend(td)
-    else:
-        FLAT_TARGET_DATASETS.append(td)
-TARGET_DATASETS = [td.id for td in FLAT_TARGET_DATASETS]
-
-# if cfg.dataset.datasets == ['mc_rtt']:
-cfg.dataset.datasets = TARGET_ALIASES
-cfg.dataset.eval_datasets = []
+# cfg.dataset.datasets = ["odoherty_rtt-Indy-20160627_01"]
+# cfg.dataset.eval_datasets = ["odoherty_rtt-Indy-20160627_01"]
 
 dataset = SpikingDataset(cfg.dataset)
-if cfg.dataset.eval_datasets and not TARGET_DATASETS:
+if cfg.dataset.eval_datasets:
     dataset.subset_split(splits=['eval'])
 else:
     # Mock training procedure to identify val data
@@ -112,13 +54,11 @@ else:
     train, val = dataset.create_tv_datasets()
     dataset = val
 
-if TARGET_DATASETS:
-    dataset.subset_by_key(TARGET_DATASETS, key=MetaKey.session)
 
 data_attrs = dataset.get_data_attrs()
 print(data_attrs)
 print(f'{len(dataset)} examples')
-
+cfg.model.task.tasks = [ModelTask.kinematic_decoding]
 model = transfer_model(src_model, cfg.model, data_attrs)
 
 if pipeline_model:
@@ -151,6 +91,7 @@ heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 
 #%%
 import pandas as pd
+import numpy as np
 offset_bins = model.task_pipelines[ModelTask.kinematic_decoding.value].bhvr_lag_bins
 # B T H
 # The predictions here are definitely not correct...
@@ -164,12 +105,18 @@ trials = 1
 # print(heldin_outputs[Output.behavior].min())
 # sns.histplot(heldin_outputs[Output.behavior].flatten())
 # sns.histplot(heldin_outputs[Output.behavior_pred].flatten())
-pred = heldin_outputs[Output.behavior_pred][:,offset_bins:]
-true = heldin_outputs[Output.behavior][:,offset_bins:]
+pred = heldin_outputs[Output.behavior_pred]
+pred = [p[offset_bins:] for p in pred]
+true = heldin_outputs[Output.behavior]
+true = [t[offset_bins:] for t in true]
+
+flat_pred = np.concatenate(pred) if isinstance(pred, list) else pred.flatten()
+flat_true = np.concatenate(true) if isinstance(true, list) else true.flatten()
+print(flat_pred.shape)
 df = pd.DataFrame({
-    'pred': pred.flatten(),
-    'true': true.flatten(),
-    'coord': (pred.shape[0] * pred.shape[1]) * ['x'] + (pred.shape[0] * pred.shape[1]) * ['y'],
+    'pred': flat_pred.flatten(),
+    'true': flat_true.flatten(),
+    'coord': len(flat_pred) * ['x'] + len(flat_true) * ['y'],
 })
 # ax = prep_plt()
 # sns.scatterplot(x='true', y='pred', hue='coord', data=df, ax=ax, s=3, alpha=0.4)
@@ -177,7 +124,9 @@ df = pd.DataFrame({
 # plot marginals
 sns.jointplot(x='true', y='pred', hue='coord', data=df, s=3, alpha=0.4)
 # sns.jointplot(x='true', y='pred', hue='coord', data=df, kind='hist') # Too slow
-
+#%%
+# print(true)
+sns.histplot(flat_true[:,0].flatten())
 
 #%%
 ax = prep_plt()
@@ -200,6 +149,7 @@ def plot_trial(trial, ax, color, label=False):
     pos_pred = vel_pred.cumsum(0)
     ax.plot(pos_true[:,0], pos_true[:,1], label='true' if label else '', linestyle='-', color=color)
     ax.plot(pos_pred[:,0], pos_pred[:,1], label='pred' if label else '', linestyle='--', color=color)
+
 
 for i, trial in enumerate(trials):
     plot_trial(trial, ax, colors[i], label=i == 0)

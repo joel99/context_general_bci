@@ -174,7 +174,7 @@ class PittCOLoader(ExperimentalTaskLoader):
                         continue
                     # trim edges -- typically a trial starts with half a second of inter-trial and ends with a second of failure/inter-trial pad
                     session_spikes = session_spikes[start_pad:-end_pad]
-                    if 'position' in payload and task == ExperimentalTask.observation: # We only "trust" in the labels provided by obs (for now)
+                    if 'position' in payload and task in [ExperimentalTask.observation, ExperimentalTask.ortho, ExperimentalTask.fbc]: # We only "trust" in the labels provided by obs (for now)
                         session_vel = get_velocity(payload['position'][payload['trial_num'] == i])[start_pad:-end_pad]
                     else:
                         session_vel = None

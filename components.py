@@ -626,22 +626,21 @@ class SpaceTimeTransformer(nn.Module):
             # Suggested fix: pad value set to something nonzero. (IDR why we didn't set that in the first place, I think concerns about attending to sub-chunk padding?)
             # import pdb;pdb.set_trace()
             if self.cross_attn_enabled:
-                if memory is None:
-                    memory = trial_context
-                else:
-                    memory = torch.cat([memory, trial_context], dim=1)
+                memory = [i for i in [memory, trial_context] if i is not None]
+                memory = torch.cat(memory, dim=1)
                 if memory_times is None: # No mask needed for context only
                     memory_mask = None
                 else: # This is the covariate decode path
                     memory_mask = SpaceTimeTransformer.generate_square_subsequent_mask_from_times(
                         times, memory_times
                     )
-                    memory_mask = torch.cat([memory_mask, torch.zeros(
-                        (memory_mask.size(0), contextualized_src.size(1), trial_context.size(1)),
-                        dtype=torch.float, device=memory_mask.device
-                    )], dim=-1)
+                    if trial_context is not None:
+                        memory_mask = torch.cat([memory_mask, torch.zeros(
+                            (memory_mask.size(0), contextualized_src.size(1), trial_context.size(1)),
+                            dtype=torch.float, device=memory_mask.device
+                        )], dim=-1)
                     memory_mask = repeat(memory_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
-                    if memory_padding_mask is not None:
+                    if memory_padding_mask is not None and trial_context is not None:
                         memory_padding_mask = torch.cat([
                             memory_padding_mask,
                             torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)

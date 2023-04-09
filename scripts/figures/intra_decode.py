@@ -25,7 +25,7 @@ pl.seed_everything(0)
 UNSORT = True
 # UNSORT = False
 
-ROBUST_RUN = 'session_cross_noctx-89e73b3s'
+ROBUST_RUN = 'session_cross_noctx-wc24ulkl'
 DATASET_WHITELIST = [
     "odoherty_rtt-Indy-20160407_02",
     "odoherty_rtt-Indy-20170131_02",
@@ -101,6 +101,7 @@ def get_single_payload(cfg: RootConfig, src_model, run, experiment_set, mode='nl
     dataset.subset_split(splits=['eval'])
     dataset.build_context_index()
     data_attrs = dataset.get_data_attrs()
+    cfg.model.task.tasks = [ModelTask.kinematic_decoding] # remove stochastic shuffle
     model = transfer_model(src_model, cfg.model, data_attrs)
     dataloader = get_dataloader(dataset)
 
@@ -156,8 +157,6 @@ df = kin_df
 #%%
 print(df)
 
-#%%
-print(df[df['series'] == 'scale_v3/intra_unsort/'])
 #%%
 prescribed_limits = {
     's3200': 3190,

@@ -131,14 +131,15 @@ def get_wandb_lineage(cfg: RootConfig):
         filters={
             "config.experiment_set": cfg.inherit_exp,
             "config.tag": lineage_query,
-            "state": {"$in": ["finished"]}
+            "state": {"$in": ["finished", "crashed"]}
         }
     )
     if len(runs) == 0:
         raise ValueError(f"No wandb runs found for experiment set {cfg.inherit_exp} and tag {cfg.tag}")
     # Basic sanity checks on the loaded checkpoint
     # check runtime
-    if runs[0].summary.get("_runtime", 0) < 1 * 60: # (seconds)
+    # Allow crashed, which is slurm timeout
+    if runs[0].state != 'crashed' and runs[0].summary.get("_runtime", 0) < 1 * 60: # (seconds)
         raise ValueError(f"InheritError: Run {runs[0].id} abnormal runtime {runs[0].summary.get('_runtime', 0)}")
 
     return runs[0] # auto-sorts to newest
@@ -157,7 +158,7 @@ def wandb_run_exists(cfg: RootConfig, experiment_set: str="", tag: str="", other
         filters={
             "config.experiment_set": experiment_set if experiment_set else cfg.experiment_set,
             "config.tag": tag if tag else cfg.tag,
-            "state": {"$in": ["finished"]},
+            "state": {"$in": ["finished", "crashed"]},
             **other_overrides,
         }
     )

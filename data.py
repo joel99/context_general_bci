@@ -187,11 +187,13 @@ class SpikingDataset(Dataset):
             current.pop('heldout_neurons')
         return current != cached_preproc_version
 
-    def list_alias_to_contexts(self, path_or_alias_list: List[Path | str]) -> List[ContextInfo]:
+    @staticmethod
+    def list_alias_to_contexts(path_or_alias_list: List[Path | str]) -> List[ContextInfo]:
         # sorted wrapper for more safety
-        return sorted([c for p in path_or_alias_list for c in self.aliases_to_contexts(p)])
+        return sorted([c for p in path_or_alias_list for c in SpikingDataset.aliases_to_contexts(p)])
 
-    def aliases_to_contexts(self, session_path_or_alias: Path | str) -> List[ContextInfo]:
+    @staticmethod
+    def aliases_to_contexts(session_path_or_alias: Path | str) -> List[ContextInfo]:
         if isinstance(session_path_or_alias, str):
             # Try alias
             context_meta = context_registry.query(alias=session_path_or_alias)
