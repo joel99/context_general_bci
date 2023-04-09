@@ -50,25 +50,20 @@ def get_clean_comp(csv_path):
     comp_df['limit'] = 0
     comp_df['variant'] = 'kf_base'
     comp_df['series'] = 'kf_base'
-    comp_df['data_id'] = comp_df['subject'] + '_' + comp_df['session'].astype(str) + '_' + comp_df['set'].astype(str)
     return comp_df
 crs02b_df = get_clean_comp('./scripts/figures/CRS02bSetInventory.csv')
 crs02b_df['subject'] = 'CRS02bLab'
-
-comp_df = crs02b_df
-
+crs07_df = get_clean_comp('./scripts/figures/CRS07SetInventory.csv')
+crs07_df['subject'] = 'CRS07Lab'
+comp_df = pd.concat([crs02b_df, crs07_df])
+comp_df['data_id'] = comp_df['subject'] + '_' + comp_df['session'].astype(str) + '_' + comp_df['set'].astype(str)
 
 
 
 EVAL_DATASETS = [
     'observation_CRS02bLab_session_19.*',
-    # "observation_CRS02bLab_session_1903",
-    # "observation_CRS02bLab_session_1905",
-    # "observation_CRS02bLab_session_1908_set_1",
-    # "observation_CRS02bLab_session_1903",
-    # "observation_CRS02bLab_session_19.",
-    # "observation_CRS07Lab_session_15.",
-    # "observation_CRS07Lab_session_16."
+    # 'observation_CRS07Lab_session_15.*',
+    # 'observation_CRS07Lab_session_16.*',
 ]
 # expand by querying alias
 EVAL_DATASETS = SpikingDataset.list_alias_to_contexts(EVAL_DATASETS)
@@ -181,10 +176,14 @@ sub_df = df[df['data_id'].isin(intersect_ids)]
 print(sub_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
 
 #%%
-
+# make pretty seaborn default
+sns.set_theme(style="whitegrid")
 # boxplot
 ax = sns.boxplot(data=sub_df, x='variant', y='kin_r2')
 ax.set_ylim(0)
+ax.set_ylabel('Vel R2')
+ax.set_xlabel('Model variant')
+ax.set_title('CRS07')
 
 
 #%%
