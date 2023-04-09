@@ -22,10 +22,6 @@ from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
 
 pl.seed_everything(0)
 
-UNSORT = True
-# UNSORT = False
-
-# TODO repeat for CRS07 data
 def get_clean_comp(csv_path):
     local_scores = pd.read_csv(csv_path)
     # R2 is currently either a nan, a single number, or a string with two numbers, parse out the average
@@ -62,8 +58,8 @@ comp_df['data_id'] = comp_df['subject'] + '_' + comp_df['session'].astype(str) +
 
 EVAL_DATASETS = [
     'observation_CRS02bLab_session_19.*',
-    # 'observation_CRS07Lab_session_15.*',
-    # 'observation_CRS07Lab_session_16.*',
+    'observation_CRS07Lab_session_15.*',
+    'observation_CRS07Lab_session_16.*',
 ]
 # expand by querying alias
 EVAL_DATASETS = SpikingDataset.list_alias_to_contexts(EVAL_DATASETS)
@@ -115,16 +111,16 @@ def get_single_payload(cfg: RootConfig, src_model, run, experiment_set, mode='nl
 
     # the dataset name is of the for {type}_{subject}_session_{session}_set_{set}_....mat
     # parse out the variables
-    _, subject, _, session, _, set_num, *_ = dataset.cfg.eval_datasets[0].split('_')
+    # _, subject, _, session, _, set_num, *_ = dataset.cfg.eval_datasets[0].split('_')
 
     payload = {
         'limit': set_limit,
         'variant': run.name.split('-')[0],
         'series': experiment_set,
-        'data_id': f"{subject}_{session}_{set_num}",
-        'subject': subject,
-        'session': int(session),
-        'set': int(set_num),
+        # 'data_id': f"{subject}_{session}_{set_num}",
+        # 'subject': subject,
+        # 'session': int(session),
+        # 'set': int(set_num),
         'lr': run.config['model']['lr_init'], # swept
     }
     payload[mode] = get_evals(model, dataloader, mode=mode, runs=1 if mode != 'nll' else 8)
@@ -136,30 +132,53 @@ def build_df(runs, mode='nll'):
     for run in runs:
         variant, _frag, *rest = run.name.split('-')
         src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
-        # dataset_name = cfg.dataset.datasets[0] # drop wandb ID
-        for dataset in EVAL_DATASETS:
-            cfg.dataset.datasets = [dataset]
-            cfg.dataset.eval_datasets = [dataset]
-            experiment_set = run.config['experiment_set']
-            if variant.startswith('sup') or variant.startswith('unsup'):
-                experiment_set = experiment_set + '_' + variant.split('_')[0]
-            if (
-                variant,
-                dataset,
-                run.config['model']['lr_init'],
-                experiment_set
-            ) in seen_set:
-                continue
-            payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode)
-            df.append(payload)
-            seen_set[(variant, dataset, run.config['model']['lr_init']), experiment_set] = True
+
+        experiment_set = run.config['experiment_set']
+        if (
+            variant,
+            run.config['dataset']['eval_datasets'][0],
+            run.config['model']['lr_init'],
+            experiment_set
+        ) in seen_set:
+            continue
+        payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode)
+        df.append(payload)
+        seen_set[(variant, run.config['dataset']['eval_datasets'][0], run.config['model']['lr_init']), experiment_set] = True
+
+        # Don't split into loop, we might be loading train data...
+
+
+
+        # for dataset in EVAL_DATASETS:
+        #     cfg.dataset.datasets = [dataset]
+        #     cfg.dataset.eval_datasets = [dataset]
+        #     experiment_set = run.config['experiment_set']
+        #     if variant.startswith('sup') or variant.startswith('unsup'):
+        #         experiment_set = experiment_set + '_' + variant.split('_')[0]
+        #     if (
+        #         variant,
+        #         dataset,
+        #         run.config['model']['lr_init'],
+        #         experiment_set
+        #     ) in seen_set:
+        #         continue
+        #     payload = get_single_payload(cfg, src_model, run, experiment_set, mode=mode)
+        #     df.append(payload)
+        #     seen_set[(variant, dataset, run.config['model']['lr_init']), experiment_set] = True
     return pd.DataFrame(df)
 kin_df = build_df(runs_kin, mode='kin_r2')
 kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'series', 'data_id'])
 kin_df.drop(columns=['lr'])
+#%%
+
+kin_df = kin_df.sort_values('kin_r2', ascending=False).drop_duplicates(['variant', 'series'])
+kin_df.drop(columns=['lr'])
+print(kin_df)
+
+
+#%%
 kin_df['session'] = kin_df['session'].astype(int)
 kin_df['set'] = kin_df['set'].astype(int)
-
 df = pd.concat([kin_df, comp_df])
 #%%
 # Are we actually better or worse than Pitt baselines?
@@ -179,12 +198,14 @@ print(sub_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
 # make pretty seaborn default
 sns.set_theme(style="whitegrid")
 # boxplot
-ax = sns.boxplot(data=sub_df, x='variant', y='kin_r2')
+ax = sns.boxplot(data=kin_df, x='variant', y='kin_r2')
+# ax = sns.boxplot(data=sub_df, x='variant', y='kin_r2')
 ax.set_ylim(0)
 ax.set_ylabel('Vel R2')
 ax.set_xlabel('Model variant')
-ax.set_title('CRS07')
-
+# ax.set_title('CRS07')
+#%%
+print(kin_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
 
 #%%
 g = sns.catplot(data=sub_df, col='data_id', x='variant', y='kin_r2', kind='bar', col_wrap=4)
