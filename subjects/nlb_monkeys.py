@@ -82,3 +82,10 @@ class Reggie(SubjectInfo):
         'M1': GeometricArrayInfo(array=np.arange(96)), # P sure this guy only has 94 channels but 96 rounds it even and we pad in `churchland_misc`
         'PMd': GeometricArrayInfo(array=np.arange(96) + 94),
     }
+
+@SubjectArrayRegistry.register
+class Earl(SubjectInfo):
+    name = SubjectName.earl
+    _arrays = {
+        'M1': SortedArrayInfo(_max_channels=96),
+    }

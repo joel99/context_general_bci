@@ -18,7 +18,8 @@ from .context_info import (
     DyerCOContextInfo,
     GallegoCOContextInfo,
     GDrivePathContextInfo,
-    BCIContextInfo
+    BCIContextInfo,
+    BatistaContextInfo,
 )
 
 from tasks import ExperimentalTask
@@ -157,4 +158,7 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
             'free_play': ExperimentalTask.unstructured,
             'default': ExperimentalTask.pitt_co,
         }),
+
+        *BatistaContextInfo.build_from_dir('./data/marino_batista/earl_multi_posture_bci', task=ExperimentalTask.marino_batista_mp_bci),
+        *BatistaContextInfo.build_from_dir('./data/marino_batista/earl_multi_posture_dco_reaching', task=ExperimentalTask.marino_batista_mp_reaching),
     ])

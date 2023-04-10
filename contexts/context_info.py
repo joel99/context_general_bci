@@ -535,6 +535,32 @@ class RTTContextInfo(ContextInfo):
             )
         return map(make_info, datapath_folder.glob("*.mat"))
 
+
+@dataclass
+class BatistaContextInfo(ContextInfo):
+
+    def _id(self):
+        return self.alias
+
+    @classmethod
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"]):
+        root = Path(root)
+        if not root.exists():
+            logger.warning(f"Datapath folder {root} does not exist. Skipping.")
+            return []
+        def make_info(path: Path):
+            subject, *_ = root.stem.split("_")
+            subject = SubjectArrayRegistry.query_by_subject(subject)
+            return BatistaContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=arrays,
+                alias=f"marino_{subject.name.value}-{path.stem}",
+                datapath=path,
+            )
+        infos = map(make_info, root.glob("*.mat"))
+        return filter(lambda x: x is not None, infos)
+
 # ====
 # Archive
 

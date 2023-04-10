@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from scipy.signal import decimate
 
 from config import DataKey, DatasetConfig
 from subjects import SubjectInfo, create_spike_payload
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 class MarinoBatistaLoader(ExperimentalTaskLoader):
     name = ExperimentalTask.marino_batista_mp_reaching
 
+    BASE_RES = 1000 # hz (i.e. 1ms)
+
     @classmethod
     def load(
         cls,
@@ -34,78 +37,45 @@ class MarinoBatistaLoader(ExperimentalTaskLoader):
         dataset_alias: str,
         **kwargs,
     ):
-        mat_dict = loadmat(datapath)
-        import pdb;pdb.set_trace()
+        mat_dict = loadmat(datapath)['Data']
 
-        # load matrix
-        trialtable = mat_dict['trial_table']
-        neurons = mat_dict['out_struct']['units']
-        # pos = np.array(mat_dict['out_struct']['pos'])
-        vel = np.array(mat_dict['out_struct']['vel'])
-        # acc = np.array(mat_dict['out_struct']['acc'])
-        # force = np.array(mat_dict['out_struct']['force'])
-        time = vel[:, 0]
-
-        num_neurons = len(neurons)
-        num_trials = trialtable.shape[0]
+        state_data = mat_dict['stateData']
+        spikes = mat_dict['spikes'] # L [T (ms) x C (neurons)]
+        num_trials = len(state_data)
+        use_vel = 'BCI' not in str(datapath)
+        if use_vel:
+            marker_data = mat_dict['marker']
 
         meta_payload = {}
         meta_payload['path'] = []
 
         arrays_to_use = context_arrays
-        # data_list = {'firing_rates': [], 'position': [], 'velocity': [], 'acceleration': [],
-                    #  'force': [], 'labels': [], 'sequence': []}
         for trial_id in range(num_trials):
-            min_T = trialtable[trial_id, 9]
-            max_T = trialtable[trial_id, 12]
+            trial_time = mat_dict['time'][trial_id]
+            trial_spikes = spikes[trial_id]
+            if use_vel:
+                trial_vel = marker_data[trial_id]['velocity'][:,:2] # x and y, mm/ms -> m/s for consistency with other monkey tasks
+                nan_mask = np.isnan(trial_vel[:,0])
+                marker_time = marker_data[trial_id]['time']
+                marker_time = marker_time[~nan_mask]
+                trial_vel = trial_vel[~nan_mask]
+                # assumes continuitiy, i.e. nan mask only cropping ends
+                intersect_time = np.intersect1d(trial_time, marker_time)
+                # subset both spikes and vel to the same time
+                trial_spikes = trial_spikes[np.isin(trial_time, intersect_time)]
+                trial_vel = trial_vel[np.isin(marker_time, intersect_time)]
 
-            binning_period = cfg.bin_size_ms / 1000
-            grid = np.arange(min_T, max_T + binning_period, binning_period)
-            grids = grid[:-1]
-            gride = grid[1:]
-            num_bins = len(grids)
+                # downsample
+                if trial_vel.shape[0] % int(cfg.bin_size_ms) != 0:
+                    # crop beginning
+                    trial_vel = trial_vel[int(cfg.bin_size_ms) - (trial_vel.shape[0] % int(cfg.bin_size_ms)):]
+                trial_vel = decimate(trial_vel, int(cfg.bin_size_ms / 1), axis=0, zero_phase=True)
 
-            neurons_binned = np.zeros((num_bins, num_neurons))
-            # pos_binned = np.zeros((num_bins, 2))
-            vel_binned = np.zeros((num_bins, 2))
-            # acc_binned = np.zeros((num_bins, 2))
-            # force_binned = np.zeros((num_bins, 2))
-            # targets_binned = np.zeros((num_bins,))
-            # id_binned = np.arange(num_bins)
-
-            # JY: binning edited to be a bit more efficient
-            for k in range(num_bins):
-                bin_mask = (time >= grids[k]) & (time <= gride[k])
-                # if len(pos) > 0:
-                    # pos_binned[k, :] = np.mean(pos[bin_mask, 1:], axis=0)
-                vel_binned[k, :] = np.mean(vel[bin_mask, 1:], axis=0)
-                # if len(acc):
-                #     acc_binned[k, :] = np.mean(acc[bin_mask, 1:], axis=0)
-                # if len(force) > 0:
-                #     force_binned[k, :] = np.mean(force[bin_mask, 1:], axis=0)
-                # targets_binned[k] = trialtable[trial_id, 1]
-            for i in range(num_neurons):
-                spike_times = neurons[i]['ts']
-                neurons_binned[:, i] = np.histogram(spike_times, grid)[0]
-                # for k in range(num_bins):
-                #     bin_mask = (spike_times >= grids[k]) & (spike_times <= gride[k])
-                #     neurons_binned[k, i] = np.sum(bin_mask) # / binning_period
-
-            # filter velocity
-            mask = np.linalg.norm(vel_binned, 2, axis=1) > cfg.dyer_co.velocity_threshold
-            # data_list['firing_rates'].append(neurons_binned[mask])
-            # data_list['position'].append(pos_binned[mask])
-            # data_list['velocity'].append(vel_binned[mask])
-            # data_list['acceleration'].append(acc_binned[mask])
-            # data_list['force'].append(force_binned[mask])
-            # data_list['labels'].append(targets_binned[mask])
-            # data_list['sequence'].append(id_binned[mask])
             single_payload = {
-                DataKey.spikes: create_spike_payload(neurons_binned[mask], arrays_to_use),
-                DataKey.bhvr_vel: torch.tensor(vel_binned[mask]),
-                # DataKey.bhvr_acc: torch.tensor(acc_binned[mask]),
-                # DataKey.bhvr_force: torch.tensor(force_binned[mask]),
+                DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg, spike_bin_size_ms=1),
             }
+            if use_vel:
+                single_payload[DataKey.bhvr_vel] = torch.tensor(trial_vel.copy())
             single_path = cache_root / f'{trial_id}.pth'
             meta_payload['path'].append(single_path)
             torch.save(single_payload, single_path)

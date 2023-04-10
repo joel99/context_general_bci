@@ -4,6 +4,7 @@ r"""
 import scipy
 from scipy import io as spio
 import numpy as np
+import mat73
 
 def loadmat(filename):
     r"""This function should be called instead of direct spio.loadmat
@@ -48,6 +49,8 @@ def loadmat(filename):
             else:
                 elem_list.append(sub_elem)
         return elem_list
-
-    data = scipy.io.loadmat(filename, struct_as_record=False, squeeze_me=True)
-    return _check_keys(data)
+    try:
+        data = scipy.io.loadmat(filename, struct_as_record=False, squeeze_me=True)
+        return _check_keys(data)
+    except:
+        return mat73.loadmat(filename)

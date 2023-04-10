@@ -23,7 +23,7 @@ from tasks import ExperimentalTask
 # dataset_name = 'mc_maze_small' # 107 sorted units
 # dataset_name = 'mc_maze$' # 137 sorted units
 # dataset_name = 'churchland_maze_jenkins-0'
-# dataset_name = 'churchland_maze_jenkins-1'
+dataset_name = 'churchland_maze_jenkins-1'
 # dataset_name = 'churchland_maze_jenkins-2'
 # dataset_name = 'churchland_maze_jenkins-3'
 # dataset_name = 'churchland_maze_nitschke-0'
@@ -41,14 +41,14 @@ from tasks import ExperimentalTask
 # dataset_name = 'odoherty_rtt-Loco-20170301_05'
 # dataset_name = 'odoherty_rtt-Loco-20170302_02'
 # dataset_name = 'odoherty_rtt-Loco-20170227_04'
-# dataset_name = 'odoherty_rtt-Loco-20170210_03'
+dataset_name = 'odoherty_rtt-Loco-20170210_03'
 
 # dataset_name = 'odoherty_rtt-Indy.*'
-dataset_name = 'odoherty_rtt-Indy-20160627_01'
-dataset_name = 'odoherty_rtt-Indy-20160407_02'
-dataset_name = 'odoherty_rtt-Indy-20161005_06'
-dataset_name = 'odoherty_rtt-Indy-20161026_03'
-dataset_name = 'odoherty_rtt-Indy-20170131_02'
+# dataset_name = 'odoherty_rtt-Indy-20160627_01'
+# dataset_name = 'odoherty_rtt-Indy-20160407_02'
+# dataset_name = 'odoherty_rtt-Indy-20161005_06'
+# dataset_name = 'odoherty_rtt-Indy-20161026_03'
+# dataset_name = 'odoherty_rtt-Indy-20170131_02'
 # dataset_name = 'odoherty_rtt-Indy-20161005_06'
 # dataset_name = 'odoherty_rtt-Indy-20160630_01'
 # dataset_name = 'odoherty_rtt-Indy-20160915_01'
@@ -70,8 +70,10 @@ dataset_name = 'odoherty_rtt-Indy-20170131_02'
 # dataset_name = 'observation'
 # dataset_name = 'ortho'
 # dataset_name = 'ortho_CRS07'
-dataset_name = "observation_CRS02bLab_session_1908_set_1"
+# dataset_name = "observation_CRS02bLab_session_1908_set_1"
 
+# dataset_name = 'marino_Earl-Del*'
+# dataset_name = 'marino_Earl-BCI*'
 context = context_registry.query(alias=dataset_name)
 if isinstance(context, list):
     context = context[0]
@@ -80,9 +82,12 @@ print(context)
 # context = context_registry.query_by_datapath(datapath)
 
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
+default_cfg.odoherty_rtt.include_sorted = False
+default_cfg.odoherty_rtt.arrays = ['Indy-M1', 'Loco-M1']
 # default_cfg.data_keys = [DataKey.spikes]
 # default_cfg.data_keys = [DataKey.spikes]
 # default_cfg.data_keys = [DataKey.spikes, DataKey.heldout_spikes, DataKey.bhvr_vel]
+default_cfg.data_keys = [DataKey.spikes] # , DataKey.bhvr_vel]
 default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 20
 default_cfg.max_channels = 288
