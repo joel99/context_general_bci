@@ -103,13 +103,14 @@ class SkinnyBehaviorRegression(nn.Module):
             self.bhvr_std = None
 
         self.register_buffer('decode_token', repeat(torch.zeros(cfg.hidden_size), 'h -> 1 t h', t=TIMESTEPS))
-        self.register_buffer('decode_time', torch.arange(TIMESTEPS).unsqueeze(0)) # 20ms bins, 2s
+        self.register_buffer('decode_time', torch.arange(TIMESTEPS).unsqueeze(0)) # 20ms bins, 2s # 1 t
         if self.causal and self.cfg.behavior_lag_lookahead:
             self.decode_time = self.decode_time + self.bhvr_lag_bins
 
     def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: List[torch.Tensor]) -> torch.Tensor:
+        # import pdb;pdb.set_trace()
         backbone_features: torch.Tensor = self.decoder(
-            self.decode_tokens,
+            self.decode_token,
             trial_context=trial_context,
             times=self.decode_time,
             positions=None,
@@ -230,6 +231,8 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                         self.session_flag = nn.Parameter(torch.randn(self.cfg.session_embed_size) / math.sqrt(self.cfg.session_embed_size))
                     else:
                         self.session_flag = nn.Parameter(torch.zeros(self.cfg.session_embed_size))
+        else:
+            self.session_embed = None
 
         if self.cfg.subject_embed_strategy is not EmbedStrat.none:
             self.subject_embed = nn.Embedding(len(self.data_attrs.context.subject), self.cfg.subject_embed_size)
@@ -241,6 +244,8 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                     self.subject_flag = nn.Parameter(torch.randn(self.cfg.subject_embed_size) / math.sqrt(self.cfg.subject_embed_size))
                 else:
                     self.subject_flag = nn.Parameter(torch.zeros(self.cfg.subject_embed_size))
+        else:
+            self.subject_embed = None
 
         if self.cfg.task_embed_strategy is not EmbedStrat.none:
             if self.cfg.task_embed_strategy == EmbedStrat.token and getattr(self.cfg, 'task_embed_token_count', 1) > 1:
@@ -256,6 +261,8 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                         self.task_flag = nn.Parameter(torch.randn(self.cfg.task_embed_size) / math.sqrt(self.cfg.task_embed_size))
                     else:
                         self.task_flag = nn.Parameter(torch.zeros(self.cfg.task_embed_size))
+        else:
+            self.task_embed = None
 
         if self.data_attrs.max_channel_count > 0: # there is padding
             channel_count = self.data_attrs.max_channel_count
@@ -362,22 +369,25 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
 
     def forward(
         self,
-        spikes: torch.Tensor # T x C x H # ! should be int dtype, double check
+        spikes: torch.Tensor # B=1 x T x C x H # ! should be int dtype, double check
     ) -> torch.Tensor: # out is behavior, T x 2
         # do the reshaping yourself
         # ! Assumes this divides evenly
-        spikes = spikes.unfold(1, self.cfg.neurons_per_token, self.cfg.neurons_per_token).flatten(-2)
-        t, c, h = spikes.size()
-        time = repeat(torch.arange(spikes.size(0), device=spikes.device), 't -> (t c)')
-        position = repeat(torch.arange(c, device=spikes.device), 'c -> (t c)', t=t)
+        spikes = spikes.unfold(2, self.cfg.neurons_per_token, self.cfg.neurons_per_token).flatten(-2)
+        b, t, c, h = spikes.size()
+        # unsqueezes are to add batch dim
+        time = repeat(torch.arange(t, device=spikes.device), 't -> (t c)', c=c).unsqueeze(0)
+        position = repeat(torch.arange(c, device=spikes.device), 'c -> (t c)', t=t).unsqueeze(0)
 
-        session = self.session_embed(torch.zeros(1, dtype=torch.uint8, device=spikes.device)) + self.session_flag
-        subject = self.subject_embed(torch.zeros(1, dtype=torch.uint8, device=spikes.device)) + self.subject_flag
-        task = self.task_embed(torch.zeros(1, dtype=torch.uint8, device=spikes.device)) + self.task_flag
-        trial_context = [session, subject, task]
+        trial_context = []
+        if self.session_embed is not None:
+            trial_context.append(self.session_embed(torch.zeros(1, dtype=int, device=spikes.device)).unsqueeze(0) + self.session_flag)
+        if self.subject_embed is not None:
+            trial_context.append(self.subject_embed(torch.zeros(1, dtype=int, device=spikes.device)).unsqueeze(0) + self.subject_flag)
+        if self.task_embed is not None:
+            trial_context.append(self.task_embed(torch.zeros(1, dtype=int, device=spikes.device)).unsqueeze(0) + self.task_flag)
 
-        state_in = self.readin(spikes).flatten(-2).unsqueeze(0)
-
+        state_in = self.readin(torch.as_tensor(spikes, dtype=int)).flatten(-2).flatten(1,2) # flatten time and channel dim
         features: torch.Tensor = self.backbone(
             state_in,
             trial_context=trial_context,
@@ -388,7 +398,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             times=time,
             positions=position,
         ) # B x Token x H (flat)
-        return self.decoder(features, time, trial_context)
+        return self.decoder(features, time, trial_context)[0]
 
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs):

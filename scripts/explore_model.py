@@ -14,8 +14,9 @@ from config import RootConfig, ModelConfig, ModelTask, Metric, Output, EmbedStra
 from data import SpikingDataset, DataAttrs
 from model import transfer_model, logger
 
-from analyze_utils import stack_batch, get_wandb_run, load_wandb_run, wandb_query_latest
+from analyze_utils import stack_batch, load_wandb_run
 from analyze_utils import prep_plt
+from utils import  get_wandb_run, wandb_query_latest
 
 pl.seed_everything(0)
 
@@ -68,6 +69,7 @@ query = "f32_5ho-tsntbsci"
 # query = "f32_nlb-b4rz44ou"
 # query = "mc_rtt-i0n8o24x"
 
+query = 'test-tzz4zm2r'
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=True)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -109,9 +111,9 @@ print(cfg.dataset.datasets)
 # if 'pitt' in query:
 #     cfg.dataset.datasets = ['CRS02bHome.data.00437']
 # cfg.dataset.eval_datasets = []
-cfg.dataset.eval_datasets = [
-    'odoherty_rtt-Indy-20160407_02'
-]
+# cfg.dataset.eval_datasets = [
+#     'odoherty_rtt-Indy-20160407_02'
+# ]
 
 print(cfg.dataset.datasets)
 

@@ -1066,6 +1066,9 @@ class BehaviorRegression(TaskPipeline):
             self.bhvr_mean = None
             self.bhvr_std = None
 
+        if getattr(self.cfg, 'behavior_contrastive', ""):
+            self.contrast_bce = nn.BCEWithLogitsLoss(reduction='none')
+
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode = False):
         if self.cfg.decode_strategy != EmbedStrat.token or self.cfg.decode_separate:
             return batch
@@ -1201,29 +1204,37 @@ class BehaviorRegression(TaskPipeline):
         if not compute_metrics:
             return batch_out
         # Compute loss
-        bhvr_tgt = batch[self.cfg.behavior_target]
-        if self.bhvr_mean is not None:
-            bhvr_tgt = bhvr_tgt - self.bhvr_mean
-            bhvr_tgt = bhvr_tgt / self.bhvr_std
-        if getattr(self.cfg, 'behavior_integrate', False):
-            bhvr = bhvr.cumsum(dim=1)
-            bhvr_tgt = bhvr_tgt.cumsum(dim=1)
-            import pdb;pdb.set_trace()
-        if getattr(self.cfg, 'behavior_tolerance', 0) > 0:
-            # Calculate mse with a tolerance floor
-            loss = bhvr - bhvr_tgt
-            loss = torch.where(loss.abs() < self.cfg.behavior_tolerance, torch.zeros_like(loss), loss)
-            if getattr(self.cfg, 'behavior_tolerance_ceil', 0) > 0:
-                loss = torch.where((loss.abs() > self.cfg.behavior_tolerance_ceil).any(1, keepdim=True), torch.zeros_like(loss), loss)
-            loss = loss.pow(2)
-        else:
-            loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
         _, length_mask, _ = self.get_masks(
             batch, ref=backbone_features,
             length_key=COVARIATE_LENGTH_KEY if self.cfg.decode_strategy == EmbedStrat.token else LENGTH_KEY,
             compute_channel=False
         )
         length_mask[:, :self.bhvr_lag_bins] = False # don't compute loss for lagged out timesteps
+
+        bhvr_tgt = batch[self.cfg.behavior_target]
+        if self.bhvr_mean is not None:
+            bhvr_tgt = bhvr_tgt - self.bhvr_mean
+            bhvr_tgt = bhvr_tgt / self.bhvr_std
+        if getattr(self.cfg, 'behavior_contrastive', "") != "":
+            if self.cfg.behavior_contrastive == "sum":
+                # Extract sum of valid mask
+                # ? Hm, how do I implement this again?
+                import pdb;pdb.set_trace()
+                bhvr = bhvr[length_mask].sum(0, keepdim=True)
+                bhvr_tgt = bhvr_tgt[length_mask].sum(0, keepdim=True)
+                # create in batch negatives
+
+        else:
+            if getattr(self.cfg, 'behavior_tolerance', 0) > 0:
+                # Calculate mse with a tolerance floor
+                loss = bhvr - bhvr_tgt
+                loss = torch.where(loss.abs() < self.cfg.behavior_tolerance, torch.zeros_like(loss), loss)
+                if getattr(self.cfg, 'behavior_tolerance_ceil', 0) > 0:
+                    loss = torch.where((loss.abs() > self.cfg.behavior_tolerance_ceil).any(1, keepdim=True), torch.zeros_like(loss), loss)
+                loss = loss.pow(2)
+            else:
+                loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
+
         r2_mask = length_mask
 
         if self.cfg.behavior_fit_thresh:
