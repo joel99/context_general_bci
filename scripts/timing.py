@@ -65,7 +65,7 @@ mode = 'cpu'
 mode = 'gpu'
 compile_flag = ''
 compile_flag = 'torchscript'
-# compile_flag = 'onnx'
+compile_flag = 'onnx'
 onnx_file = 'model.onnx'
 
 if mode == 'gpu':

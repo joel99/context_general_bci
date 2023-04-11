@@ -818,10 +818,6 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
         trial_context = torch.cat(trial_context, dim=1)
         # trial_context, _ = pack(trial_context, 'b * h')
 
-        contextualized_src = [src]
-        contextualized_src = torch.cat(contextualized_src, dim=1)
-        # contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
-
         src_mask = self.make_src_mask(src, trial_context, times, t, s, causal=causal)
 
         if temporal_padding_mask is not None:
@@ -832,32 +828,22 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
             # padding_mask = padding_mask.masked_fill(padding_mask, float('-inf'))
 
         # Trial context is never padded
-        # cross_ctx = [i for i in [memory, trial_context] if i is not None] # verbose for torchscript
-        cross_ctx = []
-        if memory is not None:
-            cross_ctx.append(memory)
-        cross_ctx.append(trial_context)
-        memory = torch.cat(cross_ctx, dim=1)
-        if memory_times is None: # No mask needed for context only
-            memory_mask = None
-        else: # This is the covariate decode path
-            memory_mask = generate_square_subsequent_mask_from_times(
-                times, memory_times
-            )
-            if trial_context is not None:
-                memory_mask = torch.cat([memory_mask, torch.zeros(
-                    (memory_mask.size(0), contextualized_src.size(1), trial_context.size(1)),
-                    dtype=torch.float, device=memory_mask.device
-                )], dim=-1)
-            memory_mask = memory_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, memory_mask.size(1), memory_mask.size(2))
-            # memory_mask = repeat(memory_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
-            if memory_padding_mask is not None and trial_context is not None:
-                memory_padding_mask = torch.cat([
-                    memory_padding_mask,
-                    torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)
-                ], 1)
+        memory = torch.cat([memory, trial_context], dim=1)
+        memory_mask = generate_square_subsequent_mask_from_times(
+            times, memory_times
+        )
+        memory_mask = torch.cat([memory_mask, torch.zeros(
+            (memory_mask.size(0), src.size(1), trial_context.size(1)),
+            dtype=torch.float, device=memory_mask.device
+        )], dim=-1)
+        memory_mask = memory_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, memory_mask.size(1), memory_mask.size(2))
+        # memory_mask = repeat(memory_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
+        memory_padding_mask = torch.cat([
+            memory_padding_mask,
+            torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)
+        ], 1)
         output = self.transformer_encoder(
-            contextualized_src,
+            src,
             memory,
             tgt_mask=src_mask,
             tgt_key_padding_mask=padding_mask,
@@ -939,11 +925,6 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
     @property
     def out_size(self):
         return self.n_state
-
-        # return torch.where(
-        #     times[:, :, None] >= ref_times[:, None, :],
-        #     0.0, float('-inf')
-        # ).float() # ? not too sure, but we need this cast for onnx.
 
     # === Masks ===
     def make_src_mask(self, src: torch.Tensor, trial_context: torch.Tensor, times: torch.Tensor, t: int, s: int=1, causal: bool=True):
@@ -1032,5 +1013,9 @@ def generate_square_subsequent_mask_from_times(times: torch.Tensor, ref_times: O
     """
     if ref_times is None:
         ref_times = times
-    mask = (times[:, :, None] < ref_times[:, None, :]) # Note sign flip vs where expression
-    return mask.masked_fill(mask, float('-inf'))
+    # mask = (times[:, :, None] < ref_times[:, None, :]) # Note sign flip vs where expression
+    return torch.where(
+        times[:, :, None] >= ref_times[:, None, :],
+        0.0, float('-inf')
+    ).float()
+    # return mask.masked_fill(mask, float('-inf'))
