@@ -675,6 +675,13 @@ class SpaceTimeTransformer(nn.Module):
         return output
 
 
+
+r"""
+    Torchscript barebones below
+"""
+
+
+
 class PositionalEncodingScript(nn.Module):
     # lock in batch first
     def __init__(self, cfg: TransformerConfig, input_times: bool = False):
@@ -867,6 +874,7 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
                     memory_padding_mask,
                     torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)
                 ], 1)
+                memory_padding_mask = torch.where(memory_padding_mask, torch.zeros_like(memory_padding_mask, dtype=torch.float), torch.full_like(memory_padding_mask, float('-inf'), dtype=torch.float))
         output = self.transformer_encoder(
             contextualized_src,
             memory,
@@ -1031,7 +1039,8 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
         if temporal_padding_mask is not None:
             padding_mask = temporal_padding_mask
         else:
-            padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
+            padding_mask = torch.full((b, t), float('-inf'), dtype=torch.float, device=src.device)
+            # padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
 
         # Trial context is never padded
         if trial_context is not None:
