@@ -35,6 +35,8 @@ from subjects import subject_array_registry, SortedArrayInfo
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 from components import (
     SpaceTimeTransformer,
+    SpaceTimeTransformerEncoderScript,
+    SpaceTimeTransformerDecoderScript,
     ReadinMatrix,
     ReadinCrossAttention,
     ContextualMLP,
@@ -76,7 +78,7 @@ class SkinnyBehaviorRegression(nn.Module):
         self.cfg = cfg.task
 
         self.time_pad = cfg.transformer.max_trial_length
-        self.decoder = SpaceTimeTransformer(
+        self.decoder = SpaceTimeTransformerDecoderScript(
             cfg.transformer,
             max_spatial_tokens=0,
             n_layers=cfg.decoder_layers,
@@ -111,10 +113,8 @@ class SkinnyBehaviorRegression(nn.Module):
         # import pdb;pdb.set_trace()
         backbone_features: torch.Tensor = self.decoder(
             self.decode_token,
+            self.decode_time,
             trial_context=trial_context,
-            times=self.decode_time,
-            positions=None,
-            space_padding_mask=None,
             causal=self.causal,
             memory=backbone_features,
             memory_times=src_time,
@@ -143,14 +143,17 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                 f"Neurons per token served by data ({self.data_attrs.neurons_per_token}) must match model token size {self.cfg.neurons_per_token}"
         if self.data_attrs.serve_tokens_flat:
             assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
-        self.backbone = SpaceTimeTransformer(
+        self.backbone = SpaceTimeTransformerEncoderScript(
             self.cfg.transformer,
             max_spatial_tokens=data_attrs.max_spatial_tokens,
-            debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
-            context_integration=getattr(cfg.transformer, 'context_integration', 'in_context'),
+            debug_override_dropout_out=cfg.transformer.debug_override_dropout_io,
+            context_integration=cfg.transformer.context_integration,
             embed_space=cfg.transformer.embed_space,
         )
         self.bind_io()
+
+        self.neurons_per_token = self.cfg.neurons_per_token
+        self.causal = self.cfg.causal
 
     def diff_cfg(self, cfg: ModelConfig):
         r"""
@@ -373,30 +376,31 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
     ) -> torch.Tensor: # out is behavior, T x 2
         # do the reshaping yourself
         # ! Assumes this divides evenly
-        spikes = spikes.unfold(2, self.cfg.neurons_per_token, self.cfg.neurons_per_token).flatten(-2)
+        spikes = spikes.unfold(2, self.neurons_per_token, self.neurons_per_token).flatten(-2)
         b, t, c, h = spikes.size()
         # unsqueezes are to add batch dim
-        time = repeat(torch.arange(t, device=spikes.device), 't -> (t c)', c=c).unsqueeze(0)
-        position = repeat(torch.arange(c, device=spikes.device), 'c -> (t c)', t=t).unsqueeze(0)
+        time = torch.arange(t, device=spikes.device).unsqueeze(0).unsqueeze(-1).expand(b, t, c).flatten(1)
+        position = torch.arange(c, device=spikes.device).unsqueeze(0).unsqueeze(0).expand(b, t, c).flatten(1)
+        # time = repeat(torch.arange(t, device=spikes.device), 't -> (t c)', c=c).unsqueeze(0)
+        # position = repeat(torch.arange(c, device=spikes.device), 'c -> (t c)', t=t).unsqueeze(0)
 
         trial_context = []
         if self.session_embed is not None:
-            trial_context.append(self.session_embed(torch.zeros(1, dtype=int, device=spikes.device)).unsqueeze(0) + self.session_flag)
+            trial_context.append(self.session_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.session_flag)
         if self.subject_embed is not None:
-            trial_context.append(self.subject_embed(torch.zeros(1, dtype=int, device=spikes.device)).unsqueeze(0) + self.subject_flag)
+            trial_context.append(self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.subject_flag)
         if self.task_embed is not None:
-            trial_context.append(self.task_embed(torch.zeros(1, dtype=int, device=spikes.device)).unsqueeze(0) + self.task_flag)
+            trial_context.append(self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.task_flag)
 
-        state_in = self.readin(torch.as_tensor(spikes, dtype=int)).flatten(-2).flatten(1,2) # flatten time and channel dim
+        state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
+        # import pdb;pdb.set_trace()
         features: torch.Tensor = self.backbone(
             state_in,
-            trial_context=trial_context,
-            temporal_context=[],
-            temporal_padding_mask=None,
-            space_padding_mask=None,
-            causal=self.cfg.causal,
             times=time,
             positions=position,
+            trial_context=trial_context,
+            temporal_padding_mask=None,
+            causal=self.causal,
         ) # B x Token x H (flat)
         return self.decoder(features, time, trial_context)[0]
 

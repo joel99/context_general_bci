@@ -1,3 +1,5 @@
+*.onnx
+*.pt
 data
 tmp/
 outputs/
