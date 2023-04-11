@@ -7,49 +7,47 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logg
 from matplotlib import pyplot as plt
 import numpy as np
 import torch
-# import seaborn as sns
-# import pandas as pd
-# import pytorch_lightning as pl
-# from einops import rearrange
+
+import seaborn as sns
+import pandas as pd
+import pytorch_lightning as pl
+from einops import rearrange
 
 # Load BrainBertInterface and SpikingDataset to make some predictions
-# from data import SpikingDataset, DataAttrs
-# from model import transfer_model, logger
+from data import SpikingDataset, DataAttrs
+from config import ModelTask, Output
 
-# from analyze_utils import stack_batch, load_wandb_run
-# from analyze_utils import prep_plt, get_dataloader
-# from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
+from analyze_utils import stack_batch, load_wandb_run
+from analyze_utils import prep_plt, get_dataloader
+from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
 
 
-# from model import transfer_model
-# from model_decode import transfer_model
+from model_decode import transfer_model
 # pl.seed_everything(0)
 
 # UNSORT = True
 # UNSORT = False
 
 # run_id = 'session_cross_noctx-89e73b3s'
-# run_id = 'human-sweep-simpler_lr_sweep-dgnx7mn9'
 # dataset_name = 'odoherty_rtt-Indy-20160407_02'
-# dataset_name = 'observation_CRS02bLab_session_19.*'
 
-# trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
-# trainer = pl.Trainer(accelerator='cpu', default_root_dir='./data/tmp')
+run_id = 'human-sweep-simpler_lr_sweep-dgnx7mn9'
+dataset_name = 'observation_CRS02bLab_session_19.*'
 
-# run = get_wandb_run(run_id)
-# src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
-# cfg.dataset.datasets = [dataset_name]
-# cfg.dataset.eval_datasets = [dataset_name]
-# cfg.dataset.exclude_datasets = []
-# dataset = SpikingDataset(cfg.dataset)
-# dataset.subset_split(splits=['eval'])
-# dataset.build_context_index()
-# data_attrs = dataset.get_data_attrs()
-# cfg.model.task.tasks = [ModelTask.kinematic_decoding]
-# cfg.model.task.outputs = [Output.behavior_pred]
-# model = transfer_model(src_model, cfg.model, data_attrs)
-# model.eval()
-# dataloader = get_dataloader(dataset, batch_size=1, shuffle=False, num_workers=0)
+run = get_wandb_run(run_id)
+src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
+cfg.dataset.datasets = [dataset_name]
+cfg.dataset.eval_datasets = [dataset_name]
+cfg.dataset.exclude_datasets = []
+dataset = SpikingDataset(cfg.dataset)
+dataset.subset_split(splits=['eval'])
+dataset.build_context_index()
+data_attrs = dataset.get_data_attrs()
+cfg.model.task.tasks = [ModelTask.kinematic_decoding]
+cfg.model.task.outputs = [Output.behavior_pred]
+model = transfer_model(src_model, cfg.model, data_attrs)
+model.eval()
+dataloader = get_dataloader(dataset, batch_size=1, shuffle=False, num_workers=0)
 
 # script = torch.jit.script(model, next(iter(dataloader)))
 # script.save(PATH)
@@ -67,7 +65,7 @@ mode = 'cpu'
 mode = 'gpu'
 compile_flag = ''
 compile_flag = 'torchscript'
-compile_flag = 'onnx'
+# compile_flag = 'onnx'
 onnx_file = 'model.onnx'
 
 if mode == 'gpu':
@@ -93,7 +91,7 @@ with torch.no_grad():
     # for trial in dataset:
     # for batch in dataloader:
         # spikes = trial[DataKey.spikes].flatten(1,2).unsqueeze(0) # simulate normal trial
-        spikes = torch.randint(0, 4, (1, 200, 192, 1), dtype=torch.uint8)
+        spikes = torch.randint(0, 4, (1, 100, 192, 1), dtype=torch.uint8)
         start = time.time()
         if do_onnx:
             out = ort_session.run(None, ort_inputs)

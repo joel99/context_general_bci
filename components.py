@@ -780,22 +780,6 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
         return self.n_state
         # return self.cfg.n_state
 
-    def generate_square_subsequent_mask_from_times(self, times: torch.Tensor, ref_times: Optional[torch.Tensor] = None) -> torch.Tensor:
-        r"""
-            Generate a square mask for the sequence. The masked positions are filled with float('-inf').
-            Unmasked positions are filled with float(0.0).
-
-            times: B x Token
-
-            out: B x T x T
-        """
-        if ref_times is None:
-            ref_times = times
-        return torch.where(
-            times[:, :, None] >= ref_times[:, None, :],
-            0.0, float('-inf')
-        )
-
     # === Masks ===
     def make_src_mask(self, src: torch.Tensor, trial_context: torch.Tensor, times: torch.Tensor, t: int, s: int=1, causal: bool=True):
         r"""
@@ -806,14 +790,10 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
             Produces time major (T*S + TempCtx + TrialCtx, T*S + TempCtx + TrialCtx)
             Use t=1 to produce a space only mask, s=1 to produce a time only mask
         """
-        if causal:
-            src_mask = self.generate_square_subsequent_mask_from_times(times)
-        else:
-            src_mask = None
-        if src_mask is not None and src_mask.ndim == 3: # expand along heads
-            src_mask = src_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, src_mask.size(1), src_mask.size(2))
-            # src_mask = repeat(src_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
-        return src_mask
+        if not causal:
+            return None
+        src_mask = generate_square_subsequent_mask_from_times(times)
+        return src_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, src_mask.size(1), src_mask.size(2))
 
     def forward(
         self,
@@ -847,7 +827,9 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
         if temporal_padding_mask is not None:
             padding_mask = temporal_padding_mask
         else:
+            # padding_mask = torch.zeros((b, t), dtype=torch.float, device=src.device) # pytorch compile complains
             padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
+            # padding_mask = padding_mask.masked_fill(padding_mask, float('-inf'))
 
         # Trial context is never padded
         # cross_ctx = [i for i in [memory, trial_context] if i is not None] # verbose for torchscript
@@ -859,7 +841,7 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
         if memory_times is None: # No mask needed for context only
             memory_mask = None
         else: # This is the covariate decode path
-            memory_mask = self.generate_square_subsequent_mask_from_times(
+            memory_mask = generate_square_subsequent_mask_from_times(
                 times, memory_times
             )
             if trial_context is not None:
@@ -874,7 +856,6 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
                     memory_padding_mask,
                     torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)
                 ], 1)
-                memory_padding_mask = torch.where(memory_padding_mask, torch.zeros_like(memory_padding_mask, dtype=torch.float), torch.full_like(memory_padding_mask, float('-inf'), dtype=torch.float))
         output = self.transformer_encoder(
             contextualized_src,
             memory,
@@ -885,8 +866,6 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
         )
         output = output[:, : t * s]
         output = self.dropout_out(output)
-        # if self.pre_norm and self.has_final_norm:
-        #     output = self.final_norm(output)
         return output
 
 class SpaceTimeTransformerEncoderScript(nn.Module):
@@ -961,21 +940,10 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
     def out_size(self):
         return self.n_state
 
-    def generate_square_subsequent_mask_from_times(self, times: torch.Tensor, ref_times: Optional[torch.Tensor] = None) -> torch.Tensor:
-        r"""
-            Generate a square mask for the sequence. The masked positions are filled with float('-inf').
-            Unmasked positions are filled with float(0.0).
-
-            times: B x Token
-
-            out: B x T x T
-        """
-        if ref_times is None:
-            ref_times = times
-        return torch.where(
-            times[:, :, None] >= ref_times[:, None, :],
-            0.0, float('-inf')
-        )
+        # return torch.where(
+        #     times[:, :, None] >= ref_times[:, None, :],
+        #     0.0, float('-inf')
+        # ).float() # ? not too sure, but we need this cast for onnx.
 
     # === Masks ===
     def make_src_mask(self, src: torch.Tensor, trial_context: torch.Tensor, times: torch.Tensor, t: int, s: int=1, causal: bool=True):
@@ -988,7 +956,7 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
             Use t=1 to produce a space only mask, s=1 to produce a time only mask
         """
         if causal:
-            src_mask = self.generate_square_subsequent_mask_from_times(times)
+            src_mask = generate_square_subsequent_mask_from_times(times)
         else:
             src_mask = None
         # Update src mask for context. Note that row is attender, col is attended.
@@ -1030,8 +998,7 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
         trial_context = torch.cat(trial_context, dim=1)
         # trial_context, _ = pack(trial_context, 'b * h')
 
-        contextualized_src = [src, trial_context]
-        contextualized_src = torch.cat(contextualized_src, dim=1)
+        contextualized_src = torch.cat([src, trial_context], dim=1)
         # contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
         src_mask = self.make_src_mask(src, trial_context, times, t, s, causal=causal)
@@ -1039,14 +1006,31 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
         if temporal_padding_mask is not None:
             padding_mask = temporal_padding_mask
         else:
-            padding_mask = torch.full((b, t), float('-inf'), dtype=torch.float, device=src.device)
-            # padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
+            padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
 
         # Trial context is never padded
-        if trial_context is not None:
-            padding_mask = F.pad(padding_mask, (0, trial_context.size(-2)), value=0.)
+        padding_mask = torch.cat([
+            padding_mask,
+            torch.zeros((b, trial_context.size(-2)), dtype=torch.bool, device=src.device)
+        ], dim=-1)
+        # padding_mask = padding_mask.masked_fill(padding_mask, float('-inf'))
+        # padding_mask = F.pad(padding_mask, (0, trial_context.size(-2)), value=0.)
 
         output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
         output = output[:, : t * s]
         output = self.dropout_out(output)
         return output
+
+def generate_square_subsequent_mask_from_times(times: torch.Tensor, ref_times: Optional[torch.Tensor] = None) -> torch.Tensor:
+    r"""
+        Generate a square mask for the sequence. The masked positions are filled with float('-inf').
+        Unmasked positions are filled with float(0.0).
+
+        times: B x Token
+
+        out: B x T x T
+    """
+    if ref_times is None:
+        ref_times = times
+    mask = (times[:, :, None] < ref_times[:, None, :]) # Note sign flip vs where expression
+    return mask.masked_fill(mask, float('-inf'))
