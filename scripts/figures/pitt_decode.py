@@ -211,6 +211,8 @@ ax.set_ylim(0, 1)
 ax.set_ylabel('Vel R2')
 ax.set_xlabel('Model variant')
 ax.set_title(f'{subject} Perf ({EXPERIMENTS_KIN[0]})')
+# Rotate xlabels
+ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
 
 #%%
 print(kin_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
