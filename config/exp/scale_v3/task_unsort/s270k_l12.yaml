@@ -23,8 +23,8 @@ dataset:
   - observation_CRS07Lab_session_16.*
 train:
   autoscale_batch_size: false
-  accumulate_batches: 2
-  batch_size: 512 # 2x80G -> effective 2048
+  accumulate_batches: 4
+  batch_size: 256 # 2x80G -> effective 2048
 model:
   transformer:
     n_layers: 12
