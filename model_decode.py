@@ -109,15 +109,15 @@ class SkinnyBehaviorRegression(nn.Module):
         if self.causal and self.cfg.behavior_lag_lookahead:
             self.decode_time = self.decode_time + self.bhvr_lag_bins
 
-    def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: List[torch.Tensor]) -> torch.Tensor:
+    def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: torch.Tensor) -> torch.Tensor:
         # import pdb;pdb.set_trace()
         backbone_features: torch.Tensor = self.decoder(
             self.decode_token,
             self.decode_time,
             trial_context=trial_context,
-            causal=self.causal,
             memory=backbone_features,
             memory_times=src_time,
+            causal=self.causal,
         )
         bhvr = self.out(backbone_features)
         if self.bhvr_lag_bins:
@@ -391,6 +391,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             trial_context.append(self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.subject_flag)
         if self.task_embed is not None:
             trial_context.append(self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.task_flag)
+        trial_context = torch.cat(trial_context, dim=1)
 
         state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
         # import pdb;pdb.set_trace()
@@ -399,7 +400,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             times=time,
             positions=position,
             trial_context=trial_context,
-            temporal_padding_mask=None,
+            # temporal_padding_mask=None,
             causal=self.causal,
         ) # B x Token x H (flat)
         return self.decoder(features, time, trial_context)[0]

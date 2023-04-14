@@ -452,6 +452,7 @@ class DatasetConfig:
     churchland_misc: ExperimentalConfig = ExperimentalConfig()
 
     marino_batista_mp_bci: ExperimentalConfig = ExperimentalConfig()
+    marino_batista_mp_iso_force: ExperimentalConfig = ExperimentalConfig()
     marino_batista_mp_reaching: ExperimentalConfig = ExperimentalConfig()
 
     pitt_co: PittConfig = PittConfig.create_with_arrays([ # This is actually the catch all for Pitt, and doesn't have any particular structure. No guarantees, might not even be CO.

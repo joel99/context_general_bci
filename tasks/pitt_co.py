@@ -5,7 +5,6 @@ import math
 import numpy as np
 import torch
 import pandas as pd
-from pynwb import NWBHDF5IO
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
 from scipy.ndimage import gaussian_filter1d
