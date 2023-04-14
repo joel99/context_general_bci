@@ -180,11 +180,19 @@ class PittCOLoader(ExperimentalTaskLoader):
                     if session_spikes.size(0) < round(cfg.pitt_co.chop_size_ms / cfg.bin_size_ms):
                         save_trial_spikes(session_spikes, i, {DataKey.bhvr_vel: session_vel} if session_vel is not None else {})
                     else:
+                        end_of_trial = session_spikes.size(0) % round(cfg.pitt_co.chop_size_ms / cfg.bin_size_ms)
+                        if end_of_trial > 10: # some arbitrary small threshold...
+                            session_spikes_end = session_spikes[-end_of_trial:]
+                            if session_vel is not None:
+                                session_vel_end = session_vel[-end_of_trial:]
+                            save_trial_spikes(session_spikes_end, f'{i}_end', {DataKey.bhvr_vel: session_vel_end} if session_vel is not None else {})
+
                         session_spikes = chop_vector(session_spikes)
                         if session_vel is not None:
                             session_vel = chop_vector(session_vel)
                         for j, subtrial_spikes in enumerate(session_spikes):
                             save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', {DataKey.bhvr_vel: session_vel[j]} if session_vel is not None else {})
+
         else: # folder style, preproc-ed on mind
             for i, fname in enumerate(datapath.glob("*.mat")):
                 if fname.stem.startswith('QL.Task'):

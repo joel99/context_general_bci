@@ -1,0 +1,20 @@
+# @package _global_
+
+defaults:
+  - _default
+dataset:
+  datasets:
+  - mc_maze.*
+  - dyer_co.*
+  - gallego_co.*
+  - churchland_misc.*
+  - churchland_maze.*
+  - marino_.*
+  # scale_limit: 4000
+train:
+  autoscale_batch_size: false
+  accumulate_batches: 2
+  batch_size: 512 # 2x80G -> effective 2048
+model:
+  transformer:
+    n_layers: 16
