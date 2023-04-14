@@ -18,3 +18,4 @@ train:
 model:
   transformer:
     n_layers: 16
+notes: "train set 126764."
