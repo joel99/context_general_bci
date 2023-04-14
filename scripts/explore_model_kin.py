@@ -26,7 +26,12 @@ mode = 'train'
 mode = 'test'
 
 query = "human-sweep-simpler_lr_sweep-dgnx7mn9"
-query = 'session_cross_noctx-wc24ulkl'
+query = "human_only-5a62oz96"
+# query = 'session_cross_noctx-wc24ulkl'
+
+# query = 'human_sum_contrast-3inx20gs'
+# query = 'human_sum_contrast-l2zg9sju'
+query = 'human_sum_contrast-lheohfzn'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -46,6 +51,7 @@ if pipeline_model:
 
 target_dataset = 'observation_CRS02bLab_session_1908_set_1'
 target_dataset = 'observation_CRS02bLab_session_1913_set_1'
+target_dataset = 'observation_CRS02bLab_session_1827.*'
 # target_dataset = 'observation_CRS02bLab_session_1922_set_6'
 # target_dataset = 'observation_CRS02bLab_session_1904_set_6'
 # target_dataset = 'observation_CRS02bLab_session_1925_set_3'
@@ -153,6 +159,7 @@ g.fig.suptitle(f'{mode} {target_dataset} Velocity R2: {heldin_metrics["test_kine
 #%%
 ax = prep_plt()
 trials = range(4)
+trials = range(2)
 # trials = torch.arange(6)
 
 colors = sns.color_palette('colorblind', len(trials))
@@ -168,7 +175,7 @@ def plot_trial(trial, ax, color, label=False):
 
     pos_true = vel_true.cumsum(0)
     pos_pred = vel_pred.cumsum(0)
-    ax.plot(pos_true[:,0], pos_true[:,1], label='true' if label else '', linestyle='-', color=color)
+    # ax.plot(pos_true[:,0], pos_true[:,1], label='true' if label else '', linestyle='-', color=color)
     ax.plot(pos_pred[:,0], pos_pred[:,1], label='pred' if label else '', linestyle='--', color=color)
 
 

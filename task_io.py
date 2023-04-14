@@ -24,6 +24,10 @@ from components import SpaceTimeTransformer
 # through most of data collection (certainly good if we aggregate sensor/sessions)
 SHUFFLE_KEY = "shuffle"
 
+def logsumexp(x):
+    c = x.max()
+    return c + (x - c).exp().sum().log()
+
 def apply_shuffle(item: torch.Tensor, shuffle: torch.Tensor):
     # item: B T *
     # shuffle: T
@@ -1217,13 +1221,30 @@ class BehaviorRegression(TaskPipeline):
             bhvr_tgt = bhvr_tgt / self.bhvr_std
         if getattr(self.cfg, 'behavior_contrastive', "") != "":
             if self.cfg.behavior_contrastive == "sum":
-                # Extract sum of valid mask
-                # ? Hm, how do I implement this again?
-                import pdb;pdb.set_trace()
-                bhvr = bhvr[length_mask].sum(0, keepdim=True)
-                bhvr_tgt = bhvr_tgt[length_mask].sum(0, keepdim=True)
-                # create in batch negatives
+                # Extract sum of valid mask - should probably extend be subslices but uh..
+                # Hm, I should consider fragmenting... but then we have no guarantees on validity of data (i.e. we might be using mask)
+                # Do all-to-all mask https://lilianweng.github.io/posts/2021-05-31-contrastive/#infonce
+                # zero according to non-length mask
 
+                # B T H Unfold into maybe like 200ms snippets, i.e. 10 bins
+                bhvr_end = bhvr * length_mask.unsqueeze(-1)
+                # bhvr_end = bhvr_end.sum(1) # B x 2
+                # bhvr_end = bhvr_end.unfold(1, 10, 10).flatten(2).flatten(0, 1) # B' x 2
+                bhvr_end = bhvr_end.unfold(1, 10, 10).sum(-1).flatten(0, 1) # B' x 2
+                # bhvr_tgt_end = (bhvr_tgt * length_mask.unsqueeze(-1)).sum(1) # B x 2
+                bhvr_tgt_end = bhvr_tgt * length_mask.unsqueeze(-1)
+                # bhvr_tgt_end = bhvr_tgt_end.unfold(1, 10, 10).flatten(2).flatten(0, 1) # B' x 2
+                bhvr_tgt_end = bhvr_tgt_end.unfold(1, 10, 10).sum(-1).flatten(0, 1) # B' x 2
+                scores = bhvr_end @ bhvr_tgt_end.T # B x B
+                # Try CLIP-type cross-entropy instead?
+
+                loss = F.cross_entropy(scores, torch.arange(scores.shape[0], device=scores.device)) \
+                    + F.cross_entropy(scores.T, torch.arange(scores.shape[0], device=scores.device))
+
+                # Direct
+                # loss = logsumexp(scores) - logsumexp(scores.diag()) # tehnically should have a triu somewhere
+
+                # ! TODO support session blacklist
         else:
             if getattr(self.cfg, 'behavior_tolerance', 0) > 0:
                 # Calculate mse with a tolerance floor
@@ -1235,34 +1256,33 @@ class BehaviorRegression(TaskPipeline):
             else:
                 loss = F.mse_loss(bhvr, bhvr_tgt, reduction='none')
 
-        r2_mask = length_mask
+            if self.cfg.behavior_fit_thresh:
+                loss_mask = length_mask & (bhvr_tgt.abs() > self.cfg.behavior_fit_thresh).any(-1)
+            else:
+                loss_mask = length_mask
 
-        if self.cfg.behavior_fit_thresh:
-            loss_mask = length_mask & (bhvr_tgt.abs() > self.cfg.behavior_fit_thresh).any(-1)
-        else:
-            loss_mask = length_mask
-
-        # blacklist
-        if self.session_blacklist:
-            session_mask = batch[MetaKey.session] != self.session_blacklist[0]
-            for sess in self.session_blacklist[1:]:
-                session_mask = session_mask & (batch[MetaKey.session] != sess)
-            if self.cfg.adversarial_classify_lambda:
-                logits = self.blacklist_classifier(backbone_features)[..., 0]
-                blacklist_loss = self.blacklist_loss(logits, repeat((~session_mask).float(), 'b -> b t', t=backbone_features.shape[1]))
-                blacklist_loss = blacklist_loss[loss_mask].mean()
-                batch_out['adversarial_loss'] = blacklist_loss
-            loss_mask = loss_mask & session_mask[:, None]
-            if not session_mask.any(): # no valid sessions
-                loss = 0 # don't fail
+            # blacklist
+            if self.session_blacklist:
+                session_mask = batch[MetaKey.session] != self.session_blacklist[0]
+                for sess in self.session_blacklist[1:]:
+                    session_mask = session_mask & (batch[MetaKey.session] != sess)
+                if self.cfg.adversarial_classify_lambda:
+                    logits = self.blacklist_classifier(backbone_features)[..., 0]
+                    blacklist_loss = self.blacklist_loss(logits, repeat((~session_mask).float(), 'b -> b t', t=backbone_features.shape[1]))
+                    blacklist_loss = blacklist_loss[loss_mask].mean()
+                    batch_out['adversarial_loss'] = blacklist_loss
+                loss_mask = loss_mask & session_mask[:, None]
+                if not session_mask.any(): # no valid sessions
+                    loss = 0 # don't fail
+                else:
+                    loss = loss[loss_mask].mean()
+                if self.cfg.adversarial_classify_lambda:
+                    # print(f'loss: {loss:.3f}, blacklist loss: {blacklist_loss:.3f}, total = {(loss - (blacklist_loss) * self.cfg.adversarial_classify_lambda):.3f}')
+                    loss += (-1 * blacklist_loss) * self.cfg.adversarial_classify_lambda # adversarial
             else:
                 loss = loss[loss_mask].mean()
-            if self.cfg.adversarial_classify_lambda:
-                # print(f'loss: {loss:.3f}, blacklist loss: {blacklist_loss:.3f}, total = {(loss - (blacklist_loss) * self.cfg.adversarial_classify_lambda):.3f}')
-                loss += (-1 * blacklist_loss) * self.cfg.adversarial_classify_lambda # adversarial
-        else:
-            loss = loss[loss_mask].mean()
 
+        r2_mask = length_mask
 
         if self.cfg.kl_lambda:
             loss = loss + self.cfg.kl_lambda * batch_out['alignment_kl']
