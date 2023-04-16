@@ -1,16 +1,16 @@
 #!/bin/bash
-#SBATCH --job-name=ndt2_4x
+#SBATCH --job-name=ndt2_2x
 #SBATCH --cluster gpu
 #SBATCH -p a100_nvlink
 #SBATCH -t 16:00:00
-#SBATCH --mem 400G
+#SBATCH --mem 200G
 #SBATCH --output=slurm_logs/%j.out
 #SBATCH --nodes=1
+#SBATCH -x gpu-n31
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=16
 #SBATCH --constraint=80g
-#SBATCH -x gpu-n31
 echo 'tasks'
 echo $SLURM_NTASKS
 echo 'per node'
