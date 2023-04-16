@@ -18,6 +18,7 @@ from analyze_utils import prep_plt, wandb_query_latest, load_wandb_run
 
 sample_query = 'test' # just pull the latest run
 sample_query = 'pt_parity'
+# sample_query =
 
 wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 print(wandb_run)

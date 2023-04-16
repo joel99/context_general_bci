@@ -58,23 +58,25 @@ comp_df['data_id'] = comp_df['subject'] + '_' + comp_df['session'].astype(str) +
 
 
 EVAL_DATASETS = [
-    'observation_CRS02bLab_session_19.*',
-    # 'observation_CRS07Lab_session_15.*',
-    # 'observation_CRS07Lab_session_16.*',
+    # 'observation_CRS02bLab_session_19.*',
+    'observation_CRS07Lab_session_15.*',
+    'observation_CRS07Lab_session_16.*',
 ]
 # expand by querying alias
 EVAL_DATASETS = SpikingDataset.list_alias_to_contexts(EVAL_DATASETS)
 EVAL_ALIASES = [x.alias for x in EVAL_DATASETS]
 
 EXPERIMENTS_KIN = [
-    f'pitt_v2/probe',
-    # f'pitt_v2/probe_01',
+    # f'pitt_v2/probe',
+    f'pitt_v2/probe_01',
 ]
 
 queries = [
     # 'human_obs_limit',
     'human_obs',
-    # 'human',
+    'human_obs_m5',
+    'human',
+    'human_m5',
 ]
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
@@ -133,9 +135,11 @@ def build_df(runs, mode='nll'):
     seen_set = {}
     for run in runs:
         variant, _frag, *rest = run.name.split('-')
+        if variant not in queries:
+            continue
         src_model, cfg, data_attrs = load_wandb_run(run, tag='val_loss')
-
         experiment_set = run.config['experiment_set']
+        pl.seed_everything(seed=cfg.seed)
         # if (
         #     variant,
         #     run.config['dataset']['eval_datasets'][0],
@@ -151,13 +155,28 @@ def build_df(runs, mode='nll'):
         # In order to get the correct eval split, we need to use the same set of datasets as train (splits are not per dataset)
         # So construct this and split it repeatedly
         ref_df = SpikingDataset(cfg.dataset)
+        tv_ref = deepcopy(ref_df)
+        eval_ref = deepcopy(ref_df)
+        eval_ref.subset_split(splits=['eval'])
+        tv_ref.subset_split()
+        train_ref, val_ref = tv_ref.create_tv_datasets()
 
         for i, dataset in enumerate(EVAL_ALIASES):
+            # We use val _and_ eval to try to be generous and match Pitt settings
             inst_df = deepcopy(ref_df)
             inst_df.cfg.eval_datasets = [dataset]
             inst_df.cfg.datasets = [dataset]
             inst_df.subset_by_key([EVAL_DATASETS[i].id], key=MetaKey.session)
-            inst_df.subset_split(splits=['eval'])
+            valid_keys = list(val_ref.meta_df[
+                (val_ref.meta_df[MetaKey.session] == EVAL_DATASETS[i].id)
+            ][MetaKey.unique]) + list(eval_ref.meta_df[
+                (eval_ref.meta_df[MetaKey.session] == EVAL_DATASETS[i].id)
+            ][MetaKey.unique])
+            inst_df.subset_by_key(valid_keys, key=MetaKey.unique)
+            # inst_df.subset_split(splits=['eval'])
+
+            # val.subset_by_key([EVAL_DATASETS[i].id], key=MetaKey.session)
+
 
             experiment_set = run.config['experiment_set']
             if variant.startswith('sup') or variant.startswith('unsup'):
@@ -183,9 +202,7 @@ kin_df.drop(columns=['lr'])
 # print(kin_df)
 
 
-#%%
 df = pd.concat([kin_df, comp_df])
-#%%
 # Are we actually better or worse than Pitt baselines?
 
 # intersect unique data ids, to get the relevant test set. Also, only compare nontrivial KF slots
@@ -202,6 +219,7 @@ print(sub_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
 #%%
 # make pretty seaborn default
 subject = 'CRS02bLab'
+subject = 'CRS07Lab'
 subject_df = sub_df[sub_df['subject'] == subject]
 
 sns.set_theme(style="whitegrid")

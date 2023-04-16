@@ -3,15 +3,16 @@
 defaults:
   - /model: flat_enc_dec
   - /dataset: flat
-  - /train: trial100_tune_exp2
+  - /train: single_session_exp1
+
 model:
   causal: true
   task:
     mask_ratio: 0.5
   neurons_per_token: 32
-
+  transformer:
+    n_layers: 12
 dataset:
-  scale_limit_per_eval_session: 100
   eval_ratio: 0.05
   datasets:
   - odoherty_rtt-Indy-20160407_02 # ~816 trials
@@ -22,6 +23,4 @@ dataset:
     include_sorted: False
 fragment_datasets: True
 inherit_exp: scale_v3/task_unsort
-successor_exp:
-- scale_v3/task_unsort/probe
-# ? Should I have this config outside?
+inherit_tag: s130k_l12
