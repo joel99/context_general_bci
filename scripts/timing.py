@@ -22,7 +22,8 @@ from analyze_utils import prep_plt, get_dataloader
 from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
 
 
-from model_decode import transfer_model
+from model import transfer_model
+# from model_decode import transfer_model
 # pl.seed_everything(0)
 
 # UNSORT = True
@@ -64,9 +65,9 @@ loop_times = []
 mode = 'cpu'
 mode = 'gpu'
 compile_flag = ''
-compile_flag = 'torchscript'
-compile_flag = 'onnx'
-onnx_file = 'model.onnx'
+# compile_flag = 'torchscript'
+# compile_flag = 'onnx'
+# onnx_file = 'model.onnx'
 
 if mode == 'gpu':
     model = model.to('cuda:0')
@@ -85,45 +86,58 @@ else:
     do_onnx = False
 
 loops = 50
+pl.seed_everything(0)
 
+trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
+trainer_out = trainer.predict(model, dataloader)
+trainer_out = stack_batch(trainer_out)
+# import pdb;pdb.set_trace()
+# Recast for trainer...
+if mode == 'gpu':
+    model = model.to('cuda:0')
+
+test_outs = []
 with torch.no_grad():
-    for i in range(50):
+    # for i in range(50):
     # for trial in dataset:
-    # for batch in dataloader:
+    for batch in dataloader:
         # spikes = trial[DataKey.spikes].flatten(1,2).unsqueeze(0) # simulate normal trial
-        spikes = torch.randint(0, 4, (1, 100, 192, 1), dtype=torch.uint8)
+        # spikes = torch.randint(0, 4, (1, 100, 192, 1), dtype=torch.uint8)
         start = time.time()
         if do_onnx:
             out = ort_session.run(None, ort_inputs)
         else:
-            # import pdb;pdb.set_trace()
             if mode == 'gpu':
-                spikes = spikes.to('cuda:0')
-                # for k in batch:
-                #     batch[k] = batch[k].to('cuda:0')
+                # spikes = spikes.to('cuda:0')
+                for k in batch:
+                    batch[k] = batch[k].to('cuda:0')
 
-            out = model(spikes)
+            # out = model(spikes)
 
-            # out = model(batch)
-            # out = model.task_pipelines[ModelTask.kinematic_decoding.value](
-            #     batch,
-            #     out,
-            #     compute_metrics=False,
-            #     eval_mode=True
-            # )[Output.behavior_pred]
+            out = model(batch)
+            out = model.task_pipelines[ModelTask.kinematic_decoding.value](
+                batch,
+                out,
+                compute_metrics=False,
+                eval_mode=True
+            )[Output.behavior_pred]
 
             if mode == 'gpu':
                 out = out.to('cpu')
         end = time.time()
+        test_outs.append(out)
         if compile_flag == 'onnx' and not Path(onnx_file).exists():
             model = model.to_onnx("model.onnx", spikes, export_params=True)
             torch.save(spikes, 'samples.pt')
             exit(0)
         loop_times.append(end - start)
-        print(f'Loop {spikes.size()}: {end - start:.4f}')
+        print(f'Loop: {end - start:.4f}')
+        # print(f'Loop {spikes.size()}: {end - start:.4f}')
 # drop first ten
 loop_times = loop_times[10:]
 
 # print(f'Benchmark: {run_id}. Data: {dataset_name}')
 print(f'Benchmark: {mode}')
 print(f"Avg: {np.mean(loop_times)*1000:.4f}ms, Std: {np.std(loop_times) * 1000:.4f}ms")
+
+import pdb;pdb.set_trace()
