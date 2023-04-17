@@ -1,4 +1,4 @@
-from typing import List, Dict, Type, Tuple, Optional
+from typing import List, Dict, Type, Tuple, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
@@ -57,13 +57,13 @@ class SubjectArrayRegistry:
         return query
 
     @classmethod
-    def query_by_subject(cls, id: SubjectName | str) -> SubjectInfo:
+    def query_by_subject(cls, id: Union[SubjectName, str]) -> SubjectInfo:
         if isinstance(id, str):
             id = getattr(SubjectName, id)
         return cls._subject_registry[id]
 
 
-def create_spike_payload(spikes: torch.Tensor | np.ndarray, arrays_to_use: List[str], cfg: DatasetConfig | None = None, spike_bin_size_ms=1) -> Dict[str, torch.Tensor]:
+def create_spike_payload(spikes: Union[torch.Tensor, np.ndarray], arrays_to_use: List[str], cfg: Optional[DatasetConfig] = None, spike_bin_size_ms=1) -> Dict[str, torch.Tensor]:
     r"""
         spikes: full (dense) array from which to extract recording array structure; Time x Channels (x 1/features)
     """

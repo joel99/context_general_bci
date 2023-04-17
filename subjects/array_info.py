@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Dict, Type, Tuple, Optional
+from typing import List, Dict, Type, Tuple, Optional, Union
 import numpy as np
 
 from ..subjects import SubjectName
@@ -97,7 +97,7 @@ class SubjectInfo:
     def aliases(cls) -> Dict[ArrayID, List[ArrayID]]:
         return cls._aliases
 
-    def get_channel_count(self, arrays: ArrayID | List[ArrayID] = ""):
+    def get_channel_count(self, arrays: Union[ArrayID, List[ArrayID]] = ""):
         if isinstance(arrays, str) and arrays:
             arrays = [arrays]
         queried = self.arrays.values() if not arrays else [self.arrays[a] for a in arrays]

@@ -19,11 +19,9 @@ try:
         _prep_mask,
         make_stacked_array
     )
-
-    from pynwb import NWBFile, NWBHDF5IO, TimeSeries, ProcessingModule
-    from pynwb.core import MultiContainerInterface, NWBDataInterface
 except:
     logger.info("nlb_tools not installed, please install with `pip install nlb-tools`")
+    NWBDataset = None
 
 from ..config import DataKey, DatasetConfig, MetaKey
 from ..subjects import SubjectInfo, SubjectName, SubjectArrayRegistry, create_spike_payload
