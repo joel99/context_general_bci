@@ -78,12 +78,22 @@ class SkinnyBehaviorRegression(nn.Module):
         self.cfg = cfg.task
 
         self.time_pad = cfg.transformer.max_trial_length
-        self.decoder = SpaceTimeTransformerDecoderScript(
+        # self.decoder = SpaceTimeTransformerDecoderScript(
+        #     cfg.transformer,
+        #     max_spatial_tokens=0,
+        #     n_layers=cfg.decoder_layers,
+        #     allow_embed_padding=True,
+        #     context_integration='cross_attn',
+        #     embed_space=False
+        # )
+
+        # Pitt decoder is not cross attn. TODO toggle if this is the case. (JIT freaks if interface changes.)
+        self.decoder = SpaceTimeTransformerEncoderScript(
             cfg.transformer,
             max_spatial_tokens=0,
             n_layers=cfg.decoder_layers,
             allow_embed_padding=True,
-            context_integration='cross_attn',
+            context_integration='in_context',
             embed_space=False
         )
         self.out = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
@@ -110,16 +120,21 @@ class SkinnyBehaviorRegression(nn.Module):
             self.decode_time = self.decode_time + self.bhvr_lag_bins
 
     def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: torch.Tensor) -> torch.Tensor:
-        # import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
         backbone_features: torch.Tensor = self.decoder(
             self.decode_token,
             self.decode_time,
             trial_context=trial_context,
-            memory=backbone_features,
-            memory_times=src_time,
+            # memory=backbone_features,
+            # memory_times=src_time,
             causal=self.causal,
         )
+
         bhvr = self.out(backbone_features)
+        if self.bhvr_mean is not None:
+            bhvr = bhvr * self.bhvr_std + self.bhvr_mean
+        return bhvr
+        # TODO return truncated bhvr
         if self.bhvr_lag_bins:
             bhvr = bhvr[:, :-self.bhvr_lag_bins]
         return bhvr[:,-1]
@@ -331,6 +346,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                     logger.info(f'Transferred {module_name} weights.')
                 else:
                     logger.info(f'New {module_name} weights.')
+
         def try_transfer_embed(
             embed_name: str, # Used for looking up possibly existing attribute
             new_attrs: List[str],
@@ -370,6 +386,8 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         try_transfer('subject_flag')
         try_transfer('task_flag')
 
+        try_transfer('readin')
+
     def forward(
         self,
         spikes: torch.Tensor # B=1 x T x C x H # ! should be int dtype, double check
@@ -392,9 +410,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         if self.task_embed is not None:
             trial_context.append(self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.task_flag)
         trial_context = torch.cat(trial_context, dim=1)
-
         state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
-        # import pdb;pdb.set_trace()
         features: torch.Tensor = self.backbone(
             state_in,
             times=time,
@@ -403,7 +419,15 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             # temporal_padding_mask=None,
             causal=self.causal,
         ) # B x Token x H (flat)
-        return self.decoder(features, time, trial_context)[0]
+        return { # debug payload
+            'state_in': state_in[0],
+            'time': time[0],
+            'position': position[0],
+            'trial_context': trial_context[0],
+            'backbone': features[0],
+        }, self.decoder(features, time, trial_context)[0] # remove batch dimension
+        # TODO only what we need
+        # return self.decoder(features, time, trial_context)[0] # remove batch dimension
 
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs):

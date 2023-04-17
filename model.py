@@ -579,7 +579,12 @@ class BrainBertInterface(pl.LightningModule):
             ) # B x T x S x H or B x Token x H (flat)
         # if outputs.isnan().any():
             # import pdb;pdb.set_trace()
-        return outputs
+        return { # debug payload
+            'state_in': state_in,
+            'trial_context': trial_context,
+            'times': batch.get(DataKey.time, None),
+            'positions': batch.get(DataKey.position, None),
+        }, outputs
 
     def _step(self, batch: Dict[str, torch.Tensor], eval_mode=False) -> Dict[str, torch.Tensor]:
         r"""

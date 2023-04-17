@@ -1,5 +1,5 @@
 #%%
-# CPU testing harness
+# Compression was rapid. Now make sure the outputs are the same...
 from pathlib import Path
 import logging
 import sys
@@ -22,9 +22,13 @@ from analyze_utils import prep_plt, get_dataloader
 from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
 
 
-# from model import transfer_model
-from model_decode import transfer_model
-# pl.seed_everything(0)
+parity_mode = 'old'
+# parity_mode = 'new'
+if parity_mode == 'old':
+    from model import transfer_model
+else:
+    from model_decode import transfer_model
+pl.seed_everything(0)
 
 # UNSORT = True
 # UNSORT = False
@@ -97,34 +101,42 @@ pl.seed_everything(0)
 #     model = model.to('cuda:0')
 
 test_outs = []
+backbone_payloads = []
 with torch.no_grad():
     # for i in range(50):
-    for trial in dataset:
-    # for batch in dataloader:
-        spikes = trial[DataKey.spikes].flatten(1,2).unsqueeze(0) # simulate normal trial
+    for batch in dataloader:
+    # for trial in dataset:
+        # import pdb;pdb.set_trace()
+        if parity_mode == 'new':
+            spikes = rearrange(batch[DataKey.spikes], 'b (time space) chunk 1 -> b time (space chunk) 1', space=6)
+        # spikes = trial[DataKey.spikes].flatten(1,2).unsqueeze(0) # simulate normal trial
         # spikes = torch.randint(0, 4, (1, 100, 192, 1), dtype=torch.uint8)
         start = time.time()
         if do_onnx:
             out = ort_session.run(None, ort_inputs)
         else:
             if mode == 'gpu':
-                spikes = spikes.to('cuda:0')
-                # for k in batch:
-                #     batch[k] = batch[k].to('cuda:0')
-                # for k in trial:
-                #     trial[k] = trial[k].to('cuda:0')
+                if parity_mode == 'new':
+                    spikes = spikes.to('cuda:0')
+                else:
+                    for k in batch:
+                        batch[k] = batch[k].to('cuda:0')
 
-            out = model(spikes)
+            # out = model(spikes)
+            if parity_mode == 'new':
+                backbone, out = model(spikes)
+                backbone_payloads.append(backbone)
 
-            # out = model(batch)
-            # out = model.task_pipelines[ModelTask.kinematic_decoding.value](
-            #     batch,
-            #     out,
-            #     compute_metrics=False,
-            #     eval_mode=True
-            # )[Output.behavior_pred]
-
-            # out = model(trial)
+            if parity_mode == 'old':
+                backbone, out = model(batch)
+                backbone['backbone'] = out
+                backbone_payloads.append(backbone)
+                out = model.task_pipelines[ModelTask.kinematic_decoding.value](
+                    batch,
+                    out,
+                    compute_metrics=False,
+                    eval_mode=True
+                )[Output.behavior_pred]
 
             if mode == 'gpu':
                 out = out.to('cpu')
@@ -145,13 +157,30 @@ loop_times = loop_times[10:]
 print(f'Benchmark: {mode}')
 print(f"Avg: {np.mean(loop_times)*1000:.4f}ms, Std: {np.std(loop_times) * 1000:.4f}ms")
 
+# Key check
+# Trial context, time, position is matched
+# State in? Backbone?
+
 #%%
 # plot outputs
-import matplotlib.pyplot as plt
 
-trial_vel = test_outs[0].numpy()
+if parity_mode == 'new':
+    trial_vel = test_outs[0].numpy()
+if parity_mode == 'old':
+    trial_vel = test_outs[0][0].numpy()
 print(trial_vel.shape)
-# trial_vel = test_outs[0][0].numpy()
 # trial_vel = trainer_out[Output.behavior_pred][0].numpy()
 for i in range(trial_vel.shape[1]):
     plt.plot(trial_vel[:,i].cumsum())
+
+#%%
+
+import pdb;pdb.set_trace()
+print(backbone_payloads[0][0].shape)
+if parity_mode == 'new':
+    trial_backbone = backbone_payloads[0].cpu().numpy()
+else:
+    trial_backbone = backbone_payloads[0][0].cpu().numpy()
+for i in range(10):
+# for i in range(trial_backbone.shape[1]):
+    plt.plot(trial_backbone[:10,i])
