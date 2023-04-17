@@ -9,7 +9,7 @@ import numpy as np
 
 import wandb
 
-from config import RootConfig
+from ..config import RootConfig
 
 def wandb_query_experiment(
     experiment: str | List[str],

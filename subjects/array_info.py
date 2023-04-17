@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Type, Tuple, Optional
 import numpy as np
 
-from subjects import SubjectName
+from ..subjects import SubjectName
 
 ArrayID = str
 @dataclass
