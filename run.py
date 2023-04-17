@@ -164,7 +164,6 @@ def run_exp(cfg : RootConfig) -> None:
     if cfg.inherit_exp and not inherit_succeeded:
         lineage_run = get_wandb_lineage(cfg)
         cfg.init_from_id = lineage_run.name
-
     if cfg.sweep_cfg: # and os.environ.get('SLURM_JOB_ID') is None: # do not allow recursive launch
         sweep_cfg = hp_sweep_space.sweep_space[cfg.sweep_cfg]
         def run_cfg(cfg_trial):

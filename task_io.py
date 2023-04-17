@@ -1080,7 +1080,6 @@ class BehaviorRegression(TaskPipeline):
         return batch
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
-        import pdb;pdb.set_trace()
         batch_out = {}
         if getattr(self.cfg, 'kl_lambda', 0.0):
             # Note: We want to _align_ at pool/population level

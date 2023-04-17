@@ -30,12 +30,6 @@ else:
     from model_decode import transfer_model
 pl.seed_everything(0)
 
-# UNSORT = True
-# UNSORT = False
-
-# run_id = 'session_cross_noctx-89e73b3s'
-# dataset_name = 'odoherty_rtt-Indy-20160407_02'
-
 run_id = 'human-sweep-simpler_lr_sweep-dgnx7mn9'
 dataset_name = 'observation_CRS02bLab_session_19.*'
 
@@ -53,14 +47,6 @@ cfg.model.task.outputs = [Output.behavior_pred]
 model = transfer_model(src_model, cfg.model, data_attrs)
 model.eval()
 dataloader = get_dataloader(dataset, batch_size=1, shuffle=False, num_workers=0)
-
-# script = torch.jit.script(model, next(iter(dataloader)))
-# script.save(PATH)
-# model = torch.jit.load(PATH)
-
-# TODO test with a bigger model - an actual tuned CRS model with
-# 2x array and longer history as well..
-# TODO test whether we loaded ckpt correctly
 
 # Setup timing harness
 import time
@@ -109,6 +95,7 @@ with torch.no_grad():
         # import pdb;pdb.set_trace()
         if parity_mode == 'new':
             spikes = rearrange(batch[DataKey.spikes], 'b (time space) chunk 1 -> b time (space chunk) 1', space=6)
+            # equivalent to loading a single trial for Pitt data.
         # spikes = trial[DataKey.spikes].flatten(1,2).unsqueeze(0) # simulate normal trial
         # spikes = torch.randint(0, 4, (1, 100, 192, 1), dtype=torch.uint8)
         start = time.time()

@@ -78,24 +78,15 @@ class SkinnyBehaviorRegression(nn.Module):
         self.cfg = cfg.task
 
         self.time_pad = cfg.transformer.max_trial_length
-        # self.decoder = SpaceTimeTransformerDecoderScript(
-        #     cfg.transformer,
-        #     max_spatial_tokens=0,
-        #     n_layers=cfg.decoder_layers,
-        #     allow_embed_padding=True,
-        #     context_integration='cross_attn',
-        #     embed_space=False
-        # )
-
-        # Pitt decoder is not cross attn. TODO toggle if this is the case. (JIT freaks if interface changes.)
-        self.decoder = SpaceTimeTransformerEncoderScript(
+        self.decoder = SpaceTimeTransformerDecoderScript(
             cfg.transformer,
             max_spatial_tokens=0,
             n_layers=cfg.decoder_layers,
             allow_embed_padding=True,
-            context_integration='in_context',
+            context_integration='cross_attn',
             embed_space=False
         )
+
         self.out = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
         self.causal = cfg.causal
         self.spacetime = cfg.transform_space
@@ -108,8 +99,6 @@ class SkinnyBehaviorRegression(nn.Module):
             assert zscore_path.exists(), f'normalizer path {zscore_path} does not exist'
             self.register_buffer('bhvr_mean', torch.load(zscore_path)['mean'])
             self.register_buffer('bhvr_std', torch.load(zscore_path)['std'])
-
-            # TODO need to unnormalize with these
         else:
             self.bhvr_mean = None
             self.bhvr_std = None
@@ -125,8 +114,8 @@ class SkinnyBehaviorRegression(nn.Module):
             self.decode_token,
             self.decode_time,
             trial_context=trial_context,
-            # memory=backbone_features,
-            # memory_times=src_time,
+            memory=backbone_features,
+            memory_times=src_time,
             causal=self.causal,
         )
 
@@ -215,22 +204,11 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
 
             Ideally, we will just bind embedding layers here, but there may be some MLPs.
         """
-        if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.session, "Session embedding strategy requires session in data"
-            if len(self.data_attrs.context.session) == 1:
-                logger.warning('Using session embedding strategy with only one session. Expected only if tuning.')
-        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.subject, "Subject embedding strategy requires subject in data"
-            if len(self.data_attrs.context.subject) == 1:
-                logger.warning('Using subject embedding strategy with only one subject. Expected only if tuning.')
-        if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.array, "Array embedding strategy requires array in data"
-            if len(self.data_attrs.context.array) == 1:
-                logger.warning('Using array embedding strategy with only one array. Expected only if tuning.')
-        if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.task, "Task embedding strategy requires task in data"
-            if len(self.data_attrs.context.task) == 1:
-                logger.warning('Using task embedding strategy with only one task. Expected only if tuning.')
+        for attr in ['session', 'subject', 'array', 'task']:
+            if getattr(self.cfg, f'{attr}_embed_strategy') is not EmbedStrat.none:
+                assert getattr(self.cfg, f'{attr}_embed_strategy') == EmbedStrat.none, f'{attr} embedding strategy requires {attr} in data'
+                if len(getattr(self.data_attrs.context, attr)) == 1:
+                    logger.warning(f'Using {attr} embedding strategy with only one {attr}. Expected only if tuning.')
 
         # We write the following repetitive logic explicitly to maintain typing
         project_size = self.cfg.hidden_size

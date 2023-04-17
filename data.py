@@ -495,6 +495,7 @@ class SpikingDataset(Dataset):
     def build_context_index(self):
         if self.context_index is not None:
             logging.info("Building context index; any previous DataAttrs may be invalidated.")
+        assert self.loaded, "Must load data before building context index"
         context = {}
         for k in self.cfg.meta_keys:
             if k == MetaKey.unique:
