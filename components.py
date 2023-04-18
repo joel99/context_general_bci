@@ -479,6 +479,7 @@ class SpaceTimeTransformer(nn.Module):
             We assume that the provided trial and temporal context is consistently shaped. i.e. any context provided is provided for all samples.
             (So attention masks do not vary across batch)
         """
+        # import pdb;pdb.set_trace()
         src = self.dropout_in(src)
         # === Embeddings ===
         if self.cfg.flat_encoder:
@@ -749,8 +750,8 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
             activation=self.cfg.activation,
             norm_first=self.cfg.pre_norm,
         )
-        # if self.pre_norm and self.final_norm: # Note, this would be equally accomplished with `norm=True` on the encoder.
-        #     self.final_norm = nn.LayerNorm(self.cfg.n_state) # per Kaiming's MAE for vision
+        if self.pre_norm and self.final_norm: # Note, this would be equally accomplished with `norm=True` on the encoder.
+            self.final_norm = nn.LayerNorm(self.cfg.n_state) # per Kaiming's MAE for vision
 
         n_layers = n_layers or self.cfg.n_layers
         self.transformer_encoder = enc_cls(enc_layer, n_layers)
@@ -798,6 +799,7 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
         r"""
             Simplified to assume `flat_encoder` and not `factorized_space_time`.
         """
+        # import pdb;pdb.set_trace()
         # Embeddings
         src = src + self.time_encoder(times)
         b, t, s = src.size(0), src.size(1), 1 # it's implied that codepaths get that "space" is not really 1, but it's not used
@@ -833,8 +835,11 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
             tgt_key_padding_mask=padding_mask,
             memory_mask=memory_mask,
             # memory_key_padding_mask=memory_padding_mask
-        )
-        return output[:, : t * s]
+        )[:, : t * s]
+
+        if self.pre_norm and self.final_norm:
+            output = self.final_norm(output)
+        return output
 
 class SpaceTimeTransformerEncoderScript(nn.Module):
     r"""

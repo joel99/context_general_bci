@@ -109,7 +109,7 @@ class SkinnyBehaviorRegression(nn.Module):
             self.decode_time = self.decode_time + self.bhvr_lag_bins
 
     def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: torch.Tensor) -> torch.Tensor:
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         backbone_features: torch.Tensor = self.decoder(
             self.decode_token,
             self.decode_time,
@@ -206,7 +206,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         """
         for attr in ['session', 'subject', 'array', 'task']:
             if getattr(self.cfg, f'{attr}_embed_strategy') is not EmbedStrat.none:
-                assert getattr(self.cfg, f'{attr}_embed_strategy') == EmbedStrat.none, f'{attr} embedding strategy requires {attr} in data'
+                assert getattr(self.data_attrs.context, attr) is not None, f'{attr} embedding strategy requires {attr} in data'
                 if len(getattr(self.data_attrs.context, attr)) == 1:
                     logger.warning(f'Using {attr} embedding strategy with only one {attr}. Expected only if tuning.')
 
@@ -380,14 +380,22 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         # time = repeat(torch.arange(t, device=spikes.device), 't -> (t c)', c=c).unsqueeze(0)
         # position = repeat(torch.arange(c, device=spikes.device), 'c -> (t c)', t=t).unsqueeze(0)
 
-        trial_context = []
+        # * Quirk (to fix) of decoding process - context tokens receive flag for encoder but not for decoder...
+        trial_context_with_flag = []
+        trial_context_without_flag = []
         if self.session_embed is not None:
-            trial_context.append(self.session_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.session_flag)
+            session_embed = self.session_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+            trial_context_with_flag.append(session_embed + self.session_flag)
+            trial_context_without_flag.append(session_embed)
         if self.subject_embed is not None:
-            trial_context.append(self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.subject_flag)
+            subject_embed = self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+            trial_context_with_flag.append(subject_embed + self.subject_flag)
+            trial_context_without_flag.append(subject_embed)
         if self.task_embed is not None:
-            trial_context.append(self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.task_flag)
-        trial_context = torch.cat(trial_context, dim=1)
+            task_embed = self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+            trial_context_with_flag.append(task_embed + self.task_flag)
+            trial_context_without_flag.append(task_embed)
+        trial_context = torch.cat(trial_context_with_flag, dim=1)
         state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
         features: torch.Tensor = self.backbone(
             state_in,
@@ -397,15 +405,8 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             # temporal_padding_mask=None,
             causal=self.causal,
         ) # B x Token x H (flat)
-        return { # debug payload
-            'state_in': state_in[0],
-            'time': time[0],
-            'position': position[0],
-            'trial_context': trial_context[0],
-            'backbone': features[0],
-        }, self.decoder(features, time, trial_context)[0] # remove batch dimension
-        # TODO only what we need
-        # return self.decoder(features, time, trial_context)[0] # remove batch dimension
+        trial_context_without_flag = torch.cat(trial_context_without_flag, dim=1)
+        return self.decoder(features, time, trial_context_without_flag)[0] # remove batch dimension
 
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs):

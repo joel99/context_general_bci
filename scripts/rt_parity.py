@@ -23,14 +23,14 @@ from utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
 
 
 parity_mode = 'old'
-# parity_mode = 'new'
+parity_mode = 'new'
 if parity_mode == 'old':
     from model import transfer_model
 else:
     from model_decode import transfer_model
 pl.seed_everything(0)
 
-run_id = 'human-sweep-simpler_lr_sweep-dgnx7mn9'
+run_id = 'human-sweep-simpler_lr_sweep-89111ysu'
 dataset_name = 'observation_CRS02bLab_session_19.*'
 
 run = get_wandb_run(run_id)
@@ -111,13 +111,17 @@ with torch.no_grad():
 
             # out = model(spikes)
             if parity_mode == 'new':
-                backbone, out = model(spikes)
-                backbone_payloads.append(backbone)
+                # backbone, out = model(spikes)
+                # backbone_payloads.append(backbone)
+                out = model(spikes)
+                # import pdb;pdb.set_trace()
 
             if parity_mode == 'old':
-                backbone, out = model(batch)
-                backbone['backbone'] = out
-                backbone_payloads.append(backbone)
+                out = model(batch)
+                # backbone, out = model(batch)
+                # backbone['backbone'] = out
+                # backbone_payloads.append(backbone)
+                # import pdb;pdb.set_trace()
                 out = model.task_pipelines[ModelTask.kinematic_decoding.value](
                     batch,
                     out,
@@ -150,19 +154,20 @@ print(f"Avg: {np.mean(loop_times)*1000:.4f}ms, Std: {np.std(loop_times) * 1000:.
 
 #%%
 # plot outputs
-
+ax = prep_plt()
 if parity_mode == 'new':
     trial_vel = test_outs[0].numpy()
 if parity_mode == 'old':
     trial_vel = test_outs[0][0].numpy()
 print(trial_vel.shape)
+trial_vel = trial_vel[:47]
 # trial_vel = trainer_out[Output.behavior_pred][0].numpy()
 for i in range(trial_vel.shape[1]):
-    plt.plot(trial_vel[:,i].cumsum())
-
+    ax.plot(trial_vel[:,i].cumsum())
+ax.set_title(f'Velocity {parity_mode} {trial_vel.shape}')
+torch.save(trial_vel, f'trial_vel_{parity_mode}.pt')
 #%%
 
-import pdb;pdb.set_trace()
 print(backbone_payloads[0][0].shape)
 if parity_mode == 'new':
     trial_backbone = backbone_payloads[0].cpu().numpy()

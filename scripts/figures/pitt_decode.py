@@ -58,9 +58,9 @@ comp_df['data_id'] = comp_df['subject'] + '_' + comp_df['session'].astype(str) +
 
 
 EVAL_DATASETS = [
-    # 'observation_CRS02bLab_session_19.*',
-    'observation_CRS07Lab_session_15.*',
-    'observation_CRS07Lab_session_16.*',
+    'observation_CRS02bLab_session_19.*',
+    # 'observation_CRS07Lab_session_15.*',
+    # 'observation_CRS07Lab_session_16.*',
 ]
 # expand by querying alias
 EVAL_DATASETS = SpikingDataset.list_alias_to_contexts(EVAL_DATASETS)
@@ -68,15 +68,16 @@ EVAL_ALIASES = [x.alias for x in EVAL_DATASETS]
 
 EXPERIMENTS_KIN = [
     # f'pitt_v2/probe',
-    f'pitt_v2/probe_01',
+    f'pitt_v2/probe_01_cross',
+    # f'pitt_v2/probe_01',
 ]
 
 queries = [
-    # 'human_obs_limit',
+    'human_obs_limit',
     'human_obs',
-    'human_obs_m5',
+    # 'human_obs_m5',
     'human',
-    'human_m5',
+    # 'human_m5',
 ]
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
@@ -219,7 +220,7 @@ print(sub_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
 #%%
 # make pretty seaborn default
 subject = 'CRS02bLab'
-subject = 'CRS07Lab'
+# subject = 'CRS07Lab'
 subject_df = sub_df[sub_df['subject'] == subject]
 
 sns.set_theme(style="whitegrid")
@@ -231,6 +232,9 @@ ax.set_xlabel('Model variant')
 ax.set_title(f'{subject} Perf ({EXPERIMENTS_KIN[0]})')
 # Rotate xlabels
 ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
+
+# 10 yticks
+ax.set_yticks(np.linspace(0, 1, 11))
 
 #%%
 print(kin_df.groupby(['variant']).mean().sort_values('kin_r2', ascending=False))
