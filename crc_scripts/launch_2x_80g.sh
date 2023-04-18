@@ -6,6 +6,7 @@
 #SBATCH --mem 200G
 #SBATCH --output=slurm_logs/%j.out
 #SBATCH --nodes=1
+#SBATCH -x gpu-n31
 #SBATCH --gpus-per-node=2
 #SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=16

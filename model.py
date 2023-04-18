@@ -493,7 +493,7 @@ class BrainBertInterface(pl.LightningModule):
                 state_in = self.readin(state_in, session, subject, array)
             else: # standard project
                 state_in = self.readin(state_in)
-        if self.cfg.encode_decode or self.cfg.task.decode_separate: # TODO decouple
+        if self.cfg.encode_decode or self.cfg.task.decode_separate: # TODO decouple - or at least move after flag injection below
             # cache context
             batch['session'] = session
             batch['subject'] = subject

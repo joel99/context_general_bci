@@ -86,6 +86,7 @@ class SkinnyBehaviorRegression(nn.Module):
             context_integration='cross_attn',
             embed_space=False
         )
+
         self.out = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
         self.causal = cfg.causal
         self.spacetime = cfg.transform_space
@@ -98,8 +99,6 @@ class SkinnyBehaviorRegression(nn.Module):
             assert zscore_path.exists(), f'normalizer path {zscore_path} does not exist'
             self.register_buffer('bhvr_mean', torch.load(zscore_path)['mean'])
             self.register_buffer('bhvr_std', torch.load(zscore_path)['std'])
-
-            # TODO need to unnormalize with these
         else:
             self.bhvr_mean = None
             self.bhvr_std = None
@@ -109,17 +108,22 @@ class SkinnyBehaviorRegression(nn.Module):
         if self.causal and self.cfg.behavior_lag_lookahead:
             self.decode_time = self.decode_time + self.bhvr_lag_bins
 
-    def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: List[torch.Tensor]) -> torch.Tensor:
+    def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: torch.Tensor) -> torch.Tensor:
         # import pdb;pdb.set_trace()
         backbone_features: torch.Tensor = self.decoder(
             self.decode_token,
             self.decode_time,
             trial_context=trial_context,
-            causal=self.causal,
             memory=backbone_features,
             memory_times=src_time,
+            causal=self.causal,
         )
+
         bhvr = self.out(backbone_features)
+        if self.bhvr_mean is not None:
+            bhvr = bhvr * self.bhvr_std + self.bhvr_mean
+        return bhvr
+        # TODO return truncated bhvr
         if self.bhvr_lag_bins:
             bhvr = bhvr[:, :-self.bhvr_lag_bins]
         return bhvr[:,-1]
@@ -200,22 +204,11 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
 
             Ideally, we will just bind embedding layers here, but there may be some MLPs.
         """
-        if self.cfg.session_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.session, "Session embedding strategy requires session in data"
-            if len(self.data_attrs.context.session) == 1:
-                logger.warning('Using session embedding strategy with only one session. Expected only if tuning.')
-        if self.cfg.subject_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.subject, "Subject embedding strategy requires subject in data"
-            if len(self.data_attrs.context.subject) == 1:
-                logger.warning('Using subject embedding strategy with only one subject. Expected only if tuning.')
-        if self.cfg.array_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.array, "Array embedding strategy requires array in data"
-            if len(self.data_attrs.context.array) == 1:
-                logger.warning('Using array embedding strategy with only one array. Expected only if tuning.')
-        if self.cfg.task_embed_strategy is not EmbedStrat.none:
-            assert self.data_attrs.context.task, "Task embedding strategy requires task in data"
-            if len(self.data_attrs.context.task) == 1:
-                logger.warning('Using task embedding strategy with only one task. Expected only if tuning.')
+        for attr in ['session', 'subject', 'array', 'task']:
+            if getattr(self.cfg, f'{attr}_embed_strategy') is not EmbedStrat.none:
+                assert getattr(self.data_attrs.context, attr) is not None, f'{attr} embedding strategy requires {attr} in data'
+                if len(getattr(self.data_attrs.context, attr)) == 1:
+                    logger.warning(f'Using {attr} embedding strategy with only one {attr}. Expected only if tuning.')
 
         # We write the following repetitive logic explicitly to maintain typing
         project_size = self.cfg.hidden_size
@@ -331,6 +324,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                     logger.info(f'Transferred {module_name} weights.')
                 else:
                     logger.info(f'New {module_name} weights.')
+
         def try_transfer_embed(
             embed_name: str, # Used for looking up possibly existing attribute
             new_attrs: List[str],
@@ -370,6 +364,8 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         try_transfer('subject_flag')
         try_transfer('task_flag')
 
+        try_transfer('readin')
+
     def forward(
         self,
         spikes: torch.Tensor # B=1 x T x C x H # ! should be int dtype, double check
@@ -384,25 +380,33 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         # time = repeat(torch.arange(t, device=spikes.device), 't -> (t c)', c=c).unsqueeze(0)
         # position = repeat(torch.arange(c, device=spikes.device), 'c -> (t c)', t=t).unsqueeze(0)
 
-        trial_context = []
+        # * Quirk (to fix) of decoding process - context tokens receive flag for encoder but not for decoder...
+        trial_context_with_flag = []
+        trial_context_without_flag = []
         if self.session_embed is not None:
-            trial_context.append(self.session_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.session_flag)
+            session_embed = self.session_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+            trial_context_with_flag.append(session_embed + self.session_flag)
+            trial_context_without_flag.append(session_embed)
         if self.subject_embed is not None:
-            trial_context.append(self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.subject_flag)
+            subject_embed = self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+            trial_context_with_flag.append(subject_embed + self.subject_flag)
+            trial_context_without_flag.append(subject_embed)
         if self.task_embed is not None:
-            trial_context.append(self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0) + self.task_flag)
-
+            task_embed = self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+            trial_context_with_flag.append(task_embed + self.task_flag)
+            trial_context_without_flag.append(task_embed)
+        trial_context = torch.cat(trial_context_with_flag, dim=1)
         state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
-        # import pdb;pdb.set_trace()
         features: torch.Tensor = self.backbone(
             state_in,
             times=time,
             positions=position,
             trial_context=trial_context,
-            temporal_padding_mask=None,
+            # temporal_padding_mask=None,
             causal=self.causal,
         ) # B x Token x H (flat)
-        return self.decoder(features, time, trial_context)[0]
+        trial_context_without_flag = torch.cat(trial_context_without_flag, dim=1)
+        return self.decoder(features, time, trial_context_without_flag)[0] # remove batch dimension
 
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs):

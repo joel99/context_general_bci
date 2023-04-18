@@ -380,7 +380,7 @@ class SpaceTimeTransformer(nn.Module):
             Use t=1 to produce a space only mask, s=1 to produce a time only mask
         """
         if causal:
-            if self.flat_encoder:
+            if self.cfg.flat_encoder:
                 src_mask = SpaceTimeTransformer.generate_square_subsequent_mask_from_times(times)
             else:
                 assert not self.cross_attn_enabled, "Causal non-flat not supported with cross attention"
@@ -479,6 +479,7 @@ class SpaceTimeTransformer(nn.Module):
             We assume that the provided trial and temporal context is consistently shaped. i.e. any context provided is provided for all samples.
             (So attention masks do not vary across batch)
         """
+        # import pdb;pdb.set_trace()
         src = self.dropout_in(src)
         # === Embeddings ===
         if self.cfg.flat_encoder:
@@ -749,8 +750,8 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
             activation=self.cfg.activation,
             norm_first=self.cfg.pre_norm,
         )
-        # if self.pre_norm and self.final_norm: # Note, this would be equally accomplished with `norm=True` on the encoder.
-        #     self.final_norm = nn.LayerNorm(self.cfg.n_state) # per Kaiming's MAE for vision
+        if self.pre_norm and self.final_norm: # Note, this would be equally accomplished with `norm=True` on the encoder.
+            self.final_norm = nn.LayerNorm(self.cfg.n_state) # per Kaiming's MAE for vision
 
         n_layers = n_layers or self.cfg.n_layers
         self.transformer_encoder = enc_cls(enc_layer, n_layers)
@@ -761,40 +762,12 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
                 self.time_encoder = nn.Embedding(self.cfg.max_trial_length, self.cfg.n_state)
         else:
             self.time_encoder = PositionalEncodingScript(self.cfg, input_times=self.cfg.transform_space)
-        if debug_override_dropout_in:
-            self.dropout_in = nn.Identity()
-        else:
-            self.dropout_in = nn.Dropout(self.cfg.dropout)
-        if debug_override_dropout_out:
-            self.dropout_out = nn.Identity()
-        else:
-            self.dropout_out = nn.Dropout(self.cfg.dropout)
-        # And implement token level etc.
-        # if self.cfg.fixup_init:
-        #     self.fixup_initialization()
-        self.embed_space = embed_space
 
     @property
     def out_size(self):
         # verbose for torchscript
         return self.n_state
         # return self.cfg.n_state
-
-    def generate_square_subsequent_mask_from_times(self, times: torch.Tensor, ref_times: Optional[torch.Tensor] = None) -> torch.Tensor:
-        r"""
-            Generate a square mask for the sequence. The masked positions are filled with float('-inf').
-            Unmasked positions are filled with float(0.0).
-
-            times: B x Token
-
-            out: B x T x T
-        """
-        if ref_times is None:
-            ref_times = times
-        return torch.where(
-            times[:, :, None] >= ref_times[:, None, :],
-            0.0, float('-inf')
-        )
 
     # === Masks ===
     def make_src_mask(self, src: torch.Tensor, trial_context: torch.Tensor, times: torch.Tensor, t: int, s: int=1, causal: bool=True):
@@ -806,87 +779,66 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
             Produces time major (T*S + TempCtx + TrialCtx, T*S + TempCtx + TrialCtx)
             Use t=1 to produce a space only mask, s=1 to produce a time only mask
         """
-        if causal:
-            src_mask = self.generate_square_subsequent_mask_from_times(times)
-        else:
-            src_mask = None
-        if src_mask is not None and src_mask.ndim == 3: # expand along heads
-            src_mask = src_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, src_mask.size(1), src_mask.size(2))
-            # src_mask = repeat(src_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
-        return src_mask
+        if not causal:
+            return None
+        src_mask = generate_square_subsequent_mask_from_times(times)
+        return src_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, src_mask.size(1), src_mask.size(2))
 
     def forward(
         self,
         src: torch.Tensor, # B T A H - embedded already (or possibly B T A S_A H), or B Token H
         times: torch.Tensor, # for flat spacetime path, B x Token
-        trial_context: List[torch.Tensor], # T' [B H]
-        temporal_padding_mask: Optional[torch.Tensor] = None, # B T
-        memory: Optional[torch.Tensor] = None, # memory as other context if needed for covariate decoder flow
+        trial_context: torch.Tensor, # B T' H
+        # trial_context: List[torch.Tensor], # T' [B H]
+        memory: torch.Tensor, # memory as other context if needed for covariate decoder flow
         memory_times: Optional[torch.Tensor] = None, # solely for causal masking, not for re-embedding
+        temporal_padding_mask: Optional[torch.Tensor] = None, # B T
         memory_padding_mask: Optional[torch.Tensor] = None,
         causal: bool=True,
     ) -> torch.Tensor: # T B H
         r"""
             Simplified to assume `flat_encoder` and not `factorized_space_time`.
         """
-        src = self.dropout_in(src)
-
+        # import pdb;pdb.set_trace()
         # Embeddings
         src = src + self.time_encoder(times)
         b, t, s = src.size(0), src.size(1), 1 # it's implied that codepaths get that "space" is not really 1, but it's not used
-
-        trial_context = torch.cat(trial_context, dim=1)
-        # trial_context, _ = pack(trial_context, 'b * h')
-
-        contextualized_src = [src]
-        contextualized_src = torch.cat(contextualized_src, dim=1)
-        # contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
         src_mask = self.make_src_mask(src, trial_context, times, t, s, causal=causal)
 
         if temporal_padding_mask is not None:
             padding_mask = temporal_padding_mask
         else:
+            # padding_mask = torch.zeros((b, t), dtype=torch.float, device=src.device) # pytorch compile complains
             padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
+            # padding_mask = padding_mask.masked_fill(padding_mask, float('-inf'))
 
         # Trial context is never padded
-        # cross_ctx = [i for i in [memory, trial_context] if i is not None] # verbose for torchscript
-        cross_ctx = []
-        if memory is not None:
-            cross_ctx.append(memory)
-        cross_ctx.append(trial_context)
-        memory = torch.cat(cross_ctx, dim=1)
-        if memory_times is None: # No mask needed for context only
-            memory_mask = None
-        else: # This is the covariate decode path
-            memory_mask = self.generate_square_subsequent_mask_from_times(
-                times, memory_times
-            )
-            if trial_context is not None:
-                memory_mask = torch.cat([memory_mask, torch.zeros(
-                    (memory_mask.size(0), contextualized_src.size(1), trial_context.size(1)),
-                    dtype=torch.float, device=memory_mask.device
-                )], dim=-1)
-            memory_mask = memory_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, memory_mask.size(1), memory_mask.size(2))
-            # memory_mask = repeat(memory_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
-            if memory_padding_mask is not None and trial_context is not None:
-                memory_padding_mask = torch.cat([
-                    memory_padding_mask,
-                    torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)
-                ], 1)
-                memory_padding_mask = torch.where(memory_padding_mask, torch.zeros_like(memory_padding_mask, dtype=torch.float), torch.full_like(memory_padding_mask, float('-inf'), dtype=torch.float))
+        memory = torch.cat([memory, trial_context], dim=1)
+        memory_mask = generate_square_subsequent_mask_from_times(
+            times, memory_times
+        )
+        memory_mask = torch.cat([memory_mask, torch.zeros(
+            (memory_mask.size(0), src.size(1), trial_context.size(1)),
+            dtype=torch.float, device=memory_mask.device
+        )], dim=-1)
+        memory_mask = memory_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, memory_mask.size(1), memory_mask.size(2))
+        # memory_mask = repeat(memory_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
+        # memory_padding_mask = torch.cat([
+        #     memory_padding_mask,
+        #     torch.zeros((memory_padding_mask.size(0), trial_context.size(1)), dtype=torch.bool, device=memory_padding_mask.device)
+        # ], 1)
         output = self.transformer_encoder(
-            contextualized_src,
+            src,
             memory,
             tgt_mask=src_mask,
             tgt_key_padding_mask=padding_mask,
             memory_mask=memory_mask,
-            memory_key_padding_mask=memory_padding_mask
-        )
-        output = output[:, : t * s]
-        output = self.dropout_out(output)
-        # if self.pre_norm and self.has_final_norm:
-        #     output = self.final_norm(output)
+            # memory_key_padding_mask=memory_padding_mask
+        )[:, : t * s]
+
+        if self.pre_norm and self.final_norm:
+            output = self.final_norm(output)
         return output
 
 class SpaceTimeTransformerEncoderScript(nn.Module):
@@ -961,22 +913,6 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
     def out_size(self):
         return self.n_state
 
-    def generate_square_subsequent_mask_from_times(self, times: torch.Tensor, ref_times: Optional[torch.Tensor] = None) -> torch.Tensor:
-        r"""
-            Generate a square mask for the sequence. The masked positions are filled with float('-inf').
-            Unmasked positions are filled with float(0.0).
-
-            times: B x Token
-
-            out: B x T x T
-        """
-        if ref_times is None:
-            ref_times = times
-        return torch.where(
-            times[:, :, None] >= ref_times[:, None, :],
-            0.0, float('-inf')
-        )
-
     # === Masks ===
     def make_src_mask(self, src: torch.Tensor, trial_context: torch.Tensor, times: torch.Tensor, t: int, s: int=1, causal: bool=True):
         r"""
@@ -988,15 +924,9 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
             Use t=1 to produce a space only mask, s=1 to produce a time only mask
         """
         if causal:
-            src_mask = self.generate_square_subsequent_mask_from_times(times)
+            src_mask = generate_square_subsequent_mask_from_times(times)
         else:
             src_mask = None
-        # Update src mask for context. Note that row is attender, col is attended.
-        # (For simplicity in construction)
-        # Temporal Context is allowed to attend Trial acausally and self causally (if causal), but not to src
-        # ? Why restrict? Well, we should test in acausal settings, but it's restricted so causal info doesn't bleed through it
-        # Trial Context is allowed to attend to self acausally, but that's it.
-        # Somewhat redundant code structure is to play nice with typing
         if src_mask is None:
             src_mask = torch.zeros((t * s, t * s), dtype=torch.float, device=src.device) # all attending
         src_mask = F.pad(src_mask, (0, 0, 0, trial_context.size(1)), value=float('-inf'))
@@ -1004,7 +934,6 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
 
         if src_mask is not None and src_mask.ndim == 3: # expand along heads
             src_mask = src_mask.unsqueeze(1).repeat(1, self.n_heads, 1, 1).view(-1, src_mask.size(1), src_mask.size(2))
-            # src_mask = repeat(src_mask, 'b t1 t2 -> (b h) t1 t2', h=self.cfg.n_heads)
         return src_mask
 
     def forward(
@@ -1012,41 +941,45 @@ class SpaceTimeTransformerEncoderScript(nn.Module):
         src: torch.Tensor, # B T A H - embedded already (or possibly B T A S_A H), or B Token H
         times: torch.Tensor, # for flat spacetime path, B x Token
         positions: torch.Tensor, # for flat spacetime path
-        trial_context: List[torch.Tensor], # T' [B H]
-        temporal_padding_mask: Optional[torch.Tensor] = None, # B T
+        trial_context: torch.Tensor, # B T' H
+        # temporal_padding_mask: Optional[torch.Tensor] = None, # B T
         causal: bool=True,
     ) -> torch.Tensor: # T B H
         r"""
             Simplified to assume `flat_encoder` and not `factorized_space_time`.
         """
-        src = self.dropout_in(src)
-
-        # Embeddings
-        src = src + self.time_encoder(times)
-        if self.embed_space:
-            src = src + self.space_encoder(positions)
+        src = src + self.time_encoder(times) + self.space_encoder(positions)
         b, t, s = src.size(0), src.size(1), 1 # it's implied that codepaths get that "space" is not really 1, but it's not used
 
-        trial_context = torch.cat(trial_context, dim=1)
-        # trial_context, _ = pack(trial_context, 'b * h')
-
-        contextualized_src = [src, trial_context]
-        contextualized_src = torch.cat(contextualized_src, dim=1)
+        contextualized_src = torch.cat([src, trial_context], dim=1)
         # contextualized_src, ps = pack(contextualized_src, 'b * h') # b [(t a) + (t n) + t'] h
 
         src_mask = self.make_src_mask(src, trial_context, times, t, s, causal=causal)
 
-        if temporal_padding_mask is not None:
-            padding_mask = temporal_padding_mask
-        else:
-            padding_mask = torch.full((b, t), float('-inf'), dtype=torch.float, device=src.device)
-            # padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
+        # padding_mask = torch.zeros((b, t), dtype=torch.bool, device=src.device)
+        # padding_mask = torch.cat([
+        #     padding_mask,
+        #     torch.zeros((b, trial_context.size(-2)), dtype=torch.bool, device=src.device)
+        # ], dim=-1)
 
-        # Trial context is never padded
-        if trial_context is not None:
-            padding_mask = F.pad(padding_mask, (0, trial_context.size(-2)), value=0.)
+        output = self.transformer_encoder(contextualized_src, src_mask)
+        # output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
+        return output[:, : t * s]
 
-        output = self.transformer_encoder(contextualized_src, src_mask, src_key_padding_mask=padding_mask)
-        output = output[:, : t * s]
-        output = self.dropout_out(output)
-        return output
+def generate_square_subsequent_mask_from_times(times: torch.Tensor, ref_times: Optional[torch.Tensor] = None) -> torch.Tensor:
+    r"""
+        Generate a square mask for the sequence. The masked positions are filled with float('-inf').
+        Unmasked positions are filled with float(0.0).
+
+        times: B x Token
+
+        out: B x T x T
+    """
+    if ref_times is None:
+        ref_times = times
+    # mask = (times[:, :, None] < ref_times[:, None, :]) # Note sign flip vs where expression
+    return torch.where(
+        times[:, :, None] >= ref_times[:, None, :],
+        0.0, float('-inf')
+    ).float()
+    # return mask.masked_fill(mask, float('-inf'))

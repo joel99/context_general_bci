@@ -17,32 +17,6 @@ import seaborn as sns
 from omegaconf import OmegaConf
 from analyze_utils import prep_plt
 
-# dataset_name = 'mc_maze_large' # 122 sorted units
-# dataset_name = 'mc_maze_medium' # 114 sorted units
-# dataset_name = 'mc_maze_small' # 107 sorted units
-# dataset_name = 'mc_maze$' # 137 sorted units
-# dataset_name = 'churchland_maze_jenkins-0'
-# dataset_name = 'churchland_maze_jenkins-1'
-# dataset_name = 'churchland_maze_jenkins-2'
-# dataset_name = 'churchland_maze_jenkins-3'
-# dataset_name = 'churchland_maze_nitschke-0'
-# dataset_name = 'churchland_maze_nitschke-1'
-# dataset_name = 'churchland_maze_nitschke-2'
-# dataset_name = 'churchland_maze_nitschke-3'
-# dataset_name = 'churchland_maze_nitschke-4'
-
-# TODO - current inferred rates for RTT are wavy for some reason
-# dataset_name = 'mc_rtt'
-# dataset_name = 'odoherty_rtt-Loco-20170215_02'
-
-# dataset_name = 'odoherty_rtt-Loco-20170216_02'
-# dataset_name = 'odoherty_rtt-Loco-20170217_02'
-# dataset_name = 'odoherty_rtt-Loco-20170228_02'
-# dataset_name = 'odoherty_rtt-Loco-20170301_05'
-# dataset_name = 'odoherty_rtt-Loco-20170302_02'
-# dataset_name = 'odoherty_rtt-Loco-20170227_04'
-# dataset_name = 'odoherty_rtt-Loco-20170210_03'
-
 # dataset_name = 'odoherty_rtt-Indy.*'
 dataset_name = 'odoherty_rtt-Indy-20160627_01'
 # dataset_name = 'odoherty_rtt-Indy-20161005_06'
@@ -68,6 +42,8 @@ print(context)
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 # default_cfg.data_keys = [DataKey.spikes]
 default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+default_cfg.odoherty_rtt.include_sorted = False
+default_cfg.odoherty_rtt.arrays = ['Indy-M1', 'Loco-M1']
 default_cfg.bin_size_ms = 20
 # default_cfg.bin_size_ms = 30
 default_cfg.max_arrays = min(max(1, len(context.array)), 2)
@@ -169,7 +145,8 @@ npt = dataset.cfg.neurons_per_token
 
 seed_everything(42)
 
-grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token]
+grid_mask = (torch.rand(pop_spikes.size()) < 0.0)[::npt, ::sample_times_per_token]
+# grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token]
 # grid_mask = (torch.rand(pop_spikes.size()) < 0.5)[::npt, ::sample_times_per_token] * 0
 print(grid_mask.size())
 
@@ -208,15 +185,15 @@ def heatmap_plot(spikes, ax=None):
     # ax.set_xticks(np.linspace(0, spikes.shape[1], 5))
     # ax.set_xticklabels(np.linspace(0, spikes.shape[1] * dataset.cfg.bin_size_ms, 5).astype(int))
 
-    ax.set_xlabel('Time')
+    ax.set_xlabel('Time', fontsize=20)
     # add rightwards arrow
     ax.annotate(
-        '', xy=(0.65, -0.035), xytext=(0.55, -0.035),
+        '', xy=(0.65, -0.035), xytext=(0.58, -0.035),
         xycoords='axes fraction', textcoords='axes fraction',
         arrowprops=dict(arrowstyle="->", color='black')
     )
 
-    ax.set_ylabel('Neuron')
+    ax.set_ylabel('Neuron', fontsize=20)
     # add upwards arrow
     ax.annotate(
         '', xy=(-0.035, 0.7), xytext=(-0.035, 0.6),
@@ -226,8 +203,9 @@ def heatmap_plot(spikes, ax=None):
 
 
     # ax.set_title("RTT Binned (Indy, 2016/06/27)")
-    ax.set_title("Input (Single-trial spiking activity)", fontsize=16)
-    ax.set_title("Target", fontsize=16)
+    ax.set_title("Single-trial spiking activity", fontsize=20)
+    # ax.set_title("Input (Single-trial spiking activity)", fontsize=16)
+    # ax.set_title("Target", fontsize=16)
     # ax.set_title(context.alias)
 
     # Rescale cbar to only use 0, 1, 2, 3 for labels

@@ -42,7 +42,7 @@ class MarinoBatistaLoader(ExperimentalTaskLoader):
         state_data = mat_dict['stateData']
         spikes = mat_dict['spikes'] # L [T (ms) x C (neurons)]
         num_trials = len(state_data)
-        use_vel = 'BCI' not in str(datapath)
+        use_vel = 'reaching' in str(datapath)
         if use_vel:
             marker_data = mat_dict['marker']
 
@@ -82,3 +82,4 @@ class MarinoBatistaLoader(ExperimentalTaskLoader):
         return pd.DataFrame(meta_payload)
 
 ExperimentalTaskRegistry.register_manual(ExperimentalTask.marino_batista_mp_bci, MarinoBatistaLoader)
+ExperimentalTaskRegistry.register_manual(ExperimentalTask.marino_batista_mp_iso_force, MarinoBatistaLoader)

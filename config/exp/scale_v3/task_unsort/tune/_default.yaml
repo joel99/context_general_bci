@@ -23,5 +23,5 @@ dataset:
 fragment_datasets: True
 inherit_exp: scale_v3/task_unsort
 successor_exp:
-- scale_v3/subject_unsort/probe
+- scale_v3/task_unsort/probe
 # ? Should I have this config outside?

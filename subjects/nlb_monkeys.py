@@ -89,3 +89,17 @@ class Earl(SubjectInfo):
     _arrays = {
         'M1': SortedArrayInfo(_max_channels=96),
     }
+
+@SubjectArrayRegistry.register
+class Rocky(SubjectInfo):
+    name = SubjectName.rocky
+    _arrays = {
+        'M1': SortedArrayInfo(_max_channels=192), # max seen 165
+    }
+
+@SubjectArrayRegistry.register
+class Nigel(SubjectInfo):
+    name = SubjectName.nigel
+    _arrays = {
+        'M1': SortedArrayInfo(_max_channels=96), # max seen 58
+    }
