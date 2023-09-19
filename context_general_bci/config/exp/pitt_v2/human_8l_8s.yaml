@@ -1,0 +1,25 @@
+# @package _global_
+defaults:
+  - _default
+model:
+  transformer:
+    n_layers: 8
+  session_embed_token_count: 8
+dataset:
+  datasets:
+  - observation_.*
+  - ortho_.*
+  - fbc_.*
+  - unstructured_.*
+  - pitt_co.*
+  # Our "test set"
+  exclude_datasets:
+  - observation_P2Lab_session_19.* #
+  - observation_P3Lab_session_15.*
+  - observation_P3Lab_session_16.*
+  # There are at least 4 test sessions for P3 and 8 for P2Lab
+train:
+  autoscale_batch_size: false
+  batch_size: 64
+  accumulate_batches: 2
+load_from_id: human_8l_8s-mbbng1dw # interrupted bc i'm dumb

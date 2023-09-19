@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+  - _default
+dataset:
+  datasets:
+  - observation_.*
+  - ortho_.*
+  - fbc_.*
+  - unstructured_.*
+  - pitt_co.*
+  # Our "test set"
+  exclude_datasets:
+  - observation_P2Lab_session_19.* #
+  - observation_P3Lab_session_15.*
+  - observation_P3Lab_session_16.*
+  # There are at least 4 test sessions for P3 and 8 for P2Lab
+train:
+  autoscale_batch_size: false
+  batch_size: 32
+  accumulate_batches: 4

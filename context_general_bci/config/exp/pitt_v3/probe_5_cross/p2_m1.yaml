@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+  - _default
+dataset:
+  datasets:
+  - observation_P2_19.* #
+  eval_datasets:
+  - observation_P2_19.* #
+model:
+  task:
+    mask_ratio: 0.1
+inherit_tag: P2_m5

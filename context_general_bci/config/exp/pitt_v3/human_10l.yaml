@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - _default
+model:
+  transformer:
+    n_layers: 10
+dataset:
+  datasets:
+  - observation_.* # pursuit.*
+  - ortho_.* # pursuit.*
+  - fbc_.* # pursuit.*
+  - unstructured_.*
+  - pitt_co.*
+train:
+  autoscale_batch_size: false
+  batch_size: 256 # A100 80G
+  # Use 2 nodes
+  accumulate_batches: 4

@@ -1,0 +1,15 @@
+# @package _global_
+
+defaults:
+  - _default
+inherit_exp: pitt_v3/decode_online_bci
+inherit_tag: human_P4_tune
+# inherit_tag: human_aug_only_full # JY backup, not clear on lineage here
+tag: 'online_human_refit'
+notes: "Inits from refit-ed ckpt. Can be used for further closed loop tune or just observation." # pitt_v3/decode_full/human
+model:
+  closed_loop_crop_bins: 50 # safe default.
+dataset:
+  fbc:
+    closed_loop_intention_estimation: 'refit'
+# Note, if you plan on using multisession, then specify: dataset.datasets=['observation_P4.*'] (this will integrate the new session automatically)

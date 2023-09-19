@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+  - _default
+dataset:
+  datasets:
+  - observation_P3_15.*
+  - observation_P3_16.*
+  eval_datasets:
+  - observation_P3_15.*
+  - observation_P3_16.*
+model:
+  task:
+    mask_ratio: 0.5

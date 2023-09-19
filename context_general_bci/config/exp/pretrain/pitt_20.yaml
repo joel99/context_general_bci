@@ -1,0 +1,40 @@
+# @package _global_
+
+tag: pitt_20
+
+defaults:
+  - /model: pretrain
+  - /train: nlb
+dataset:
+  datasets:
+  - P2Home.data.*
+  eval_datasets:
+  - P2Home.data.00445
+  data_keys:
+  - DataKey.spikes
+  pitt_co:
+    arrays:
+    - P2-lateral_m1
+    - P2-medial_m1
+    - P2-sensory
+  max_length_ms: 4000
+  max_arrays: 3
+  bin_size_ms: 20
+  max_channels: 96
+  meta_keys:
+  - MetaKey.unique
+  - MetaKey.session
+  - MetaKey.array
+  - MetaKey.subject
+model:
+  task:
+    tasks:
+    - ModelTask.infill
+    metrics:
+    - Metric.bps
+  subject_embed_strategy: EmbedStrat.token
+  array_embed_strategy: EmbedStrat.token_add
+train:
+  batch_size: 16
+  accumulate_batches: 4
+sweep_cfg: base
