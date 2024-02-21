@@ -20,6 +20,7 @@ from .context_info import (
     GDrivePathContextInfo,
     BCIContextInfo,
     BatistaContextInfo,
+    FalconContextInfo,
 )
 
 from context_general_bci.tasks import ExperimentalTask
@@ -172,6 +173,8 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
             'free_play': ExperimentalTask.unstructured,
             'default': ExperimentalTask.pitt_co,
         }),
+
+        *FalconContextInfo.build_from_dir('./data/h1', task=ExperimentalTask.falcon),
 
         # *BatistaContextInfo.build_from_dir('./data/marino_batista/earl_multi_posture_isometric_force', task=ExperimentalTask.marino_batista_mp_iso_force),
         # *BatistaContextInfo.build_from_dir('./data/marino_batista/earl_multi_posture_bci', task=ExperimentalTask.marino_batista_mp_bci),

@@ -637,6 +637,33 @@ class BatistaContextInfo(ContextInfo):
         infos = map(make_info, root.glob("*.mat"))
         return filter(lambda x: x is not None, infos)
 
+
+@dataclass
+class FalconContextInfo(ContextInfo):
+    def _id(self):
+        return self.alias
+
+    @classmethod
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"]):
+        root = Path(root)
+        if not root.exists():
+            logger.warning(f"Datapath folder {root} does not exist. Skipping.")
+            return []
+        def make_info(path: Path):
+            # path = ..../h1/
+            subject = path.parts[-2].lower()
+            subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+            return FalconContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=arrays,
+                alias=f"falcon_{subject.name.value}-{path.stem}",
+                datapath=path,
+            )
+        infos = map(make_info, root.glob("*.nwb"))
+        return list(filter(lambda x: x is not None, infos))
+
+
 # ====
 # Archive
 

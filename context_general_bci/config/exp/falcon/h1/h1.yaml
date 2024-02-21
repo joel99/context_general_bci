@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+  - /model: flat_enc_dec
+  - /dataset: flat
+model:
+  causal: false
+  subject_embed_strategy: EmbedStrat.token
+  task:
+    mask_ratio: 0.25 # for efficiency
+  neurons_per_token: 32
+dataset:
+  bin_size_ms: 10
+  neurons_per_token: 32
+
+  max_arrays: 1
+  max_channels: 192
+
+  datasets:
+  - falcon_FALCONH1.*
+
+train:
+  batch_size: 32

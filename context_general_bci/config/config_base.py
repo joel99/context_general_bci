@@ -501,6 +501,7 @@ class DatasetConfig:
     ]))
     delay_reach: ExperimentalConfig = field(default_factory=ExperimentalConfig)
 
+    falcon: ExperimentalConfig = field(default_factory=ExperimentalConfig)
     permute_channels: bool = False # test flag, permute channels randomly per session
 
 @dataclass

@@ -28,6 +28,8 @@ class SubjectName(OrderedEnum):
     nigel = "Nigel"
     rocky = "Rocky"
 
+    falcon_h1 = "FALCONH1"
+
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
 from .array_registry import SubjectArrayRegistry, create_spike_payload
 # ? Should we be referencing this instance or the class in calls? IDK
