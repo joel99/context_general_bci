@@ -414,7 +414,6 @@ class SpikingDataset(Dataset):
                     data_items[k] = (payload[k] - per_zscore['mean']) / per_zscore['std']
                 else:
                     data_items[k] = payload[k]
-
         out = {
             **data_items,
             **meta_items,
@@ -473,8 +472,7 @@ class SpikingDataset(Dataset):
                     stack_batch[k].append(item)
                 else:
                     if self.cfg.serve_tokenized_flat and k == CHANNEL_KEY: # determine cropped channel count
-                        b[k] = b[k][crop_start[i]:crop_start[i]+time_budget[i]]
-                        stack_batch[k].append(b[k].flatten(0, 1))
+                        stack_batch[k].append(b[k][crop_start[i]:crop_start[i]+time_budget[i]].flatten(0, 1)) # ! Careful not to write this into b[k], appears to write into original vector for some reason.
                     else:
                         stack_batch[k].append(b[k])
         lengths = torch.tensor([el.size(0) for el in stack_batch[DataKey.spikes]])

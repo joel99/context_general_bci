@@ -2,22 +2,33 @@
 
 defaults:
   - /model: flat_enc_dec
+  - /model/task:
+    - joint_bhvr_decode_flat
   - /dataset: flat
 model:
-  causal: false
-  subject_embed_strategy: EmbedStrat.token
+  causal: true
+  neurons_per_token: 32
+  session_embed_strategy: EmbedStrat.token
+  transformer:
+    max_trial_length: 500 # 15 seconds
   task:
     mask_ratio: 0.25 # for efficiency
-  neurons_per_token: 32
 dataset:
   bin_size_ms: 10
+  max_length_ms: 5000
+  max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
+
   neurons_per_token: 32
-
-  max_arrays: 1
   max_channels: 192
+  max_arrays: 1
 
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
   datasets:
   - falcon_FALCONH1.*
+
+  behavior_dim: 7
 
 train:
   batch_size: 32

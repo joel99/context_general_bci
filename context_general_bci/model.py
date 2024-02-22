@@ -1,12 +1,9 @@
 from typing import Tuple, Dict, List, Optional, Any, Mapping, Union
-import dataclasses
-import time
 from copy import deepcopy
 import math
 import numpy as np
 import torch
 from torch import nn, optim
-import torch.nn.functional as F
 import pytorch_lightning as pl
 from einops import rearrange, repeat, reduce, pack, unpack # baby steps...
 from omegaconf import OmegaConf, ListConfig, DictConfig
@@ -568,6 +565,7 @@ class BrainBertInterface(pl.LightningModule):
                 reshape = 'b t a (chunk c) h -> b t a chunk (c h)'
             state_in = rearrange(state_in, reshape, c=self.cfg.neurons_per_token)
             if self.cfg.spike_embed_style == EmbedStrat.token:
+                state_in = state_in.clamp(0, self.cfg.max_neuron_count - 1)
                 state_in = self.readin(state_in)
             elif self.cfg.spike_embed_style == EmbedStrat.project:
                 if getattr(self.cfg, 'debug_project_space', False):
@@ -645,8 +643,6 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
-
-
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
         if DataKey.extra in batch and not self.data_attrs.serve_tokens_flat: # serve_tokens_flat is enc dec, don't integrate extra (query) tokens in enc
@@ -942,7 +938,8 @@ class BrainBertInterface(pl.LightningModule):
                 self.log(f'{prefix}_{m}', metrics[m], **kwargs)
         for m in self.cfg.task.metrics:
             if m == Metric.kinematic_r2 or m == Metric.kinematic_r2_thresh:
-                labels = ['x', 'y', 'z']
+                labels = ['t0', 't1', 't2', 'r0', 'r1', 'r2', 'g']
+                # labels = ['x', 'y', 'z']
                 for i, r2 in enumerate(metrics[m]):
                     self.log(f'{prefix}_{m.value}_{labels[i]}', r2, **kwargs)
                 self.log(f'{prefix}_{m.value}', metrics[m].mean(), **kwargs)
