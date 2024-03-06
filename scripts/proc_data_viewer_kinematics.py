@@ -1,27 +1,25 @@
 #%%
 import numpy as np
 import pandas as pd
-import h5py
 import torch
 
-import logging
 from matplotlib import pyplot as plt
 import seaborn as sns
-from omegaconf import OmegaConf
 
 from context_general_bci.contexts import context_registry
 from context_general_bci.config import DatasetConfig, DataKey, MetaKey
 from context_general_bci.dataset import SpikingDataset
 from context_general_bci.tasks import ExperimentalTask
+from context_general_bci.utils import wandb_query_latest
+from context_general_bci.analyze_utils import prep_plt, load_wandb_run
 
-from context_general_bci.analyze_utils import prep_plt, wandb_query_latest, load_wandb_run
-
-mode = 'rtt'
-mode = 'pitt'
-if mode == 'rtt':
-    ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
-else:
-    ctxs = context_registry.query(task=ExperimentalTask.observation)
+# mode = 'rtt'
+# mode = 'pitt'
+# if mode == 'rtt':
+    # ctxs = context_registry.query(task=ExperimentalTask.odoherty_rtt)
+# else:
+    # ctxs = context_registry.query(task=ExperimentalTask.observation)
+ctxs = context_registry.query(task=ExperimentalTask.falcon)
 
 context = ctxs[0]
 # context = context_registry.query(alias='mc_rtt')
@@ -29,8 +27,8 @@ print(context)
 # datapath = './data/odoherty_rtt/indy_20160407_02.mat'
 # context = context_registry.query_by_datapath(datapath)
 
-sample_query = 'human_test' # just pull the latest run
-# sample_query = 'pt_parity'
+# sample_query = 'human_test' # just pull the latest run
+sample_query = 'h1'
 
 wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 # print(wandb_run)
@@ -55,8 +53,8 @@ dataset.subset_split()
 print(len(dataset))
 #%%
 # trial = 0
-trial = 10
-# trial = 30
+# trial = 10
+trial = 30
 # trial = 10
 trial_vel = dataset[trial][DataKey.bhvr_vel]
 

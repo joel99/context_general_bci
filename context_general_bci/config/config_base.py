@@ -54,8 +54,6 @@ class Output(Enum):
 
 class DataKey(Enum):
     # DataKey are time-varying and typically served with spikes
-    # TODO need more thinking about this. Data is heterogenuous, can we maintain a single interface
-    # What is the right we to specify we want some type of array?
     spikes = 'spikes'
     stim = 'stim' # icms
     heldout_spikes = 'heldout_spikes' # for co-bps
@@ -63,6 +61,7 @@ class DataKey(Enum):
     bhvr_vel = 'bhvr_vel'
     bhvr_acc = 'bhvr_acc'
     bhvr_force = 'bhvr_force'
+    bhvr_mask = 'bhvr_mask'
 
     time = 'time'
     position = 'position' # space, however you want to think about it. Tracks channel cluster.

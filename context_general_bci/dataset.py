@@ -430,7 +430,6 @@ class SpikingDataset(Dataset):
     def __len__(self):
         return len(self.meta_df)
 
-    @staticmethod
     def tokenized_collater(self, batch):
         r"""
             batch: list of dicts
@@ -813,7 +812,7 @@ class SpikingDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
-            collate_fn=functools.partial(self.train.tokenized_collater, self.train),
+            collate_fn=train.tokenized_collater,
         )
 
     def val_dataloader(self):
@@ -823,7 +822,7 @@ class SpikingDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
                 persistent_workers=self.num_workers > 0,
-                collate_fn=functools.partial(dataset.tokenized_collater, dataset),
+                collate_fn=dataset.tokenized_collater,
             ) for dataset in self.val]
 
     def test_dataloader(self):
@@ -835,6 +834,6 @@ class SpikingDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
                 persistent_workers=self.num_workers > 0,
-                collate_fn=functools.partial(dataset.tokenized_collater, dataset),
+                collate_fn=dataset.tokenized_collater,
             ) for dataset in self.test]
 

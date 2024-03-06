@@ -651,7 +651,7 @@ class FalconContextInfo(ContextInfo):
             return []
         def make_info(path: Path):
             # path = ..../h1/
-            subject = path.parts[-2].lower()
+            subject = path.parts[-3].lower()
             subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
             return FalconContextInfo(
                 subject=subject,

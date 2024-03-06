@@ -10,7 +10,7 @@ model:
   neurons_per_token: 32
   session_embed_strategy: EmbedStrat.token
   transformer:
-    max_trial_length: 100 # 2 seconds
+    max_trial_length: 200 # 2 seconds
     n_layers: 4
   task:
     mask_ratio: 0.25 # for efficiency
@@ -18,7 +18,7 @@ model:
     decode_normalizer: './data/zscore_h1_7d.pt'
 dataset:
   bin_size_ms: 20
-  max_length_ms: 1000
+  max_length_ms: 2000
   max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
 
   neurons_per_token: 32

@@ -776,6 +776,7 @@ class BrainBertInterface(pl.LightningModule):
             DataKey.heldout_spikes: '* t c h',
             DataKey.stim: '* t c h', # TODO review
             DataKey.bhvr_vel: '* t h',
+            DataKey.bhvr_mask: '* t h',
             MetaKey.session: '*',
             MetaKey.subject: '*',
             MetaKey.task: '*',
@@ -938,10 +939,10 @@ class BrainBertInterface(pl.LightningModule):
                 self.log(f'{prefix}_{m}', metrics[m], **kwargs)
         for m in self.cfg.task.metrics:
             if m == Metric.kinematic_r2 or m == Metric.kinematic_r2_thresh:
-                labels = ['t0', 't1', 't2', 'r0', 'r1', 'r2', 'g']
+                # labels = ['t0', 't1', 't2', 'r0', 'r1', 'r2', 'g']
                 # labels = ['x', 'y', 'z']
-                for i, r2 in enumerate(metrics[m]):
-                    self.log(f'{prefix}_{m.value}_{labels[i]}', r2, **kwargs)
+                # for i, r2 in enumerate(metrics[m]):
+                    # self.log(f'{prefix}_{m.value}_{labels[i]}', r2, **kwargs)
                 self.log(f'{prefix}_{m.value}', metrics[m].mean(), **kwargs)
             else:
                 self.log(f'{prefix}_{m.value}', metrics[m], **kwargs)

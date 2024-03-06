@@ -1227,6 +1227,9 @@ class BehaviorRegression(TaskPipeline):
 
         # mask nans
         length_mask = length_mask & (~torch.isnan(bhvr_tgt).any(-1))
+        if DataKey.bhvr_mask in batch:
+            length_mask = length_mask & batch[DataKey.bhvr_mask][..., 0]
+
         if self.bhvr_mean is not None:
             bhvr_tgt = bhvr_tgt - self.bhvr_mean
             bhvr_tgt = bhvr_tgt / self.bhvr_std
@@ -1373,7 +1376,7 @@ class BehaviorClassification(TaskPipeline):
         if self.cfg.decode_normalizer:
             # See `data_kin_global_stat`
             zscore_path = Path(self.cfg.decode_normalizer)
-            assert zscore_path.exists(), f'normalizer path {zscore_path} does not exist'
+            assert zscore_path.exists(), f'normalizer path {zscore_path} does not exist, try running scripts/compute_normalizer.py'
             self.register_buffer('bhvr_mean', torch.load(zscore_path)['mean'])
             self.register_buffer('bhvr_std', torch.load(zscore_path)['std'])
         else:

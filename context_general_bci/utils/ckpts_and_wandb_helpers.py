@@ -29,7 +29,7 @@ def wandb_query_experiment(
     return runs
 
 def get_best_ckpt_in_dir(ckpt_dir: Path, tag="val_loss", higher_is_better=False):
-    if 'bps' in tag:
+    if 'bps' in tag or 'r2' in tag:
         higher_is_better = True
     # Newest is best since we have early stopping callback, and modelcheckpoint only saves early stopped checkpoints (not e.g. latest)
     res = sorted(ckpt_dir.glob("*.ckpt"), key=osp.getmtime)

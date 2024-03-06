@@ -92,7 +92,7 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=4, **kwa
         batch_size=batch_size,
         num_workers=num_workers,
         persistent_workers=num_workers > 0,
-        collate_fn=dataset.collater_factory()
+        collate_fn=dataset.tokenized_collater
     )
 
 def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
@@ -164,7 +164,7 @@ def _prep_plt(ax=None, spine_alpha=0.3, size="small", big=False):
     plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
     plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
     plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
-    plt.style.use('seaborn-muted')
+    plt.style.use('seaborn-v0_8-muted')
     if ax is None:
         plt.figure(figsize=(6,4))
         ax = plt.gca()

@@ -18,7 +18,7 @@ try:
 except:
     logger.info("pynwb not installed, please install with `conda install -c conda-forge pynwb`")
 
-from context_general_bci.config import DataKey, DatasetConfig
+from context_general_bci.config import DataKey, DatasetConfig, ExperimentalConfig
 from context_general_bci.subjects import SubjectInfo, create_spike_payload
 from context_general_bci.tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 
@@ -52,7 +52,8 @@ def load_nwb(fn: str):
     with NWBHDF5IO(fn, 'r') as io:
         nwbfile = io.read()
         units = nwbfile.units.to_dataframe()
-        kin = nwbfile.acquisition['OpenLoopKinematics'].data[:]
+        kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:].astype(dtype=np.float32)
+        kin_mask = ~nwbfile.acquisition['Blacklist'].data[:].astype(bool)
         trial_num = nwbfile.acquisition["TrialNum"].data[:]
         timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
         labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
@@ -60,6 +61,7 @@ def load_nwb(fn: str):
         return (
             bin_units(units, bin_end_timestamps=timestamps),
             kin,
+            kin_mask,
             trial_num,
             timestamps,
             epochs,
@@ -67,10 +69,11 @@ def load_nwb(fn: str):
         )
 
 def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
-    binned, kin, trial_num, timestamps, epochs, labels = zip(*[load_nwb(str(f)) for f in files])
+    binned, kin, kin_mask, trial_num, timestamps, epochs, labels = zip(*[load_nwb(str(f)) for f in files])
     # Merge data by simple concat
     binned = np.concatenate(binned, axis=0)
-    kin = np.concatenate(kin, axis=0).astype(dtype=np.float32)
+    kin = np.concatenate(kin, axis=0)
+    kin_mask = np.concatenate(kin_mask, axis=0)
     trial_num = np.concatenate(trial_num, axis=0)
 
     # Offset timestamps and epochs to be continuous across multiple datasets
@@ -83,7 +86,7 @@ def load_files(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.Data
     epochs = pd.concat(epochs, axis=0)
     for l in labels[1:]:
         assert l == labels[0]
-    return binned, kin, trial_num, timestamps, epochs, labels[0]
+    return binned, kin, kin_mask, trial_num, timestamps, epochs, labels[0]
 
 @ExperimentalTaskRegistry.register
 class FalconLoader(ExperimentalTaskLoader):
@@ -100,13 +103,12 @@ class FalconLoader(ExperimentalTaskLoader):
         subject: SubjectInfo,
         context_arrays: List[str],
         dataset_alias: str,
+        task: ExperimentalTask,
         **kwargs,
     ):
-        assert cfg.bin_size_ms == 10, "FALCON data needs 10ms"
+        assert cfg.bin_size_ms == 20, "FALCON data needs 20ms"
         # Load data
-        binned, kin, trials, timestamps, epochs, labels = load_files([datapath])
-        nan_mask = np.isnan(trials)
-
+        binned, kin, kin_mask, trials, timestamps, epochs, labels = load_files([datapath])
         meta_payload = {}
         meta_payload['path'] = []
 
@@ -118,8 +120,9 @@ class FalconLoader(ExperimentalTaskLoader):
                 continue
             trial_vel = kin[trials == trial_id]
             single_payload = {
-                DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg, spike_bin_size_ms=10),
-                DataKey.bhvr_vel: torch.tensor(trial_vel.copy())
+                DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg, spike_bin_size_ms=cfg.bin_size_ms),
+                DataKey.bhvr_vel: torch.tensor(trial_vel.copy()),
+                DataKey.bhvr_mask: torch.tensor(kin_mask[trials == trial_id].copy()).unsqueeze(-1),
             }
             single_path = cache_root / f'{trial_id}.pth'
             meta_payload['path'].append(single_path)

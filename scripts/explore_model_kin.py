@@ -23,7 +23,7 @@ from context_general_bci.utils import get_wandb_run, wandb_query_latest
 
 
 mode = 'train'
-mode = 'test'
+# mode = 'test'
 
 # query = "human-sweep-simpler_lr_sweep-dgnx7mn9"
 # query = "human_only-5a62oz96"
@@ -33,21 +33,26 @@ mode = 'test'
 # query = 'human_sum_contrast-l2zg9sju'
 # query = 'human_sum_contrast-lheohfzn'
 # query = 'sup_3200-frag-odoherty_rtt-Indy-20160627_01-sweep-simpler_lr_sweep-iy1xf1bc'
-query = 'human_obs_m5_lr1e5-2ixlx1c9'
-# query = 'human_aug-nxy3te61'
-query = 'online_obs_tune-nr2b51yd'
-# query = 'online_obs_tune-0ee5xlel'
+# query = 'human_obs_m5_lr1e5-2ixlx1c9'
+# # query = 'human_aug-nxy3te61'
+# query = 'online_obs_tune-nr2b51yd'
+# # query = 'online_obs_tune-0ee5xlel'
 
-query = 'human_P4_tune-mip3powm'
-# query = 'online_human_pt-5ytq361d'
-query = 'online_human_pt-cfzx5heb'
-query = 'online_human_pt-w3rnnpj4'
+# query = 'human_P4_tune-mip3powm'
+# # query = 'online_human_pt-5ytq361d'
+# query = 'online_human_pt-cfzx5heb'
+# query = 'online_human_pt-w3rnnpj4'
+query = 'h1'
+query = 'h1_200-sweep-simple_discrete-zmaaar1l'
+query = 'h1_hp-9w0oay57'
+query = 'h1_v2-sweep-h1_fine_grained_discrete-4j1mi057'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
-src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+# src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_loss')
+src_model, cfg, old_data_attrs = load_wandb_run(wandb_run, tag='val_kinematic_r2')
 
 cfg.model.task.metrics = [Metric.kinematic_r2]
 cfg.model.task.outputs = [Output.behavior, Output.behavior_pred]
@@ -63,15 +68,16 @@ if pipeline_model:
 # target_dataset = 'observation_P2Lab_session_1913_set_1'
 # target_dataset = 'observation_P2Lab_session_1827.*'
 # target_dataset = 'observation_P2Lab_session_1922_set_6'
-target_dataset = 'observation_P2_1904_6'
+# target_dataset = 'observation_P2_1904_6'
 # target_dataset = 'observation_P2Lab_session_1925_set_3'
 # target_dataset = 'observation_P3_150_1_2d_cursor_center_out'
 
 # cfg.dataset.datasets = ["observation_P2Lab_session_1908_set_1"]
 # cfg.dataset.eval_datasets = ["observation_P2Lab_session_1908_set_1"]
-target_dataset = 'observation_P4_10_2'
-target_dataset = 'observation_P4_11_16'
+# target_dataset = 'observation_P4_10_2'
+# target_dataset = 'observation_P4_11_16'
 
+target_dataset = 'falcon_FALCONH1.*'
 # target_dataset = 'odoherty_rtt-Indy-20160627_01'
 # cfg.dataset.datasets = ["odoherty_rtt-Indy-20160627_01"]
 # cfg.dataset.eval_datasets = ["odoherty_rtt-Indy-20160627_01"]
@@ -84,9 +90,7 @@ target_dataset = 'observation_P4_11_16'
 
 dataset = SpikingDataset(cfg.dataset)
 print("Original length: ", len(dataset))
-ctx = dataset.list_alias_to_contexts([target_dataset])[0]
-# dataset.subset_by_key([ctx.id], MetaKey.session)
-# print(len(dataset))
+# ctx = dataset.list_alias_to_contexts([target_dataset])[0]
 if cfg.dataset.eval_datasets and mode == 'test':
     dataset.subset_split(splits=['eval'])
 else:
@@ -96,8 +100,8 @@ else:
     dataset = train
     dataset = val
 
-dataset.subset_by_key([ctx.id], MetaKey.session)
-print("Subset length: ", len(dataset))
+# dataset.subset_by_key([ctx.id], MetaKey.session)
+# print("Subset length: ", len(dataset))
 
 
 data_attrs = dataset.get_data_attrs()
@@ -115,7 +119,8 @@ if pipeline_model:
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
-def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=1, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=0, **kwargs) -> DataLoader:
+# def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=1, **kwargs) -> DataLoader:
 # def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwargs) -> DataLoader:
 # def get_dataloader(dataset: SpikingDataset, batch_size=200, num_workers=1, **kwargs) -> DataLoader:
     # Defaults set for evaluation on 1 GPU.
@@ -123,7 +128,7 @@ def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=1, **kwar
         batch_size=batch_size,
         num_workers=num_workers,
         persistent_workers=num_workers > 0,
-        collate_fn=dataset.collater_factory()
+        collate_fn=dataset.tokenized_collater
     )
 
 dataloader = get_dataloader(dataset)
@@ -144,13 +149,19 @@ flat_true = np.concatenate(true) if isinstance(true, list) else true.flatten()
 flat_pred = flat_pred[(flat_true != model.data_attrs.pad_token).any(-1)]
 flat_true = flat_true[(flat_true != model.data_attrs.pad_token).any(-1)]
 
+coords = []
+for i in range(flat_pred.shape[1]):
+    coords.extend([f'k{i}'] * flat_pred.shape[0])
 df = pd.DataFrame({
     'pred': flat_pred.flatten(),
     'true': flat_true.flatten(),
-    'coord': flat_pred.shape[0] * ['x'] + flat_pred.shape[0] * ['y'],
+    'coord': coords,
 })
+from sklearn.metrics import r2_score
+full_batch_r2 = r2_score(flat_true, flat_pred, multioutput='variance_weighted')
+print(full_batch_r2)
 # plot marginals
-g = sns.jointplot(x='true', y='pred', hue='coord', data=df, s=3, alpha=0.4)
+g = sns.jointplot(x='true', y='pred', hue='coord', data=df, s=8, alpha=0.4)
 
 # set title
 g.fig.suptitle(f'{query} {mode} {target_dataset} Velocity R2: {heldin_metrics["test_kinematic_r2"]:.2f}')

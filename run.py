@@ -268,18 +268,18 @@ def run_exp(cfg : RootConfig) -> None:
         ),
     ]
     # Eh, this doesn't produce different results.
-    # if ModelTask.kinematic_decoding in cfg.model.task.tasks:
-    #     callbacks.append(
-    #         ModelCheckpoint(
-    #         monitor='val_kinematic_decoding_loss',
-    #             filename='val_kin-{epoch:02d}-{val_loss:.4f}',
-    #             save_top_k=1,
-    #             mode='min',
-    #             every_n_epochs=1,
-    #             # every_n_train_steps=cfg.train.val_check_interval,
-    #             dirpath=None
-    #         ),
-    #     )
+    if ModelTask.kinematic_decoding in cfg.model.task.tasks:
+        callbacks.append(
+            ModelCheckpoint(
+            monitor='val_kinematic_r2',
+                filename='val_kinematic_r2-{epoch:02d}-{val_kinematic_r2:.4f}-{val_loss:.4f}',
+                save_top_k=1,
+                mode='max',
+                every_n_epochs=1,
+                # every_n_train_steps=cfg.train.val_check_interval,
+                dirpath=None
+            ),
+        )
 
     if cfg.train.patience > 0:
         early_stop_cls = ProbeToFineTuneEarlyStopping if cfg.probe_finetune else EarlyStopping
