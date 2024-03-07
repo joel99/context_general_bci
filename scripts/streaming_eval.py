@@ -70,6 +70,9 @@ print(data_attrs)
 model = transfer_model(src_model, cfg.model, data_attrs)
 model.eval()
 model = model.to("cuda")
+#%%
+print(dataset.meta_df[MetaKey.session].unique())
+print(model.data_attrs.context.session)
 # %%
 labels = ['x', 'y', 'z', 'rx', 'g1', 'g2', 'g3']
 def eval_model(

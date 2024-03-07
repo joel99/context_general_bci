@@ -132,6 +132,6 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         *GDrivePathContextInfo.build_from_dir('./data/churchland_misc'),
 
         *FalconContextInfo.build_from_dir('./data/h1/train', task=ExperimentalTask.falcon),
-        *FalconContextInfo.build_from_dir('./data/h1/test_short', task=ExperimentalTask.falcon),
-        *FalconContextInfo.build_from_dir('./data/h1/test_long', task=ExperimentalTask.falcon),
+        *FalconContextInfo.build_from_dir('./data/h1/test_short', task=ExperimentalTask.falcon, suffix='calibration'),
+        *FalconContextInfo.build_from_dir('./data/h1/test_long', task=ExperimentalTask.falcon, suffix='calibration'),
     ])

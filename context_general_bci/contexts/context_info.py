@@ -653,11 +653,15 @@ class FalconContextInfo(ContextInfo):
             # path = ..../h1/
             subject = path.parts[-3].lower()
             subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+            # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
+            pieces = path.stem.split('_')
+            pre_set_pieces = pieces[:pieces.index('set')]
+            stem = '_'.join(pre_set_pieces)
             return FalconContextInfo(
                 subject=subject,
                 task=task,
                 _arrays=arrays,
-                alias=f"falcon_{subject.name.value}-{path.stem}",
+                alias=f"falcon_{subject.name.value}-{stem}",
                 datapath=path,
             )
         infos = map(make_info, root.glob(f"*{suffix}.nwb"))
