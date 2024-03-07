@@ -648,6 +648,13 @@ class FalconContextInfo(ContextInfo):
         return self.alias
 
     @staticmethod
+    def get_alias(subject: SubjectInfo, stem: str):
+        pieces = stem.split('_')
+        pre_set_pieces = pieces[:pieces.index('set')]
+        stem = '_'.join(pre_set_pieces)
+        return f"falcon_{subject.name.value}-{stem}"
+
+    @staticmethod
     def get_alias_from_path(path: Path):
         subject = path.parts[-3].lower()
         subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
@@ -655,7 +662,7 @@ class FalconContextInfo(ContextInfo):
         pieces = path.stem.split('_')
         pre_set_pieces = pieces[:pieces.index('set')]
         stem = '_'.join(pre_set_pieces)
-        return f"falcon_{subject.name.value}-{stem}",
+        return f"falcon_{subject.name.value}-{stem}"
 
     @classmethod
     def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix=''):
