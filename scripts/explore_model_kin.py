@@ -143,11 +143,20 @@ pred = heldin_outputs[Output.behavior_pred]
 pred = [p[offset_bins:] for p in pred]
 true = heldin_outputs[Output.behavior]
 true = [t[offset_bins:] for t in true]
+if Output.behavior_mask in heldin_outputs:
+    mask = heldin_outputs[Output.behavior_mask]
+    mask = [m[offset_bins:] for m in mask]
 
 flat_pred = np.concatenate(pred) if isinstance(pred, list) else pred.flatten()
 flat_true = np.concatenate(true) if isinstance(true, list) else true.flatten()
 flat_pred = flat_pred[(flat_true != model.data_attrs.pad_token).any(-1)]
 flat_true = flat_true[(flat_true != model.data_attrs.pad_token).any(-1)]
+if Output.behavior_mask in heldin_outputs:
+    flat_mask = np.concatenate(mask) if isinstance(mask, list) else mask.flatten()
+    flat_mask = flat_mask[(flat_true != model.data_attrs.pad_token).any(-1)]
+
+    flat_pred = flat_pred[flat_mask[:, 0]]
+    flat_true = flat_true[flat_mask[:, 0]]
 
 coords = []
 for i in range(flat_pred.shape[1]):
@@ -164,7 +173,8 @@ print(full_batch_r2)
 g = sns.jointplot(x='true', y='pred', hue='coord', data=df, s=8, alpha=0.4)
 
 # set title
-g.fig.suptitle(f'{query} {mode} {target_dataset} Velocity R2: {heldin_metrics["test_kinematic_r2"]:.2f}')
+g.fig.suptitle(f'{query} {mode} {target_dataset} Velocity R2: {full_batch_r2:.2f}')
+
 #%%
 f = plt.figure(figsize=(10, 10))
 ax = prep_plt(f.gca())

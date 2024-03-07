@@ -1,4 +1,6 @@
 import os
+import torch
+
 from .loader import loadmat
 from .halton import generate_search
 from .grid_search import grid_search
@@ -13,3 +15,10 @@ def enum_backport(old_inst, new_enum_cls):
     # We run many enum checks but also migrated class modules at some point -- python doesn't recognize them as equal
     # so we add a cast
     return new_enum_cls[old_inst.name]
+
+def to_device(batch, device):
+    r" in place "
+    for k, v in batch.items():
+        if isinstance(v, torch.Tensor):
+            batch[k] = v.to(device)
+    return batch

@@ -48,6 +48,7 @@ class Output(Enum):
 
     behavior = 'behavior'
     behavior_pred = 'behavior_pred'
+    behavior_mask = 'behavior_mask'
 
     # Debug
     pooled_features = 'pooled_features'
@@ -572,7 +573,8 @@ class RootConfig:
     slurm_id: int = 0 # for experiment tracking...
     effective_bsz: int = 0 # for experiment tracking...
     nodes: int = 1
-
+from typing import Union
+BatchKey = Union[str, DataKey, MetaKey, Output]
 
 def propagate_config(config: RootConfig):
     r"""

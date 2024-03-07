@@ -644,7 +644,7 @@ class FalconContextInfo(ContextInfo):
         return self.alias
 
     @classmethod
-    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"]):
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix=''):
         root = Path(root)
         if not root.exists():
             logger.warning(f"Datapath folder {root} does not exist. Skipping.")
@@ -660,7 +660,7 @@ class FalconContextInfo(ContextInfo):
                 alias=f"falcon_{subject.name.value}-{path.stem}",
                 datapath=path,
             )
-        infos = map(make_info, root.glob("*.nwb"))
+        infos = map(make_info, root.glob(f"*{suffix}.nwb"))
         return list(filter(lambda x: x is not None, infos))
 
 

@@ -20,6 +20,7 @@ from context_general_bci.config import (
     DataKey,
     MetaKey,
     Architecture,
+    BatchKey,
 )
 
 from context_general_bci.dataset import DataAttrs, LENGTH_KEY, CHANNEL_KEY, COVARIATE_LENGTH_KEY, COVARIATE_CHANNEL_KEY
@@ -865,6 +866,34 @@ class BrainBertInterface(pl.LightningModule):
         # self, batch, *args, transform_logrates=True, mask=False, **kwargs
     ):
         return self.predict(batch, transform_logrates=transform_logrates, mask=mask)
+
+    @torch.inference_mode()
+    def predict_simple_batch(
+        self,
+        batch: Dict[BatchKey, torch.Tensor], # Should have batch=1 dimension
+        last_step_only=False,
+    ):
+        r"""
+            last_step_only: Only predict final timestep kinematic. Useful for online prediction.
+        """
+        features = self(batch)
+        # Just run kinematic predict
+        out = self.task_pipelines[ModelTask.kinematic_decoding.value](
+            batch,
+            features,
+            compute_metrics=False,
+            eval_mode=True,
+        )
+        if last_step_only:
+            out[Output.behavior] = out[Output.behavior][..., -1, :]
+            out[Output.behavior_mask] = out[Output.behavior_mask][..., -1, :]
+            out[Output.behavior_pred] = out[Output.behavior_pred][..., -1, :]
+        else:
+            out[Output.behavior] = batch[DataKey.bhvr_vel].flatten()
+            out[Output.behavior_mask] = out[Output.behavior_mask].flatten()
+            out[Output.behavior_pred] = out[Output.behavior_pred].flatten()
+        return out
+
 
 
     # === Model state ===

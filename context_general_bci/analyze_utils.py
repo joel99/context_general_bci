@@ -95,7 +95,7 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=4, **kwa
         collate_fn=dataset.tokenized_collater
     )
 
-def stack_batch(batch_out: List[Dict[str, torch.Tensor]]):
+def stack_batch(batch_out: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
     all_lists = defaultdict(list)
     for batch in batch_out:
         for k, v in batch.items():
