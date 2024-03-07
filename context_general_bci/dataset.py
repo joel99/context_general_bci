@@ -93,11 +93,11 @@ class DataAttrs:
             max_channel_count=cfg.max_channels,
             max_arrays=cfg.max_arrays,
             spike_dim=1, # Higher dims not supported right now
-            context=ContextAttrs(**self.context_index),
+            context=context,
             rtt_heldout_channel_count=cfg.nlb_rtt.heldout_neurons,
             maze_heldout_channel_count=cfg.nlb_maze.heldout_neurons,
             behavior_dim=cfg.behavior_dim,
-            pad_token=self.pad_value,
+            pad_token=cfg.pad_value,
             serve_tokens=cfg.serve_tokenized,
             serve_tokens_flat=cfg.serve_tokenized_flat,
             neurons_per_token=cfg.neurons_per_token,
