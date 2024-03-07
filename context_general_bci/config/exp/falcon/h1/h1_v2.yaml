@@ -32,7 +32,6 @@ dataset:
   - DataKey.bhvr_mask
   datasets:
   - falcon_FALCONH1.*
-
   behavior_dim: 7
 
 train:

@@ -16,8 +16,6 @@ from omegaconf import OmegaConf, ListConfig, DictConfig
 import logging
 from pprint import pformat
 
-from falcon_challenge.interface import BCIDecoder
-
 from context_general_bci.model import (
     unflatten, transfer_cfg, recursive_diff_log,
     BrainBertInterface,
@@ -44,8 +42,6 @@ from context_general_bci.components import (
     SpaceTimeTransformerEncoderScript,
     SpaceTimeTransformerDecoderScript,
     ReadinMatrix,
-    ReadinCrossAttention,
-    ContextualMLP,
 )
 from context_general_bci.task_io import task_modules, SHUFFLE_KEY, create_temporal_padding_mask, TaskPipeline
 from context_general_bci.tasks.pitt_co import CLAMP_MAX
@@ -69,7 +65,7 @@ batch_shapes = {
     DataKey.position: '* t',
 }
 
-DECODER_HISTORY_MS = 2500 # ! ! MAKE SURE TO SET THIS! ! !
+DECODER_HISTORY_MS = 4000 # ! ! MAKE SURE TO SET THIS! ! !
 DEBUG = False
 # DEBUG = True
 
@@ -142,7 +138,7 @@ class SkinnyBehaviorRegression(nn.Module):
 
 
 
-class BrainBertInterfaceDecoder(pl.LightningModule, BCIDecoder):
+class BrainBertInterfaceDecoder(pl.LightningModule):
     r"""
         I know I'll end up regretting this name.
     """
@@ -457,8 +453,6 @@ class BrainBertInterfaceDecoder(pl.LightningModule, BCIDecoder):
             OUT[Output.behavior_pred] = self.decoder(features, time, trial_context_without_flag)
             return OUT
         return self.decoder(features, time, trial_context_without_flag)[0] # remove batch dimension. Note we unflip x/y in the actual module; not this onnx compression's responsibility to interpret dims
-
-
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs, extra_embed_map: Dict[str, Tuple[Any, DataAttrs]] = {}):
     r"""

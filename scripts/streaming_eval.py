@@ -7,9 +7,20 @@ import seaborn as sns
 import pandas as pd
 import torch
 import pytorch_lightning as pl
-from einops import rearrange
-
 from sklearn.metrics import r2_score
+
+# Run this block to eval on minival
+FALCON_MINIVAL = False
+FALCON_MINIVAL = True
+
+if FALCON_MINIVAL:
+    from context_general_bci.utils import suppress_default_registry
+    suppress_default_registry()
+    from context_general_bci.contexts.context_registry import context_registry
+    from context_general_bci.contexts.context_info import FalconContextInfo, ExperimentalTask
+    context_registry.register([
+        *FalconContextInfo.build_from_dir('./data/h1/minival', task=ExperimentalTask.falcon, suffix='minival'),
+    ])
 
 from context_general_bci.model import transfer_model, BrainBertInterface
 from context_general_bci.dataset import SpikingDataset
@@ -33,6 +44,7 @@ from context_general_bci.streaming_utils import (
 )
 
 query = 'h1_v2-sweep-h1_fine_grained_discrete-4j1mi057'
+query = 'h1_v2-sweep-h1_fine_grained_discrete-v6luzk35'
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
@@ -47,7 +59,6 @@ cfg.model.task.outputs = [
     Output.behavior,
     Output.behavior_pred,
 ]
-
 target = [
     'falcon_FALCONH1.*',
 ]
@@ -62,17 +73,17 @@ dataset = SpikingDataset(cfg.dataset)
 
 prompt = None
 pl.seed_everything(0)
-train, val = dataset.create_tv_datasets()
 data_attrs = dataset.get_data_attrs()
-dataset = val
+if not FALCON_MINIVAL:
+    train, val = dataset.create_tv_datasets()
+    dataset = val
 print("Eval length: ", len(dataset))
 print(data_attrs)
 model = transfer_model(src_model, cfg.model, data_attrs)
 model.eval()
 model = model.to("cuda")
 #%%
-print(dataset.meta_df[MetaKey.session].unique())
-print(model.data_attrs.context.session)
+print(data_attrs)
 # %%
 labels = ['x', 'y', 'z', 'rx', 'g1', 'g2', 'g3']
 def eval_model(

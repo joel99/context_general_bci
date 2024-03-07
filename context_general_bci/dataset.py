@@ -86,6 +86,23 @@ class DataAttrs:
         else:
             return per_array * self.max_arrays
 
+    @staticmethod
+    def from_config(cfg: DatasetConfig, context: ContextAttrs):
+        return DataAttrs(
+            bin_size_ms=cfg.bin_size_ms,
+            max_channel_count=cfg.max_channels,
+            max_arrays=cfg.max_arrays,
+            spike_dim=1, # Higher dims not supported right now
+            context=ContextAttrs(**self.context_index),
+            rtt_heldout_channel_count=cfg.nlb_rtt.heldout_neurons,
+            maze_heldout_channel_count=cfg.nlb_maze.heldout_neurons,
+            behavior_dim=cfg.behavior_dim,
+            pad_token=self.pad_value,
+            serve_tokens=cfg.serve_tokenized,
+            serve_tokens_flat=cfg.serve_tokenized_flat,
+            neurons_per_token=cfg.neurons_per_token,
+        )
+
 class SpikingDataset(Dataset):
     r"""
         Generic container for spiking data from intracortical microelectrode recordings.
@@ -812,7 +829,7 @@ class SpikingDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
-            collate_fn=train.tokenized_collater,
+            collate_fn=self.train.tokenized_collater,
         )
 
     def val_dataloader(self):

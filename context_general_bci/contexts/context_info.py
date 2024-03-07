@@ -78,9 +78,13 @@ class ContextInfo(_ContextInfoDefaultsBase, _ContextInfoBase):
         """
         return [self.subject.wrap_array(a) for a in self._arrays]
 
+    @staticmethod
+    def get_id(subject: SubjectInfo, task: ExperimentalTask, id_str: str):
+        return f"{task}-{subject.name.value}-{id_str}"
+
     @property
     def id(self):
-        return f"{self.task}-{self.subject.name.value}-{self._id()}"
+        return ContextInfo.get_id(self.subject, self.task, self._id())
 
     @abc.abstractmethod
     def _id(self):
@@ -642,6 +646,16 @@ class BatistaContextInfo(ContextInfo):
 class FalconContextInfo(ContextInfo):
     def _id(self):
         return self.alias
+
+    @staticmethod
+    def get_alias_from_path(path: Path):
+        subject = path.parts[-3].lower()
+        subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+        # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
+        pieces = path.stem.split('_')
+        pre_set_pieces = pieces[:pieces.index('set')]
+        stem = '_'.join(pre_set_pieces)
+        return f"falcon_{subject.name.value}-{stem}",
 
     @classmethod
     def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix=''):
