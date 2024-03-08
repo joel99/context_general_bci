@@ -470,12 +470,17 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             trial_context=trial_context,
             causal=self.causal,
         ) # B x Token x H (flat)
-        return {'out': self.decoder(
+        return self.decoder(
             features,
             time,
-            trial_context_without_flag,
-            # last_step_only=last_step_only,
-        )}
+            trial_context_without_flag)
+        # Enable for parity exps
+        # return {'out': self.decoder(
+        #     features,
+        #     time,
+        #     trial_context_without_flag,
+        #     # last_step_only=last_step_only,
+        # )}
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs, extra_embed_map: Dict[str, Tuple[Any, DataAttrs]] = {}):
     r"""
