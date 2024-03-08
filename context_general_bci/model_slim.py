@@ -423,7 +423,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             self.try_transfer('subject_flag', transfer_model.subject_flag)
             self.try_transfer('task_flag', transfer_model.task_flag)
         except:
-            print("failed to transfer extra flags, likely unimportant")
+            print("Warning: Failed transfer of subject/task flags, likely unimportant.")
 
         self.try_transfer('readin', transfer_model.readin)
 
