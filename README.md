@@ -35,6 +35,20 @@ Note for slurm jobs, I trigger the necessary env loads with a `load_env.sh` scri
 
 Configurations for hyperparameter sweeping can be preset, see e.g. `exp/arch/tune_hp`. Only manual grid or random searches are currently implemented.
 
+## Supporting a new task/dataset.
+Implementing a new task or dataset involves a few steps, since the codebase generally requires metadata registration to provide data to the model. This is true even if the model doesn't use the metadata. The process is as follows:
+1. In `context_general_bci/subjects`, register a new subject name and class. They can e.g. be added to `pitt_chicago.py` or `nlb_monkeys.py`. Subjects hold information about array geometry or quality; by default you can dictate `SortedArray` for a minimally structured class that requires max channel count only.
+2. In `context_general_bci/tasks`, register a new `ExperimentalTask` and `ExperimentalTaskLoader`, the former is an enum and the latter defines the preprocessing needed to parse the datafile into a set of trials for the model to operate on. If the data item size is too large for model context, the default dataloader will randomly crop out a subset of the trial on each iteration based on dataset configuration - be careful of this effect when trying for consistent evaluation.
+3. In `context_general_bci/contexts`, register a new `ContextInfo` subclass. A context class contains the information necessary to identify which subjects, tasks are relevant for a given datafile. Each datafile is assumed to correspond to a single experimental session.
+4. Recommended: If performing decoding, output dimension normalization can be computed globally in a separate script (e.g. `compute_normalizer.py`) and specified in `ModelConfig.task.decode_normalizer`. Per-item normalization is also supported via `DatasetConfig.z_score`.
+5. Specify an experimental configuration: this is a yaml file that specifies various hyperparameters, composed into the global configuration in `config_base.py` suing the [Hydra](https://hydra.cc/) library. See the many configurations in `context_general_bci/exp/` for examples. Looking through `config_base` to consider which particular HPs are relevant to your task is recommended.
+6. Sweeping: NDT2 codebase supports basic SLURM-based hyperparameter sweeping. This is done by specifying a `sweep_cfg` key in the experimental configuration; which will pull sweep settings from `hp_sweep_space.py`. See `context_general_bci/exp/falcon/h1/` for examples.
+7. Evaluation: Different inference procedures are scattered throughout `scripts`. Basic utilities are available for pulling a checkpoint and config related to a specific W&B ID, but for proper deployment additional code will be needed to handle the specifics of your application.
+
+## Decoding applications
+While NDT2 is a self-supervised pretraining method, you may be interested in its decoding application. Please see the [FALCON-challenge codebase](https://github.com/snel-repo/falcon-challenge) for an example flow for preparaing NDT2 as a decoder.
+
+
 ## Checkpoints
 Given the relatively lightweight training process we recommend training your own model to then analyze. This will require overwriting the default wandb settings with your own.
 Note analysis scripts aren't build around manual checkpoint loading; but `model.load_from_checkpoint(<download_path>)` can be used with public checkpoints.
