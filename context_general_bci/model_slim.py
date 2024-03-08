@@ -397,26 +397,17 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
     @torch.no_grad()
     def forward(
         self,
-        spikes: torch.Tensor # B=1 x T x C x H # ! should be int dtype, double check
+        spikes: torch.Tensor # B=1 x T x C x H=1 # ! should be int dtype, double check
     ) -> torch.Tensor: # out is behavior, T x 2
-        # do the reshaping yourself
-        # ! Assumes this divides evenly
+        assert spikes.dtype in [torch.int64, torch.int32, torch.int16, torch.uint8]
+        breakpoint()
         spikes.clamp_(0, CLAMP_MAX)
-        if DEBUG: # DEBUG testing harness
-            OUT = {
-                Output.behavior: F.pad(spikes[DataKey.bhvr_vel],
-                                       pad=(0, 0, 0, DECODER_HISTORY_MS // self.data_attrs.bin_size_ms - spikes[DataKey.bhvr_vel].shape[-2]), # PAD THE TAIL!
-                                       value=self.data_attrs.pad_token)
-            }
-            time = spikes[DataKey.time]
-            position = spikes[DataKey.position]
-            spikes = spikes[DataKey.spikes]
-        else:
-            spikes = spikes.unfold(2, self.neurons_per_token, self.neurons_per_token).flatten(-2)
-            b, t, c, h = spikes.size()
-            # unsqueezes are to add batch dim
-            time = torch.arange(t, device=spikes.device).unsqueeze(0).unsqueeze(-1).expand(b, t, c).flatten(1)
-            position = torch.arange(c, device=spikes.device).unsqueeze(0).unsqueeze(0).expand(b, t, c).flatten(1)
+        # TODO pad spikes if needed
+        spikes = spikes.unfold(2, self.neurons_per_token, self.neurons_per_token).flatten(-2)
+        b, t, c, h = spikes.size()
+        # unsqueezes are to add batch dim
+        time = torch.arange(t, device=spikes.device).unsqueeze(0).unsqueeze(-1).expand(b, t, c).flatten(1)
+        position = torch.arange(c, device=spikes.device).unsqueeze(0).unsqueeze(0).expand(b, t, c).flatten(1)
 
         # * Quirk (to fix) of decoding process - context tokens receive flag for encoder but not for decoder...
         # breakpoint()
@@ -436,22 +427,14 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             trial_context_without_flag.append(task_embed)
         trial_context = torch.cat(trial_context_with_flag, dim=1)
         trial_context_without_flag = torch.cat(trial_context_without_flag, dim=1)
-        if DEBUG:
-            state_in = self.readin(spikes.int()).flatten(-3) # flatten time and channel dim
-        else:
-            state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
+        state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
         features: torch.Tensor = self.backbone(
             state_in,
             times=time,
             positions=position,
             trial_context=trial_context,
-            # temporal_padding_mask=None,
             causal=self.causal,
         ) # B x Token x H (flat)
-        # print(f'feat iter: ', features.shape, features.sum())
-        if DEBUG:
-            OUT[Output.behavior_pred] = self.decoder(features, time, trial_context_without_flag)
-            return OUT
         return self.decoder(features, time, trial_context_without_flag)[0] # remove batch dimension. Note we unflip x/y in the actual module; not this onnx compression's responsibility to interpret dims
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs, extra_embed_map: Dict[str, Tuple[Any, DataAttrs]] = {}):

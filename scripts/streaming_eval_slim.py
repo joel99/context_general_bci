@@ -6,6 +6,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import torch
+from einops import rearrange
 import pytorch_lightning as pl
 from sklearn.metrics import r2_score
 
@@ -22,7 +23,9 @@ if FALCON_MINIVAL:
         *FalconContextInfo.build_from_dir('./data/h1/minival', task=ExperimentalTask.falcon, suffix='minival'),
     ])
 
-from context_general_bci.model import transfer_model, BrainBertInterface
+from context_general_bci.model import BrainBertInterface, transfer_model
+from context_general_bci.model_slim import transfer_model as transfer_model_slim
+
 from context_general_bci.dataset import SpikingDataset
 from context_general_bci.config import (
     Metric,
@@ -80,8 +83,12 @@ if not FALCON_MINIVAL:
 print("Eval length: ", len(dataset))
 print(data_attrs)
 model = transfer_model(src_model, cfg.model, data_attrs)
+model_slim = transfer_model_slim(src_model, cfg.model, data_attrs)
 model.eval()
+model_slim.eval()
 model = model.to("cuda")
+model_slim = model_slim.to("cuda")
+
 # %%
 labels = ['x', 'y', 'z', 'rx', 'g1', 'g2', 'g3']
 def eval_model(
@@ -115,6 +122,15 @@ def eval_model(
                     parity_batch,
                     last_step_only=True,
                 )
+                # Split time dimension
+                stride = len(parity_batch[DataKey.position].unique())
+                reconstructed_flat_spikes = rearrange(
+                    parity_batch[DataKey.spikes],
+                    'b (time space) patch 1 -> b time (space patch) 1',
+                    space=stride
+                )
+                breakpoint()
+                output_slim = model_slim(reconstructed_flat_spikes)
                 stream_output.append(output)
             stream_total = stack_batch(stream_output) # concat behavior preds
             outputs.append(stream_total)

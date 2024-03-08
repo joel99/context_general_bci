@@ -644,6 +644,7 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
+        breakpoint()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
         if DataKey.extra in batch and not self.data_attrs.serve_tokens_flat: # serve_tokens_flat is enc dec, don't integrate extra (query) tokens in enc
@@ -876,6 +877,7 @@ class BrainBertInterface(pl.LightningModule):
         r"""
             last_step_only: Only predict final timestep kinematic. Useful for online prediction.
         """
+        breakpoint()
         features = self(batch)
         # Just run kinematic predict
         out = self.task_pipelines[ModelTask.kinematic_decoding.value](
