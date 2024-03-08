@@ -9,7 +9,7 @@ setup(
     author_email='joelye9@gmail.com',
 
     packages=find_packages(exclude=['scripts', 'crc_scripts', 'data']),
-    py_modules=['context_general_bci'],
+    # py_modules=['context_general_bci'],
 
     install_requires=[
         'torch==1.13.1+cu117', # 2.0 onnx export doesn't work, install with --extra-index-url https://download.pytorch.org/whl/cu117
