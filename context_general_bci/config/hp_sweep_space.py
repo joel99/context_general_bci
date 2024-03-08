@@ -7,10 +7,10 @@
 sweep_space = {
     'h1_fine_grained_discrete': {
         'model.lr_init': {
-            'feasible_points': [1e-4, 3e-4, 5e-4],
+            'feasible_points': [3e-4, 5e-4],
         },
         'model.lr_ramp_steps': {
-            'feasible_points': [25, 50],
+            'feasible_points': [25, 50, 100],
         },
     },
     "simple_discrete": {

@@ -402,7 +402,9 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         assert spikes.dtype in [torch.int64, torch.int32, torch.int16, torch.uint8]
         breakpoint()
         spikes.clamp_(0, CLAMP_MAX)
-        # TODO pad spikes if needed
+        # pad C dim if necessary
+        if spikes.size(2) % self.neurons_per_token:
+            spikes = F.pad(spikes, (0, 0, 0, self.neurons_per_token - (spikes.size(2) % self.neurons_per_token)))
         spikes = spikes.unfold(2, self.neurons_per_token, self.neurons_per_token).flatten(-2)
         b, t, c, h = spikes.size()
         # unsqueezes are to add batch dim
