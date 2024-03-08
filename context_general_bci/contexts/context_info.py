@@ -79,12 +79,12 @@ class ContextInfo(_ContextInfoDefaultsBase, _ContextInfoBase):
         return [self.subject.wrap_array(a) for a in self._arrays]
 
     @staticmethod
-    def get_id(subject: SubjectInfo, task: ExperimentalTask, id_str: str):
-        return f"{task}-{subject.name.value}-{id_str}"
+    def get_id(subject: SubjectName, task: ExperimentalTask, id_str: str):
+        return f"{task}-{subject.value}-{id_str}"
 
     @property
     def id(self):
-        return ContextInfo.get_id(self.subject, self.task, self._id())
+        return ContextInfo.get_id(self.subject.name, self.task, self._id())
 
     @abc.abstractmethod
     def _id(self):
@@ -648,11 +648,11 @@ class FalconContextInfo(ContextInfo):
         return self.alias
 
     @staticmethod
-    def get_alias(subject: SubjectInfo, stem: str):
+    def get_alias(subject: SubjectName, stem: str):
         pieces = stem.split('_')
         pre_set_pieces = pieces[:pieces.index('set')]
         stem = '_'.join(pre_set_pieces)
-        return f"falcon_{subject.name.value}-{stem}"
+        return f"falcon_{subject.value}-{stem}"
 
     @staticmethod
     def get_alias_from_path(path: Path):

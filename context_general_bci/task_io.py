@@ -1069,9 +1069,14 @@ class BehaviorRegression(TaskPipeline):
         if getattr(self.cfg, 'decode_normalizer', ''):
             # See `data_kin_global_stat`
             zscore_path = Path(self.cfg.decode_normalizer)
-            assert zscore_path.exists(), f'normalizer path {zscore_path} does not exist'
-            self.register_buffer('bhvr_mean', torch.load(zscore_path)['mean'])
-            self.register_buffer('bhvr_std', torch.load(zscore_path)['std'])
+            if not zscore_path.exists():
+                print(f'Warning: decode normalizer {zscore_path} does not exist. Better zscore should swap in shortly (This msg may occur during loading from ckpt).')
+                self.register_buffer('bhvr_mean', torch.zeros(data_attrs.behavior_dim))
+                self.register_buffer('bhvr_std', torch.ones(data_attrs.behavior_dim))
+            else:
+                print(f'Loading decode normalizer from {zscore_path}')
+                self.register_buffer('bhvr_mean', torch.load(zscore_path)['mean'])
+                self.register_buffer('bhvr_std', torch.load(zscore_path)['std'])
         else:
             self.bhvr_mean = None
             self.bhvr_std = None
