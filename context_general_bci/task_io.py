@@ -1087,7 +1087,7 @@ class BehaviorRegression(TaskPipeline):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False) -> torch.Tensor:
         batch_out = {}
-
+        # breakpoint()
         if getattr(self.cfg, 'kl_lambda', 0.0):
             # Note: We want to _align_ at pool/population level
             # Since it doesn't make sense to try to align individual spatial tokens, many to many map?

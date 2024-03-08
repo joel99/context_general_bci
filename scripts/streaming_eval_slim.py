@@ -48,6 +48,7 @@ from context_general_bci.streaming_utils import (
 
 query = 'h1_v2-sweep-h1_fine_grained_discrete-4j1mi057'
 query = 'h1_v2-sweep-h1_fine_grained_discrete-v6luzk35'
+query = 'h1_nopool_cross-sweep-h1_fine_grained_discrete-rasu7u1w'
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
@@ -98,6 +99,7 @@ def eval_model(
     dataloader = get_dataloader(dataset, batch_size=1, num_workers=0)
 
     outputs = []
+    slim_outputs = []
     for batch in dataloader:
         print('Batch')
         batch = to_device(batch, "cuda")
@@ -106,6 +108,7 @@ def eval_model(
             timesteps = batch[DataKey.time].max() + 1 # number of distinct timesteps
             buffer_steps = int(stream_buffer_s * 1000 // cfg.dataset.bin_size_ms)
             stream_output = []
+            stream_slim_output = []
             for end_time_exclusive in range(1, timesteps + 1): # +1 because range is exlusive
                 stream_batch = deepcopy(batch)
                 stream_batch = precrop_batch(stream_batch, end_time_exclusive) # Keep to end_time
@@ -129,11 +132,14 @@ def eval_model(
                     'b (time space) patch 1 -> b time (space patch) 1',
                     space=stride
                 )
-                breakpoint()
-                output_slim = model_slim(reconstructed_flat_spikes)
+                session_id = parity_batch[MetaKey.session]
+                output_slim = model_slim(reconstructed_flat_spikes, session_id, last_step_only=True)
+                stream_slim_output.append(output_slim)
                 stream_output.append(output)
             stream_total = stack_batch(stream_output) # concat behavior preds
+            stream_slim_total = stack_batch(stream_slim_output)
             outputs.append(stream_total)
+            slim_outputs.append(stream_slim_total)
         else:
             output = model.predict_simple_batch(
                 batch,
@@ -141,6 +147,7 @@ def eval_model(
             )
             outputs.append(output)
     outputs = stack_batch(outputs)
+    slim_outputs = stack_batch(slim_outputs)
 
     print(f"Checkpoint: {ckpt_epoch} (tag: {tag})")
     prediction = outputs[Output.behavior_pred].cpu()

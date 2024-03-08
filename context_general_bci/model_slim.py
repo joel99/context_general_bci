@@ -69,6 +69,27 @@ DECODER_HISTORY_MS = 4000 # ! ! MAKE SURE TO SET THIS! ! !
 DEBUG = False
 # DEBUG = True
 
+def temporal_mean_pool(time: torch.Tensor, backbone_features: torch.Tensor):
+    # Slim - assumes no padding
+    pooled_features = torch.zeros(
+        backbone_features.shape[0],
+        (time.max() + 1) + 1, # 1 extra for padding
+        backbone_features.shape[-1],
+        device=backbone_features.device,
+        dtype=backbone_features.dtype
+    )
+    time_with_pad_marked = time
+    pooled_features = pooled_features.scatter_reduce(
+        src=backbone_features,
+        dim=1,
+        index=repeat(time_with_pad_marked, 'b t -> b t h', h=backbone_features.shape[-1]),
+        reduce='mean',
+        include_self=False
+    )
+    backbone_features = pooled_features[:,:-1] # remove padding
+    return backbone_features
+
+
 class SkinnyBehaviorRegression(nn.Module):
     r"""
         For online. Do not use for training.
@@ -79,6 +100,7 @@ class SkinnyBehaviorRegression(nn.Module):
     ):
         super().__init__()
         self.decode_cross_attn = True
+        assert cfg.decoder_context_integration == 'cross_attn', "Only cross attn supported for now"
         self.cfg = cfg.task
 
         self.time_pad = cfg.transformer.max_trial_length
@@ -87,7 +109,7 @@ class SkinnyBehaviorRegression(nn.Module):
             max_spatial_tokens=0,
             n_layers=cfg.decoder_layers,
             allow_embed_padding=True,
-            context_integration='cross_attn',
+            context_integration=cfg.decoder_context_integration,
             embed_space=False
         )
 
@@ -112,10 +134,22 @@ class SkinnyBehaviorRegression(nn.Module):
         if self.causal and self.cfg.behavior_lag_lookahead:
             self.decode_time = self.decode_time + self.bhvr_lag_bins
 
-    def forward(self, backbone_features: torch.Tensor, src_time: torch.Tensor, trial_context: torch.Tensor) -> torch.Tensor:
+    def forward(
+            self,
+            backbone_features: torch.Tensor,
+            src_time: torch.Tensor,
+            trial_context: torch.Tensor,
+        ) -> torch.Tensor:
+        # breakpoint()
+        max_time = src_time.max()
+        decode_token = self.decode_token[:, :max_time+1]
+        decode_time = self.decode_time[:, :max_time+1]
+
+        # backbone_features = temporal_mean_pool(src_time, backbone_features)
+        # src_time = np.unique(src_time)
         backbone_features: torch.Tensor = self.decoder(
-            self.decode_token,
-            self.decode_time,
+            decode_token,
+            decode_time,
             trial_context=trial_context,
             memory=backbone_features,
             memory_times=src_time,
@@ -123,13 +157,8 @@ class SkinnyBehaviorRegression(nn.Module):
         )
 
         bhvr = self.out(backbone_features)
-        if DEBUG: # TODO remove
-            bhvr = bhvr * self.bhvr_std + self.bhvr_mean
         if self.bhvr_lag_bins:
             bhvr = bhvr[:, :-self.bhvr_lag_bins]
-        if DEBUG:
-            bhvr = F.pad(bhvr, (0, 0, self.bhvr_lag_bins, 0), value=0)
-            return bhvr
         final_bhvr = bhvr[:,src_time.max()]
         # final_bhvr = bhvr[:,-1]
         if self.bhvr_mean is not None:
@@ -397,10 +426,12 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
     @torch.no_grad()
     def forward(
         self,
-        spikes: torch.Tensor # B=1 x T x C x H=1 # ! should be int dtype, double check
+        spikes: torch.Tensor, # B=1 x T x C x H=1 # ! should be int dtype, double check
+        session_id: Optional[torch.Tensor] = None, # B
+        last_step_only: bool = True,
     ) -> torch.Tensor: # out is behavior, T x 2
         assert spikes.dtype in [torch.int64, torch.int32, torch.int16, torch.uint8]
-        breakpoint()
+        # breakpoint()
         spikes.clamp_(0, CLAMP_MAX)
         # pad C dim if necessary
         if spikes.size(2) % self.neurons_per_token:
@@ -416,7 +447,9 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         trial_context_with_flag = []
         trial_context_without_flag = []
         if self.session_embed is not None:
-            session_embed = self.session_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+            if session_id is None:
+                session_id = torch.zeros(1, dtype=torch.int, device=spikes.device)
+            session_embed = self.session_embed(session_id).unsqueeze(1)
             trial_context_with_flag.append(session_embed + self.session_flag)
             trial_context_without_flag.append(session_embed)
         if self.subject_embed is not None:
@@ -437,7 +470,12 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             trial_context=trial_context,
             causal=self.causal,
         ) # B x Token x H (flat)
-        return self.decoder(features, time, trial_context_without_flag)[0] # remove batch dimension. Note we unflip x/y in the actual module; not this onnx compression's responsibility to interpret dims
+        return {'out': self.decoder(
+            features,
+            time,
+            trial_context_without_flag,
+            # last_step_only=last_step_only,
+        )}
 
 def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs, extra_embed_map: Dict[str, Tuple[Any, DataAttrs]] = {}):
     r"""

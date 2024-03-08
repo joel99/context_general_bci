@@ -877,7 +877,7 @@ class BrainBertInterface(pl.LightningModule):
         r"""
             last_step_only: Only predict final timestep kinematic. Useful for online prediction.
         """
-        breakpoint()
+        # breakpoint()
         features = self(batch)
         # Just run kinematic predict
         out = self.task_pipelines[ModelTask.kinematic_decoding.value](
