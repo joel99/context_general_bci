@@ -143,7 +143,7 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=1, **kwa
         batch_size=batch_size,
         num_workers=num_workers,
         persistent_workers=num_workers > 0,
-        collate_fn=dataset.collater_factory()
+        collate_fn=dataset.tokenized_coolater
     )
 
 dataloader = get_dataloader(dataset)

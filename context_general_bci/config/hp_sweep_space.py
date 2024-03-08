@@ -5,6 +5,25 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    'h1_fine_grained_discrete': {
+        'model.lr_init': {
+            'feasible_points': [3e-4, 5e-4],
+        },
+        'model.lr_ramp_steps': {
+            'feasible_points': [25, 50, 100],
+        },
+    },
+    "simple_discrete": {
+        "model.lr_init": {
+            "feasible_points": [1e-4, 5e-4, 1e-3, 5e-3],
+        },
+        "model.lr_ramp_steps": {
+            'feasible_points': [10, 25, 50, 100],
+        },
+        "model.dropout": {
+            'feasible_points': [0.1, 0.3, 0.5, 0.7] # in lieu of sweeping capacity
+        }
+    },
     "simpler_lr_sweep": {
         "model.lr_init": {
             'feasible_points': [4e-5, 7e-5, 1e-4]

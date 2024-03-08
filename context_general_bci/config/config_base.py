@@ -48,14 +48,13 @@ class Output(Enum):
 
     behavior = 'behavior'
     behavior_pred = 'behavior_pred'
+    behavior_mask = 'behavior_mask'
 
     # Debug
     pooled_features = 'pooled_features'
 
 class DataKey(Enum):
     # DataKey are time-varying and typically served with spikes
-    # TODO need more thinking about this. Data is heterogenuous, can we maintain a single interface
-    # What is the right we to specify we want some type of array?
     spikes = 'spikes'
     stim = 'stim' # icms
     heldout_spikes = 'heldout_spikes' # for co-bps
@@ -63,6 +62,7 @@ class DataKey(Enum):
     bhvr_vel = 'bhvr_vel'
     bhvr_acc = 'bhvr_acc'
     bhvr_force = 'bhvr_force'
+    bhvr_mask = 'bhvr_mask'
 
     time = 'time'
     position = 'position' # space, however you want to think about it. Tracks channel cluster.
@@ -501,6 +501,7 @@ class DatasetConfig:
     ]))
     delay_reach: ExperimentalConfig = field(default_factory=ExperimentalConfig)
 
+    falcon: ExperimentalConfig = field(default_factory=ExperimentalConfig)
     permute_channels: bool = False # test flag, permute channels randomly per session
 
 @dataclass
@@ -572,7 +573,8 @@ class RootConfig:
     slurm_id: int = 0 # for experiment tracking...
     effective_bsz: int = 0 # for experiment tracking...
     nodes: int = 1
-
+from typing import Union
+BatchKey = Union[str, DataKey, MetaKey, Output]
 
 def propagate_config(config: RootConfig):
     r"""

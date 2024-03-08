@@ -10,17 +10,7 @@ import numpy as np
 import pandas as pd
 import functools
 
-from .context_info import (
-    ContextInfo,
-    ReachingContextInfo,
-    PassiveICMSContextInfo,
-    RTTContextInfo,
-    DyerCOContextInfo,
-    GallegoCOContextInfo,
-    GDrivePathContextInfo,
-    BCIContextInfo,
-    BatistaContextInfo,
-)
+from .context_info import ContextInfo
 
 from context_general_bci.tasks import ExperimentalTask
 
@@ -107,22 +97,18 @@ class ContextRegistry:
 context_registry = ContextRegistry()
 
 if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
+    from .context_info import (
+        ReachingContextInfo,
+        PassiveICMSContextInfo,
+        RTTContextInfo,
+        DyerCOContextInfo,
+        GallegoCOContextInfo,
+        GDrivePathContextInfo,
+        BCIContextInfo,
+        BatistaContextInfo,
+        FalconContextInfo,
+    )
     context_registry.register([
-        PassiveICMSContextInfo.build(906, 1, 'stim_trains_gen4-02b-ant_chan14-19-20-25_80uA_0.5ITI_6cond/'),
-        PassiveICMSContextInfo.build(48, 1, 'stim_trains_80uA_9rap_9std/', (2, 6)),
-        PassiveICMSContextInfo.build(61, 6, 'stim_trains_gen2_post_80uA_0.1ITI_36cond/'), # P3Lab
-        PassiveICMSContextInfo.build(67, 1, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_0/'), # P3Lab
-        PassiveICMSContextInfo.build(78, 1, 'stim_trains_gen6-07_chan14-19-20-25-10-15-18-12_80uA_0.5ITI_40cond'),
-        PassiveICMSContextInfo.build(82, 4, 'stim_trains_gen6-07_chan14-19-20-25-10-15-18-12_80uA_0.5ITI_40cond'),
-        PassiveICMSContextInfo.build(88, 3, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_1/'),
-        PassiveICMSContextInfo.build(91, 4, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_2/'),
-        PassiveICMSContextInfo.build(92, 6, 'stim_trains_scaling-test_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_8cond/'),
-        PassiveICMSContextInfo.build(98, 5, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_3/'),
-        PassiveICMSContextInfo.build(105, 4, 'stim_trains_gen3-07_chan40-45-49-35-42-55-47-50-44_80uA_0.5ITI_8cond'),
-        PassiveICMSContextInfo.build(107, 3, 'stim_trains_gen3-07_chan1-27-5-30-11-31-17-12-19_80uA_0.5ITI_8cond'),
-        PassiveICMSContextInfo.build(120, 3, 'stim_trains_scaling-train_chan34-36-42-44-46-47-50-51-52-55-56-57_80uA_0.5ITI_1cond/block_4/'),
-        PassiveICMSContextInfo.build(120, 4, 'stim_trains_single-07-post_chan50-44-56-34_80uA_0.5ITI_4cond'),
-
         ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze'),
         ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze_large'),
         ReachingContextInfo.build('./data/nlb/000139/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze_medium'),
@@ -144,40 +130,8 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
 
         *GallegoCOContextInfo.build_from_dir('./data/gallego_co', task=ExperimentalTask.gallego_co),
         *GDrivePathContextInfo.build_from_dir('./data/churchland_misc'),
-        *BCIContextInfo.build_from_dir('./data/pitt_co', task_map={
-            'obs': ExperimentalTask.observation,
-            'ortho': ExperimentalTask.ortho,
-            'ortho/fbc': ExperimentalTask.fbc, # when both types are used, opt for more expressive
-            'fbc': ExperimentalTask.fbc,
-            'fbc-stitch': ExperimentalTask.fbc,
-            'unstructured': ExperimentalTask.unstructured,
-            'free_play': ExperimentalTask.unstructured,
-            'default': ExperimentalTask.pitt_co,
-            'unk': ExperimentalTask.pitt_co,
-        }),
-        *BCIContextInfo.build_from_dir(f'./data/{CLOSED_LOOP_DIR}', task_map={
-            'obs': ExperimentalTask.observation,
-            'ortho': ExperimentalTask.ortho,
-            'fbc': ExperimentalTask.fbc,
-        }, alias_prefix='closed_loop_'),
-        *BCIContextInfo.build_from_dir(f'./data/pitt_misc/mat', task_map={
-            'obs': ExperimentalTask.observation,
-            'ortho': ExperimentalTask.ortho,
-            'fbc': ExperimentalTask.fbc,
-            'unstructured': ExperimentalTask.unstructured,
-            'free_play': ExperimentalTask.unstructured,
-        }, alias_prefix='pitt_misc_'), # Don't use in pretraining
-        *BCIContextInfo.build_from_dir_varied('./data/pitt_varied', task_map={
-            'unstructured': ExperimentalTask.unstructured,
-            'free_play': ExperimentalTask.unstructured,
-            'default': ExperimentalTask.pitt_co,
-        }),
 
-        # *BatistaContextInfo.build_from_dir('./data/marino_batista/earl_multi_posture_isometric_force', task=ExperimentalTask.marino_batista_mp_iso_force),
-        # *BatistaContextInfo.build_from_dir('./data/marino_batista/earl_multi_posture_bci', task=ExperimentalTask.marino_batista_mp_bci),
-        # *BatistaContextInfo.build_from_dir('./data/marino_batista/earl_multi_posture_dco_reaching', task=ExperimentalTask.marino_batista_mp_reaching),
-        # *BatistaContextInfo.build_from_dir('./data/marino_batista/nigel_multi_posture_bci', task=ExperimentalTask.marino_batista_mp_bci),
-        # *BatistaContextInfo.build_from_dir('./data/marino_batista/nigel_multi_posture_dco_reaching', task=ExperimentalTask.marino_batista_mp_reaching),
-        # *BatistaContextInfo.build_from_dir('./data/marino_batista/rocky_multi_posture_bci', task=ExperimentalTask.marino_batista_mp_bci),
-        # *BatistaContextInfo.build_from_dir('./data/marino_batista/rocky_multi_posture_dco_reaching', task=ExperimentalTask.marino_batista_mp_reaching),
+        *FalconContextInfo.build_from_dir('./data/h1/train', task=ExperimentalTask.falcon),
+        *FalconContextInfo.build_from_dir('./data/h1/test_short', task=ExperimentalTask.falcon, suffix='calibration'),
+        *FalconContextInfo.build_from_dir('./data/h1/test_long', task=ExperimentalTask.falcon, suffix='calibration'),
     ])

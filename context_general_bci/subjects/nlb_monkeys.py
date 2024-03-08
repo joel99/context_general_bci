@@ -103,3 +103,11 @@ class Nigel(SubjectInfo):
     _arrays = {
         'M1': SortedArrayInfo(_max_channels=96), # max seen 58
     }
+
+
+@SubjectArrayRegistry.register
+class FALCONH1(SubjectInfo):
+    name = SubjectName.falcon_h1
+    _arrays = {
+        'M1': SortedArrayInfo(_max_channels=192),
+    }

@@ -78,9 +78,13 @@ class ContextInfo(_ContextInfoDefaultsBase, _ContextInfoBase):
         """
         return [self.subject.wrap_array(a) for a in self._arrays]
 
+    @staticmethod
+    def get_id(subject: SubjectName, task: ExperimentalTask, id_str: str):
+        return f"{task}-{subject.value}-{id_str}"
+
     @property
     def id(self):
-        return f"{self.task}-{self.subject.name.value}-{self._id()}"
+        return ContextInfo.get_id(self.subject.name, self.task, self._id())
 
     @abc.abstractmethod
     def _id(self):
@@ -636,6 +640,54 @@ class BatistaContextInfo(ContextInfo):
             )
         infos = map(make_info, root.glob("*.mat"))
         return filter(lambda x: x is not None, infos)
+
+
+@dataclass
+class FalconContextInfo(ContextInfo):
+    def _id(self):
+        return self.alias
+
+    @staticmethod
+    def get_alias(subject: SubjectName, stem: str):
+        pieces = stem.split('_')
+        pre_set_pieces = pieces[:pieces.index('set')]
+        stem = '_'.join(pre_set_pieces)
+        return f"falcon_{subject.value}-{stem}"
+
+    @staticmethod
+    def get_alias_from_path(path: Path):
+        subject = path.parts[-3].lower()
+        subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+        # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
+        pieces = path.stem.split('_')
+        pre_set_pieces = pieces[:pieces.index('set')]
+        stem = '_'.join(pre_set_pieces)
+        return f"falcon_{subject.name.value}-{stem}"
+
+    @classmethod
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix=''):
+        root = Path(root)
+        if not root.exists():
+            logger.warning(f"Datapath folder {root} does not exist. Skipping.")
+            return []
+        def make_info(path: Path):
+            # path = ..../h1/
+            subject = path.parts[-3].lower()
+            subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+            # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
+            pieces = path.stem.split('_')
+            pre_set_pieces = pieces[:pieces.index('set')]
+            stem = '_'.join(pre_set_pieces)
+            return FalconContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=arrays,
+                alias=f"falcon_{subject.name.value}-{stem}",
+                datapath=path,
+            )
+        infos = map(make_info, root.glob(f"*{suffix}.nwb"))
+        return list(filter(lambda x: x is not None, infos))
+
 
 # ====
 # Archive

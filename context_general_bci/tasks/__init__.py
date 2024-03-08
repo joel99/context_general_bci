@@ -1,4 +1,5 @@
 # from enum import Enum
+import os
 from ordered_enum import OrderedEnum
 r"""
     Dependency notes:
@@ -28,15 +29,21 @@ class ExperimentalTask(OrderedEnum):
     marino_batista_mp_reaching = "marino_batista_mp_reaching"
     marino_batista_mp_iso_force = "marino_batista_mp_iso_force"
 
+    falcon = "falcon"
+
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
-# Exports
-from .passive_icms import ICMSLoader
-from .nlb import MazeLoader, RTTLoader
-from .rtt import ODohertyRTTLoader
-from .maze import ChurchlandMazeLoader
-from .myow_co import DyerCOLoader
-from .gallego_co import GallegoCOLoader
-from .churchland_misc import ChurchlandMiscLoader
-from .pitt_co import PittCOLoader
-from .delay_reach import DelayReachLoader
-from .marino_batista import MarinoBatistaLoader
+
+# Exports - deny loader imports (which will print warnings) if we don't expect to need them
+if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
+    from .passive_icms import ICMSLoader
+    from .nlb import MazeLoader, RTTLoader
+    from .rtt import ODohertyRTTLoader
+    from .maze import ChurchlandMazeLoader
+    from .myow_co import DyerCOLoader
+    from .gallego_co import GallegoCOLoader
+    from .churchland_misc import ChurchlandMiscLoader
+    from .pitt_co import PittCOLoader
+    from .delay_reach import DelayReachLoader
+    from .marino_batista import MarinoBatistaLoader
+
+from .falcon_h1 import FalconLoader

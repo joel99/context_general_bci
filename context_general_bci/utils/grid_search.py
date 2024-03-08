@@ -17,5 +17,5 @@ def grid_search(sweep_space):
         if 'feasible_points' in sweep_space[k]:
             grid_dict[k] = sweep_space[k]['feasible_points']
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"Only feasible_points is supported, not {sweep_space[k]}")
     return list(dict_product(grid_dict))

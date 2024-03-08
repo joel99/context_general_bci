@@ -86,6 +86,23 @@ class DataAttrs:
         else:
             return per_array * self.max_arrays
 
+    @staticmethod
+    def from_config(cfg: DatasetConfig, context: ContextAttrs):
+        return DataAttrs(
+            bin_size_ms=cfg.bin_size_ms,
+            max_channel_count=cfg.max_channels,
+            max_arrays=cfg.max_arrays,
+            spike_dim=1, # Higher dims not supported right now
+            context=context,
+            rtt_heldout_channel_count=cfg.nlb_rtt.heldout_neurons,
+            maze_heldout_channel_count=cfg.nlb_maze.heldout_neurons,
+            behavior_dim=cfg.behavior_dim,
+            pad_token=cfg.pad_value,
+            serve_tokens=cfg.serve_tokenized,
+            serve_tokens_flat=cfg.serve_tokenized_flat,
+            neurons_per_token=cfg.neurons_per_token,
+        )
+
 class SpikingDataset(Dataset):
     r"""
         Generic container for spiking data from intracortical microelectrode recordings.
@@ -414,7 +431,6 @@ class SpikingDataset(Dataset):
                     data_items[k] = (payload[k] - per_zscore['mean']) / per_zscore['std']
                 else:
                     data_items[k] = payload[k]
-
         out = {
             **data_items,
             **meta_items,
@@ -431,7 +447,6 @@ class SpikingDataset(Dataset):
     def __len__(self):
         return len(self.meta_df)
 
-    @staticmethod
     def tokenized_collater(self, batch):
         r"""
             batch: list of dicts
@@ -473,8 +488,7 @@ class SpikingDataset(Dataset):
                     stack_batch[k].append(item)
                 else:
                     if self.cfg.serve_tokenized_flat and k == CHANNEL_KEY: # determine cropped channel count
-                        b[k] = b[k][crop_start[i]:crop_start[i]+time_budget[i]]
-                        stack_batch[k].append(b[k].flatten(0, 1))
+                        stack_batch[k].append(b[k][crop_start[i]:crop_start[i]+time_budget[i]].flatten(0, 1)) # ! Careful not to write this into b[k], appears to write into original vector for some reason.
                     else:
                         stack_batch[k].append(b[k])
         lengths = torch.tensor([el.size(0) for el in stack_batch[DataKey.spikes]])
@@ -815,7 +829,7 @@ class SpikingDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
-            collate_fn=functools.partial(self.train.tokenized_collater, self.train),
+            collate_fn=self.train.tokenized_collater,
         )
 
     def val_dataloader(self):
@@ -825,7 +839,7 @@ class SpikingDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
                 persistent_workers=self.num_workers > 0,
-                collate_fn=functools.partial(dataset.tokenized_collater, dataset),
+                collate_fn=dataset.tokenized_collater,
             ) for dataset in self.val]
 
     def test_dataloader(self):
@@ -837,6 +851,6 @@ class SpikingDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
                 persistent_workers=self.num_workers > 0,
-                collate_fn=functools.partial(dataset.tokenized_collater, dataset),
+                collate_fn=dataset.tokenized_collater,
             ) for dataset in self.test]
 
