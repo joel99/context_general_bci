@@ -140,6 +140,10 @@ class SkinnyBehaviorRegression(nn.Module):
             src_time: torch.Tensor,
             trial_context: torch.Tensor,
         ) -> torch.Tensor:
+        r"""
+            in: assume B=1
+            return: B=1 x H
+        """
         # breakpoint()
         max_time = src_time.max()
         decode_token = self.decode_token[:, :max_time+1]
@@ -428,7 +432,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         self,
         spikes: torch.Tensor, # B=1 x T x C x H=1 # ! should be int dtype, double check
         session_id: Optional[torch.Tensor] = None, # B
-        last_step_only: bool = True,
+        # last_step_only: bool = True,
     ) -> torch.Tensor: # out is behavior, T x 2
         assert spikes.dtype in [torch.int64, torch.int32, torch.int16, torch.uint8]
         # breakpoint()
