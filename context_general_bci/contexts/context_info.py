@@ -648,20 +648,35 @@ class FalconContextInfo(ContextInfo):
         return self.alias
 
     @staticmethod
-    def get_alias(subject: SubjectName, stem: str):
-        pieces = stem.split('_')
-        pre_set_pieces = pieces[:pieces.index('set')]
-        stem = '_'.join(pre_set_pieces)
+    def get_alias(task: ExperimentalTask, subject: SubjectName, stem: str):
+        if task == ExperimentalTask.falcon_h1:
+            pieces = stem.split('_')
+            pre_set_pieces = pieces[:pieces.index('set')]
+            stem = '_'.join(pre_set_pieces)
+            return f"falcon_{subject.value}-{stem}"
+        elif task == ExperimentalTask.falcon_m1:
+            if 'behavior+ecephys' in stem:
+                session_date = stem.split('_')[-2]
+            else:
+                session_date = f'ses-{stem.split("_")[1]}'
+            return f"falcon_{subject.value}-{session_date}"
         return f"falcon_{subject.value}-{stem}"
 
     @staticmethod
-    def get_alias_from_path(path: Path):
+    def get_alias_from_path(task: ExperimentalTask, path: Path):
         subject = path.parts[-3].lower()
         subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
         # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
-        pieces = path.stem.split('_')
-        pre_set_pieces = pieces[:pieces.index('set')]
-        stem = '_'.join(pre_set_pieces)
+        if task == ExperimentalTask.falcon_h1:
+            pieces = path.stem.split('_')
+            pre_set_pieces = pieces[:pieces.index('set')]
+            stem = '_'.join(pre_set_pieces)
+        elif task == ExperimentalTask.falcon_m1:
+            if 'behavior+ecephys' in stem:
+                session_date = stem.split('_')[-2]
+            else:
+                session_date = f'ses-{stem.split("_")[1]}'
+            return f"falcon_{subject.name.value}-{session_date}"
         return f"falcon_{subject.name.value}-{stem}"
 
     @classmethod
