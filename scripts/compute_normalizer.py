@@ -15,7 +15,6 @@ from context_general_bci.utils import wandb_query_latest
 from context_general_bci.analyze_utils import prep_plt, load_wandb_run
 
 sample_query = 'h1'
-
 wandb_run = wandb_query_latest(sample_query, exact=False, allow_running=True)[0]
 # print(wandb_run)
 _, cfg, _ = load_wandb_run(wandb_run, tag='val_loss')
@@ -40,3 +39,4 @@ torch.save({
     'mean': kin_mean,
     'std': kin_std,
 }, f'./data/zscore_{sample_query}_{kin_mean.shape[0]}d.pt')
+# %%

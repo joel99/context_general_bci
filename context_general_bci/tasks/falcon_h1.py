@@ -53,9 +53,9 @@ def load_nwb(fn: str):
         nwbfile = io.read()
         units = nwbfile.units.to_dataframe()
         kin = nwbfile.acquisition['OpenLoopKinematicsVelocity'].data[:].astype(dtype=np.float32)
-        kin_mask = ~nwbfile.acquisition['Blacklist'].data[:].astype(bool)
+        kin_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
         trial_num = nwbfile.acquisition["TrialNum"].data[:]
-        timestamps = nwbfile.acquisition['OpenLoopKinematics'].timestamps[:]
+        timestamps = nwbfile.acquisition['OpenLoopKinematics'].offset + np.arange(kin.shape[0]) * nwbfile.acquisition['OpenLoopKinematics'].rate
         labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
         epochs = nwbfile.epochs.to_dataframe()
         return (

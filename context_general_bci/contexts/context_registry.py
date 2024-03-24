@@ -131,7 +131,6 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         *GallegoCOContextInfo.build_from_dir('./data/gallego_co', task=ExperimentalTask.gallego_co),
         *GDrivePathContextInfo.build_from_dir('./data/churchland_misc'),
 
-        *FalconContextInfo.build_from_dir('./data/h1/train', task=ExperimentalTask.falcon),
-        *FalconContextInfo.build_from_dir('./data/h1/test_short', task=ExperimentalTask.falcon, suffix='calibration'),
-        *FalconContextInfo.build_from_dir('./data/h1/test_long', task=ExperimentalTask.falcon, suffix='calibration'),
+        *FalconContextInfo.build_from_dir('./data/h1/held_in', task=ExperimentalTask.falcon, suffix='calib'),
+        *FalconContextInfo.build_from_dir('./data/h1/held_out', task=ExperimentalTask.falcon, suffix='calib'),
     ])
