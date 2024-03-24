@@ -10,18 +10,7 @@ import numpy as np
 import pandas as pd
 import functools
 
-from .context_info import (
-    ContextInfo,
-    ReachingContextInfo,
-    PassiveICMSContextInfo,
-    RTTContextInfo,
-    DyerCOContextInfo,
-    GallegoCOContextInfo,
-    GDrivePathContextInfo,
-    BCIContextInfo,
-    BatistaContextInfo,
-    FalconContextInfo,
-)
+from .context_info import ContextInfo
 
 from context_general_bci.tasks import ExperimentalTask
 
@@ -108,6 +97,17 @@ class ContextRegistry:
 context_registry = ContextRegistry()
 
 if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
+    from .context_info import (
+        ReachingContextInfo,
+        PassiveICMSContextInfo,
+        RTTContextInfo,
+        DyerCOContextInfo,
+        GallegoCOContextInfo,
+        GDrivePathContextInfo,
+        BCIContextInfo,
+        BatistaContextInfo,
+        FalconContextInfo,
+    )
     context_registry.register([
         ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze'),
         ReachingContextInfo.build('./data/nlb/000138/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze_large'),
