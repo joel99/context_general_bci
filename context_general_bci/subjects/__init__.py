@@ -29,6 +29,9 @@ class SubjectName(OrderedEnum):
     rocky = "Rocky"
 
     falcon_h1 = "FALCONH1"
+    falcon_m1 = "FALCONM1"
+    falcon_h2 = "FALCONH2"
+    falcon_m2 = "FALCONM2"
 
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
 from .array_registry import SubjectArrayRegistry, create_spike_payload

@@ -1317,15 +1317,18 @@ class BehaviorRegression(TaskPipeline):
         if Metric.kinematic_r2 in self.cfg.metrics:
             valid_bhvr = bhvr[r2_mask]
             valid_tgt = bhvr_tgt[r2_mask]
-            batch_out[Metric.kinematic_r2] = r2_score(valid_tgt.float().detach().cpu(), valid_bhvr.float().detach().cpu(), multioutput='raw_values')
-            if batch_out[Metric.kinematic_r2].mean() < -10:
-                batch_out[Metric.kinematic_r2] = np.zeros_like(batch_out[Metric.kinematic_r2])# .mean() # mute, some erratic result from near zero target
-                # print(valid_bhvr.mean().cpu().item(), valid_tgt.mean().cpu().item(), batch_out[Metric.kinematic_r2].mean())
-                # breakpoint()
-            if Metric.kinematic_r2_thresh in self.cfg.metrics:
-                valid_bhvr = valid_bhvr[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
-                valid_tgt = valid_tgt[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
-                batch_out[Metric.kinematic_r2_thresh] = r2_score(valid_tgt.float().detach().cpu(), valid_bhvr.float().detach().cpu(), multioutput='raw_values')
+            if len(valid_bhvr) == 0:
+                batch_out[Metric.kinematic_r2] = np.full(valid_bhvr.shape[-1], np.nan, dtype=np.float32)
+            else:
+                batch_out[Metric.kinematic_r2] = r2_score(valid_tgt.float().detach().cpu(), valid_bhvr.float().detach().cpu(), multioutput='raw_values')
+                if batch_out[Metric.kinematic_r2].mean() < -10:
+                    batch_out[Metric.kinematic_r2] = np.zeros_like(batch_out[Metric.kinematic_r2])# .mean() # mute, some erratic result from near zero target
+                    # print(valid_bhvr.mean().cpu().item(), valid_tgt.mean().cpu().item(), batch_out[Metric.kinematic_r2].mean())
+                    # breakpoint()
+                if Metric.kinematic_r2_thresh in self.cfg.metrics:
+                    valid_bhvr = valid_bhvr[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
+                    valid_tgt = valid_tgt[valid_tgt.abs() > self.cfg.behavior_metric_thresh]
+                    batch_out[Metric.kinematic_r2_thresh] = r2_score(valid_tgt.float().detach().cpu(), valid_bhvr.float().detach().cpu(), multioutput='raw_values')
         return batch_out
 
 def symlog(x: torch.Tensor):

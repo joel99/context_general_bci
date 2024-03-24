@@ -29,7 +29,10 @@ class ExperimentalTask(OrderedEnum):
     marino_batista_mp_reaching = "marino_batista_mp_reaching"
     marino_batista_mp_iso_force = "marino_batista_mp_iso_force"
 
-    falcon = "falcon"
+    falcon_h1 = "falcon_h1"
+    falcon_h2 = "falcon_h2"
+    falcon_m1 = "falcon_m1"
+    falcon_m2 = "falcon_m2"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 
@@ -46,4 +49,4 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
     from .delay_reach import DelayReachLoader
     from .marino_batista import MarinoBatistaLoader
 
-from .falcon_h1 import FalconLoader
+from .falcon import FalconLoader

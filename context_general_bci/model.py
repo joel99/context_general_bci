@@ -1008,14 +1008,11 @@ class BrainBertInterface(pl.LightningModule):
             if isinstance(all_metrics[0][k], torch.Tensor):
                 metrics[k] = torch.stack([m[k] for m in all_metrics]).mean(0)
             else:
-                metrics[k] = np.vstack([m[k] for m in all_metrics]).mean(0)
+                # stacked = [m[k] for m in all_metrics]
+                metrics[k] = np.nanmean(np.vstack([m[k] for m in all_metrics]), 0)
 
-        # if Metric.kinematic_r2 in metrics:
-            # print('Val debug: ', metrics[Metric.kinematic_r2])
         self.common_log(metrics, prefix='val' if dataloader_idx == 0 else 'eval', sync_dist=True, add_dataloader_idx=False)
-        # return None metrics['loss']
-        # if dataloader_idx == 0:
-            # return metrics['loss']
+        return metrics['loss']
 
     @torch.inference_mode()
     def test_step(self, batch, batch_idx):

@@ -111,3 +111,24 @@ class FALCONH1(SubjectInfo):
     _arrays = {
         'M1': SortedArrayInfo(_max_channels=192),
     }
+
+@SubjectArrayRegistry.register
+class FALCONH2(SubjectInfo):
+    name = SubjectName.falcon_h2
+    _arrays = {
+        'M1': SortedArrayInfo(_max_channels=192),
+    }
+
+@SubjectArrayRegistry.register
+class FALCONM1(SubjectInfo):
+    name = SubjectName.falcon_m1
+    _arrays = {
+        'M1': SortedArrayInfo(_max_channels=192),
+    }
+
+@SubjectArrayRegistry.register
+class FALCONM2(SubjectInfo):
+    name = SubjectName.falcon_m2
+    _arrays = {
+        'M1': SortedArrayInfo(_max_channels=192),
+    }

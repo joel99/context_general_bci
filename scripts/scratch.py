@@ -13,6 +13,11 @@ from context_general_bci.analyze_utils import prep_plt
 import pandas as pd
 import pytorch_lightning as pl
 
+from context_general_bci.contexts import context_registry
+
+test = context_registry.query(alias='FALCONM1*')
+print(test[0].alias)
+
 
 #%%
 # Load BrainBertInterface and SpikingDataset to make some predictions

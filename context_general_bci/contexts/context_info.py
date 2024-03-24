@@ -665,27 +665,48 @@ class FalconContextInfo(ContextInfo):
         return f"falcon_{subject.name.value}-{stem}"
 
     @classmethod
-    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix=''):
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix='', is_dandi=True):
         root = Path(root)
         if not root.exists():
             logger.warning(f"Datapath folder {root} does not exist. Skipping.")
             return []
         def make_info(path: Path):
             # path = ..../h1/
-            subject = path.parts[-3].lower()
-            subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
-            # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
-            pieces = path.stem.split('_')
-            pre_set_pieces = pieces[:pieces.index('set')]
-            stem = '_'.join(pre_set_pieces)
-            return FalconContextInfo(
-                subject=subject,
-                task=task,
-                _arrays=arrays,
-                alias=f"falcon_{subject.name.value}-{stem}",
-                datapath=path,
-            )
-        infos = map(make_info, root.glob(f"*{suffix}.nwb"))
+            if task == ExperimentalTask.falcon_h1:
+                subject = path.parts[-3].lower()
+                subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+                # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
+                pieces = path.stem.split('_')
+                pre_set_pieces = pieces[:pieces.index('set')]
+                stem = '_'.join(pre_set_pieces)
+                return FalconContextInfo(
+                    subject=subject,
+                    task=task,
+                    _arrays=arrays,
+                    alias=f"falcon_{subject.name.value}-{stem}",
+                    datapath=path,
+                )
+            elif task == ExperimentalTask.falcon_h2:
+                pass
+            elif task == ExperimentalTask.falcon_m1:
+                # sub-MonkeyL-held-in-calib_ses-20120924_behavior+ecephys.nwb 
+                subject = "m1"
+                # subject = path.split('_')[1]
+                session_date = str(path.stem).split('_')[-2]
+                subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+                return FalconContextInfo(
+                    subject=subject,
+                    task=task,
+                    _arrays=arrays,
+                    alias=f"falcon_{subject.name.value}-{session_date}",
+                    datapath=path,
+                )
+            elif task == ExperimentalTask.falcon_m2:
+                pass
+        if suffix:
+            infos = map(make_info, root.glob(f"*{suffix}*.nwb"))
+        else:
+            infos = map(make_info, root.glob("*.nwb"))
         return list(filter(lambda x: x is not None, infos))
 
 
