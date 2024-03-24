@@ -29,6 +29,7 @@ class ExperimentalTask(OrderedEnum):
     marino_batista_mp_reaching = "marino_batista_mp_reaching"
     marino_batista_mp_iso_force = "marino_batista_mp_iso_force"
 
+    falcon = "falcon" # deprecated
     falcon_h1 = "falcon_h1"
     falcon_h2 = "falcon_h2"
     falcon_m1 = "falcon_m1"
