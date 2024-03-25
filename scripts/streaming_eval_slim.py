@@ -12,7 +12,7 @@ from sklearn.metrics import r2_score
 
 # Run this block to eval on minival
 FALCON_MINIVAL = False
-# FALCON_MINIVAL = True
+FALCON_MINIVAL = True
 
 if FALCON_MINIVAL:
     from context_general_bci.utils import suppress_default_registry
@@ -20,8 +20,8 @@ if FALCON_MINIVAL:
     from context_general_bci.contexts.context_registry import context_registry
     from context_general_bci.contexts.context_info import FalconContextInfo, ExperimentalTask
     context_registry.register([
-        *FalconContextInfo.build_from_dir('./data/h1/minival', task=ExperimentalTask.falcon, suffix='minival'),
-        *FalconContextInfo.build_from_dir('./data/m1/minival', task=ExperimentalTask.falcon, suffix='minival'),
+        *FalconContextInfo.build_from_dir('./data/h1/minival', task=ExperimentalTask.falcon_h1, suffix='minival'),
+        *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-in-minival/', task=ExperimentalTask.falcon_m1),
     ])
 
 from context_general_bci.model import BrainBertInterface, transfer_model
@@ -66,8 +66,8 @@ cfg.model.task.outputs = [
     Output.behavior_pred,
 ]
 target = [
-    'falcon_FALCONM1.*',
     # 'falcon_FALCONH1.*',
+    'falcon_FALCONM1.*',
 ]
 
 cfg.dataset.datasets = target
@@ -106,7 +106,7 @@ def eval_model(
     slim_outputs = []
     for i, batch in enumerate(dataloader):
         print('Batch')
-        if i > 1:
+        if i > 2:
             break
         batch = to_device(batch, "cuda")
 
@@ -155,6 +155,7 @@ def eval_model(
             outputs.append(output)
     outputs = stack_batch(outputs)
     slim_outputs = stack_batch(slim_outputs)
+    breakpoint()
     print(torch.allclose(outputs[Output.behavior_pred], slim_outputs[Output.behavior_pred]))
     print(f"Checkpoint: {ckpt_epoch} (tag: {tag})")
     prediction = outputs[Output.behavior_pred].cpu()
@@ -196,8 +197,6 @@ def eval_model(
 (outputs, target, prediction, is_student, valid, r2_student, mse) = eval_model(
     model, dataset
 )
-
-# %%
 
 # %%
 f = plt.figure(figsize=(10, 10))

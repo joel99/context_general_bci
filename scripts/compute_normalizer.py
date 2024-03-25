@@ -39,6 +39,6 @@ print(kin_mean)
 print(kin_std)
 torch.save({
     'mean': kin_mean,
-    'std': kin_,
+    'std': kin_std,
 }, f'./data/zscore_{task_query.lower()}_{kin_mean.shape[0]}d.pt')
 # %%
