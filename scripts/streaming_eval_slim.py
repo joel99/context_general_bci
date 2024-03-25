@@ -12,7 +12,7 @@ from sklearn.metrics import r2_score
 
 # Run this block to eval on minival
 FALCON_MINIVAL = False
-FALCON_MINIVAL = True
+# FALCON_MINIVAL = True
 
 if FALCON_MINIVAL:
     from context_general_bci.utils import suppress_default_registry
@@ -21,6 +21,7 @@ if FALCON_MINIVAL:
     from context_general_bci.contexts.context_info import FalconContextInfo, ExperimentalTask
     context_registry.register([
         *FalconContextInfo.build_from_dir('./data/h1/minival', task=ExperimentalTask.falcon, suffix='minival'),
+        *FalconContextInfo.build_from_dir('./data/m1/minival', task=ExperimentalTask.falcon, suffix='minival'),
     ])
 
 from context_general_bci.model import BrainBertInterface, transfer_model
@@ -49,6 +50,7 @@ from context_general_bci.streaming_utils import (
 query = 'h1_v2-sweep-h1_fine_grained_discrete-4j1mi057'
 query = 'h1_v2-sweep-h1_fine_grained_discrete-v6luzk35'
 query = 'h1_nopool_cross-sweep-h1_fine_grained_discrete-rasu7u1w'
+query = 'm1-sweep-h1_fine_grained_discrete-4p66vrl8'
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
@@ -64,7 +66,8 @@ cfg.model.task.outputs = [
     Output.behavior_pred,
 ]
 target = [
-    'falcon_FALCONH1.*',
+    'falcon_FALCONM1.*',
+    # 'falcon_FALCONH1.*',
 ]
 
 cfg.dataset.datasets = target
@@ -91,7 +94,8 @@ model = model.to("cuda")
 model_slim = model_slim.to("cuda")
 
 # %%
-labels = ['x', 'y', 'z', 'rx', 'g1', 'g2', 'g3']
+labels = np.arange(16)
+# labels = ['x', 'y', 'z', 'rx', 'g1', 'g2', 'g3']
 def eval_model(
     model: BrainBertInterface,
     dataset: SpikingDataset,
@@ -100,8 +104,10 @@ def eval_model(
 
     outputs = []
     slim_outputs = []
-    for batch in dataloader:
+    for i, batch in enumerate(dataloader):
         print('Batch')
+        if i > 1:
+            break
         batch = to_device(batch, "cuda")
 
         if stream_buffer_s:
@@ -133,7 +139,8 @@ def eval_model(
                     space=stride
                 )
                 session_id = parity_batch[MetaKey.session]
-                output_slim = model_slim(reconstructed_flat_spikes, session_id, last_step_only=True)
+                # output_slim = model_slim(reconstructed_flat_spikes, session_id, last_step_only=True)
+                output_slim = {Output.behavior_pred: model_slim(reconstructed_flat_spikes, session_id)[-1:]}
                 stream_slim_output.append(output_slim)
                 stream_output.append(output)
             stream_total = stack_batch(stream_output) # concat behavior preds
@@ -148,7 +155,7 @@ def eval_model(
             outputs.append(output)
     outputs = stack_batch(outputs)
     slim_outputs = stack_batch(slim_outputs)
-
+    print(torch.allclose(outputs[Output.behavior_pred], slim_outputs[Output.behavior_pred]))
     print(f"Checkpoint: {ckpt_epoch} (tag: {tag})")
     prediction = outputs[Output.behavior_pred].cpu()
     target = outputs[Output.behavior].cpu()
@@ -189,6 +196,8 @@ def eval_model(
 (outputs, target, prediction, is_student, valid, r2_student, mse) = eval_model(
     model, dataset
 )
+
+# %%
 
 # %%
 f = plt.figure(figsize=(10, 10))
