@@ -16,7 +16,8 @@ from context_general_bci.tasks import ExperimentalTask
 from context_general_bci.utils import wandb_query_latest
 from context_general_bci.analyze_utils import prep_plt, load_wandb_run
 
-task_query = 'M1'
+task_query = 'H1'
+# task_query = 'M1'
 
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]

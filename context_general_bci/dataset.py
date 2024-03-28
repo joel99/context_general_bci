@@ -46,6 +46,20 @@ COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for p
 COVARIATE_CHANNEL_KEY = 'covariate_channel_counts' # essentially for heldout channels only
 HELDOUT_CHANNEL_KEY = 'heldout_channel_counts'
 
+# alias to session key, for FALCON/when it's essential to get session ID, not alias ID.
+def explicit_session_reduction(alias: str) -> str:
+    if alias.endswith('_calib'):
+        alias = alias[:-6]
+    if alias.endswith('_eval'):
+        alias = alias[:-5]
+    if alias.endswith('_minival'):
+        alias = alias[:-8]
+    if '_set_' in alias: # Pitt style
+        alias = alias.split('_set_')[0]
+    if '_run_' in alias: # Chestek style
+        alias = alias.split('_run_')[0]
+    return alias
+
 logger = logging.getLogger(__name__)
 @dataclass
 class ContextAttrs:
@@ -293,7 +307,10 @@ class SpikingDataset(Dataset):
                     raise Exception()
             elif k == MetaKey.session:
                 # never conflate sessions (even if they have the same tag)
-                meta[k] = context_meta.session_embed_id
+                if self.cfg.explicit_alias_to_session:
+                    meta[k] = explicit_session_reduction(context_meta.alias)
+                else:
+                    meta[k] = context_meta.session_embed_id
             elif k == MetaKey.unique:
                 continue # filled below
             elif k == MetaKey.subject:

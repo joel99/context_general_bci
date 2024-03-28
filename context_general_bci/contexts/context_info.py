@@ -691,14 +691,14 @@ class FalconContextInfo(ContextInfo):
                 subject = path.parts[-3].lower()
                 subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
                 # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
-                pieces = path.stem.split('_')
-                pre_set_pieces = pieces[:pieces.index('set')]
-                stem = '_'.join(pre_set_pieces)
+                # pieces = path.stem.split('_')
+                # pre_set_pieces = pieces[:pieces.index('set')]
+                # stem = '_'.join(pre_set_pieces)
                 return FalconContextInfo(
                     subject=subject,
                     task=task,
                     _arrays=arrays,
-                    alias=f"falcon_{subject.name.value}-{stem}",
+                    alias=f"falcon_{subject.name.value}-{path.stem}",
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_h2:
@@ -707,13 +707,13 @@ class FalconContextInfo(ContextInfo):
                 # sub-MonkeyL-held-in-calib_ses-20120924_behavior+ecephys.nwb 
                 subject = "m1"
                 # subject = path.split('_')[1]
-                session_date = str(path.stem).split('_')[-2]
+                # session_date = str(path.stem).split('_')[-2]
                 subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
                 return FalconContextInfo(
                     subject=subject,
                     task=task,
                     _arrays=arrays,
-                    alias=f"falcon_{subject.name.value}-{session_date}",
+                    alias=f"falcon_{subject.name.value}-{path.stem}",
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_m2:

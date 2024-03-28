@@ -69,7 +69,7 @@ def load_nwb_h1(fn: str):
         )
 
 def load_files_h1(files: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    binned, kin, kin_mask, trial_num, timestamps = zip(*[load_nwb_h1(str(f)) for f in files])
+    binned, kin, kin_mask, trial_num = zip(*[load_nwb_h1(str(f)) for f in files])
     # Merge data by simple concat
     binned = np.concatenate(binned, axis=0)
     kin = np.concatenate(kin, axis=0)
@@ -154,7 +154,7 @@ class FalconLoader(ExperimentalTaskLoader):
         assert cfg.bin_size_ms == 20, "FALCON data needs 20ms"
         # Load data
         if task == ExperimentalTask.falcon_h1:
-            binned, kin, kin_mask, trials, _ = load_files_h1([datapath])
+            binned, kin, kin_mask, trials = load_files_h1([datapath])
         elif task == ExperimentalTask.falcon_h2:
             raise NotImplementedError("Falcon H2 not implemented")
         elif task == ExperimentalTask.falcon_m1:
