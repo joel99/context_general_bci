@@ -23,6 +23,7 @@ dataset:
   bin_size_ms: 20
   max_length_ms: 4000
   max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
+  explicit_alias_to_session: true
 
   neurons_per_token: 32
   max_channels: 192
@@ -37,9 +38,10 @@ dataset:
   behavior_dim: 16
 
 train:
-  max_batch_size: 32
-  batch_size: 32
-  patience: 300
+  max_batch_size: 128
+  batch_size: 128
+  autoscale_batch_size: false
+  patience: 200
 
 sweep_cfg: 'h1_fine_grained_discrete'
 sweep_mode: 'grid'

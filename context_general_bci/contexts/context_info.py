@@ -433,20 +433,20 @@ class GallegoCOContextInfo(ReachingContextInfo):
 pitt_metadata = {}
 # get path relative to this file
 
-with open(Path(__file__).parent / 'pitt_type.yaml') as f:
-    pitt_task_subtype = yaml.load(f, Loader=yaml.FullLoader)
-    for date in pitt_task_subtype:
-        for session in pitt_task_subtype[date]:
-            session_num = int(list(session.keys())[0])
-            session_type = list(session.values())[0]
-            pitt_metadata[f'P2Home.data.{session_num:05d}'] = session_type
+# with open(Path(__file__).parent / 'pitt_type.yaml') as f:
+#     pitt_task_subtype = yaml.load(f, Loader=yaml.FullLoader)
+#     for date in pitt_task_subtype:
+#         for session in pitt_task_subtype[date]:
+#             session_num = int(list(session.keys())[0])
+#             session_type = list(session.values())[0]
+#             pitt_metadata[f'P2Home.data.{session_num:05d}'] = session_type
 
-# frankly JY no longer remembers how this was sourced
-with open(Path(__file__).parent / 'pitt_blacklist.csv') as f:
-    for line in f:
-        non_co_sessions = line.strip().split(',')
-        for session in non_co_sessions:
-            pitt_metadata[session] = 'default'
+# # frankly JY no longer remembers how this was sourced
+# with open(Path(__file__).parent / 'pitt_blacklist.csv') as f:
+#     for line in f:
+#         non_co_sessions = line.strip().split(',')
+#         for session in non_co_sessions:
+#             pitt_metadata[session] = 'default'
 
 @dataclass
 class BCIContextInfo(ReachingContextInfo):
@@ -705,6 +705,7 @@ class FalconContextInfo(ContextInfo):
                 pass
             elif task == ExperimentalTask.falcon_m1:
                 # sub-MonkeyL-held-in-calib_ses-20120924_behavior+ecephys.nwb 
+                # test time: L_20121022_held_out_eval
                 subject = "m1"
                 # subject = path.split('_')[1]
                 # session_date = str(path.stem).split('_')[-2]

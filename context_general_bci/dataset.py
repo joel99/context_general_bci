@@ -46,19 +46,21 @@ COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for p
 COVARIATE_CHANNEL_KEY = 'covariate_channel_counts' # essentially for heldout channels only
 HELDOUT_CHANNEL_KEY = 'heldout_channel_counts'
 
-# alias to session key, for FALCON/when it's essential to get session ID, not alias ID.
+# match FalconConfig.hash_dataset() functionality to get a unique ID for a dataset that is provided by evaluator
+# also used to map multi-dataset to single sesison key
 def explicit_session_reduction(alias: str) -> str:
-    if alias.endswith('_calib'):
-        alias = alias[:-6]
-    if alias.endswith('_eval'):
-        alias = alias[:-5]
-    if alias.endswith('_minival'):
-        alias = alias[:-8]
-    if '_set_' in alias: # Pitt style
-        alias = alias.split('_set_')[0]
-    if '_run_' in alias: # Chestek style
-        alias = alias.split('_run_')[0]
-    return alias
+    if 'FALCONH1' in alias:
+        alias = alias.replace('-', '_')
+        pieces = alias.split('_')
+        for piece in pieces:
+            if piece[0] == 'S':
+                return piece
+        raise ValueError(f"Could not find session in {alias}.")
+    if 'FALCONM1' in alias:
+        if 'behavior+ecephys' in alias:
+            return alias.split('_')[-2].split('-')[-1]
+        return alias.split('_')[1]
+    raise NotImplementedError(f"Session reduction not implemented for {alias}")
 
 logger = logging.getLogger(__name__)
 @dataclass
@@ -308,6 +310,7 @@ class SpikingDataset(Dataset):
             elif k == MetaKey.session:
                 # never conflate sessions (even if they have the same tag)
                 if self.cfg.explicit_alias_to_session:
+                    print(f"Explicit session reduction for {context_meta.alias}: {explicit_session_reduction(context_meta.alias)}")
                     meta[k] = explicit_session_reduction(context_meta.alias)
                 else:
                     meta[k] = context_meta.session_embed_id
