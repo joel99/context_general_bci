@@ -13,19 +13,24 @@ from context_general_bci.config import DatasetConfig, DataKey, MetaKey
 from context_general_bci.config.presets import FlatDataConfig
 from context_general_bci.dataset import SpikingDataset
 from context_general_bci.tasks import ExperimentalTask
-from context_general_bci.utils import wandb_query_latest
-from context_general_bci.analyze_utils import prep_plt, load_wandb_run
 
 # task_query = 'H1'
-task_query = 'M1'
+# task_query = 'M1'
+task_query = 'calib_odoherty_calib_rtt'
+task_query = 'calib_pitt_calib_broad'
 
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
 default_cfg.bin_size_ms = 20
-default_cfg.max_length_ms = 4000
-default_cfg.datasets = [f'FALCON{task_query}*']
+default_cfg.odoherty_rtt.chop_size_ms = 2000
+default_cfg.odoherty_rtt.include_sorted = False
+default_cfg.odoherty_rtt.arrays = ["Indy-M1", "Loco-M1"]
+# default_cfg.max_length_ms = 4000
+default_cfg.datasets = [f'{task_query}.*']
+default_cfg.pitt_co.respect_trial_boundaries = True
 
 dataset = SpikingDataset(default_cfg)
+print(len(dataset))
 dataset.build_context_index()
 
 all_kin = []

@@ -136,4 +136,10 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
 
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-in-calib', task=ExperimentalTask.falcon_m1),
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-out-calib', task=ExperimentalTask.falcon_m1),
+
+        *RTTContextInfo.build_preproc('./data/calib/odoherty_rtt/', alias_prefix='calib_odoherty_calib_rtt'),
+        *BCIContextInfo.build_preproc('./data/calib/pitt_co_alter', alias_prefix='calib_pitt_calib_broad_'), 
+
+        *RTTContextInfo.build_preproc('./data/eval/odoherty_rtt/', alias_prefix='eval_odoherty_eval_rtt'),
+        *BCIContextInfo.build_preproc('./data/eval/pitt_co_alter/', alias_prefix='eval_pitt_eval_broad_'),
     ])

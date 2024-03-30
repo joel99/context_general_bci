@@ -1,4 +1,17 @@
 #%%
+import shutil
+from pathlib import Path
+import os
+os.mkdir('./data/eval/pitt_co_alter')
+for p in Path('./data/eval/pitt_co').glob("*.pth"):
+# for p in Path('./data/calib/pitt_co').glob("*.pth"):
+    print(p)
+    # move to pitt_co_alter
+    new_name = f"P2Lab_{'_'.join(p.name.split('_')[1:])}"
+    print(new_name)
+    shutil.copy(p, f'./data/eval/pitt_co_alter/{new_name}')
+
+#%%
 import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print

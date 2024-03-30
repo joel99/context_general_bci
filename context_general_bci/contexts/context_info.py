@@ -541,6 +541,34 @@ class BCIContextInfo(ReachingContextInfo):
         infos = map(make_info, Path(root).glob("*"))
         return filter(lambda x: x is not None, infos)
 
+    @classmethod
+    def build_preproc(cls, datapath_folder_str: str, alias_prefix: str = ""):
+        datapath_folder = Path(datapath_folder_str)
+        if not datapath_folder.exists():
+            logger.warning(f"Datapath folder {datapath_folder} does not exist. Skipping.")
+            return []
+        def make_info(path: Path):
+            alias = path.stem
+            pieces = alias.split('_')
+            subject, _, session, _, session_set, *_ = pieces
+            task = ExperimentalTask.pitt_co
+            alias = f'{alias_prefix}{task.value}_{subject}_{session}_{session_set}'
+            subject = SubjectArrayRegistry.query_by_subject(subject)
+            return BCIContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=[
+                    'lateral_s1', 'medial_s1',
+                    'lateral_m1', 'medial_m1',
+                ],
+                alias=alias,
+                session=int(session),
+                session_set=int(session_set),
+                datapath=path,
+            )
+        return map(make_info, datapath_folder.glob("*.pth"))
+
+
 # Not all have S1 - JY would prefer registry to always be right rather than detecting this post-hoc during loading
 # So we do a pre-sweep and log down which sessions have which arrays here
 RTT_SESSION_ARRAYS = {
@@ -614,6 +642,32 @@ class RTTContextInfo(ContextInfo, _RTTContextInfoBase):
                 datapath=path,
             )
         return map(make_info, datapath_folder.glob("*.mat"))
+    
+    @classmethod
+    def build_preproc(cls, datapath_folder_str: str, alias_prefix: str = "", arrays=["M1"]):
+        r"""
+            For preprocessed splits produced by dataloaders and `split_eval`. Pytorch already.
+        """
+        datapath_folder = Path(datapath_folder_str)
+        if not datapath_folder.exists():
+            logger.warning(f"Datapath folder {datapath_folder} does not exist. Skipping.")
+            return []
+        
+        def make_info(path: Path):
+            subject, date, *tail = path.stem.split("_")
+            tail = '_'.join(tail)
+            subject = SubjectArrayRegistry.query_by_subject(subject)
+            date_hash = f"{date}_{tail}"
+            return RTTContextInfo(
+                subject=subject,
+                task=ExperimentalTask.odoherty_rtt,
+                _arrays=arrays,
+                alias=f"{alias_prefix}-{subject.name.value}-{date_hash}",
+                date_hash=date_hash,
+                datapath=path,
+            )
+        return map(make_info, datapath_folder.glob("*.pth"))
+
 
 
 @dataclass

@@ -20,7 +20,7 @@ class SubjectArrayRegistry:
 
     # Pattern taken from habitat.core.registry, but without optional naming
     @classmethod
-    def register(cls, to_register: SubjectInfo, assert_type = SubjectInfo):
+    def register(cls, to_register: Optional[SubjectInfo] = None, assert_type=SubjectInfo, other_aliases: Optional[List[str]] = None):
         def wrap(to_register: SubjectInfo):
             if assert_type is not None:
                 assert issubclass(
@@ -28,14 +28,25 @@ class SubjectArrayRegistry:
                 ), "{} must be a subclass of {}".format(
                     to_register, assert_type
                 )
-            cls._subject_registry[to_register.name] = to_register # ? Possibly should refer to singleton instance explicitly
 
+            cls._subject_registry[to_register.name] = to_register
             for array in to_register.arrays:
                 cls._array_registry[to_register.wrap_array(array)] = to_register.arrays[array]
             for alias in to_register.aliases:
                 cls._alias_registry[to_register.wrap_array(alias)] = [to_register.wrap_array(a) for a in to_register.aliases[alias]]
+
+            if other_aliases:
+                for alias in other_aliases: # Lol, these are subject aliases, not array aliases
+                    cls._subject_registry[alias] = to_register # or whatever you intend to do with other aliases
+
             return to_register
-        return wrap(to_register)
+        # If it's being used without parentheses
+        if to_register:
+            return wrap(to_register)
+
+        # If it's being used with parentheses
+        return wrap
+
 
     @classmethod
     def resolve_alias(cls, alias: ArrayID) -> List[ArrayID]:
@@ -58,9 +69,10 @@ class SubjectArrayRegistry:
 
     @classmethod
     def query_by_subject(cls, id: Union[SubjectName, str]) -> SubjectInfo:
-        if isinstance(id, str):
+        if isinstance(id, str) and id in SubjectName.__members__:
             id = getattr(SubjectName, id)
         return cls._subject_registry[id]
+
 
 
 def create_spike_payload(spikes: Union[torch.Tensor, np.ndarray], arrays_to_use: List[str], cfg: Optional[DatasetConfig] = None, spike_bin_size_ms=1) -> Dict[str, torch.Tensor]:

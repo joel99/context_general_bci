@@ -98,7 +98,7 @@ class SubjectInfoPittChicago(SubjectInfo):
         else:
             return cls.blacklist_channels, cls.blacklist_pedestals
 
-@SubjectArrayRegistry.register
+@SubjectArrayRegistry.register(other_aliases=['P2Lab', 'P2Home'])
 class P2(SubjectInfoPittChicago):
     # Layout shared across motor channels
     name = SubjectName.P2

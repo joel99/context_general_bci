@@ -151,6 +151,7 @@ class SpikingDataset(Dataset):
             assert self.cfg.serve_tokenized, 'codepaths assume serve_tokenized is true if serve_tokenized_flat is true'
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
+            
             if getattr(self.cfg, 'data_blacklist', ''):
                 # load txt
                 with open(self.cfg.data_blacklist, 'r') as f:

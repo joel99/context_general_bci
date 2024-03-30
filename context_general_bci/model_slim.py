@@ -417,13 +417,12 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             'task_embed', self.data_attrs.context.task, transfer_data_attrs.context.task,
             getattr(transfer_model, 'task_embed', None)
         )
-
-        self.try_transfer('session_flag', transfer_model.session_flag)
-        try:
+        if hasattr(self, 'session_flag'):
+            self.try_transfer('session_flag', transfer_model.session_flag)
+        if hasattr(self, 'subject_flag'):
             self.try_transfer('subject_flag', transfer_model.subject_flag)
+        if hasattr(self, 'task_flag'):
             self.try_transfer('task_flag', transfer_model.task_flag)
-        except:
-            print("Warning: Failed transfer of subject/task flags, likely unimportant.")
 
         self.try_transfer('readin', transfer_model.readin)
 
@@ -464,8 +463,12 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             task_embed = self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
             trial_context_with_flag.append(task_embed + self.task_flag)
             trial_context_without_flag.append(task_embed)
-        trial_context = torch.cat(trial_context_with_flag, dim=1)
-        trial_context_without_flag = torch.cat(trial_context_without_flag, dim=1)
+        if len(trial_context_with_flag) > 0:
+            trial_context = torch.cat(trial_context_with_flag, dim=1)
+            trial_context_without_flag = torch.cat(trial_context_without_flag, dim=1)
+        else:
+            trial_context = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
+            trial_context_without_flag = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
         state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
         features: torch.Tensor = self.backbone(
             state_in,
