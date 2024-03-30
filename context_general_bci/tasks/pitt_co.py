@@ -28,6 +28,8 @@ from context_general_bci.tasks import ExperimentalTask, ExperimentalTaskLoader, 
 CLAMP_MAX = 15
 NDT3_CAUSAL_SMOOTH_MS = 300
 CURSOR_TRANSLATE_AND_CLICK = [1, 2, 6] # hardcoded dims for relevant xy + clikc dims from quicklogger raw
+ALLOW_INTRA_TRIAL_CHOP = True
+ALLOW_INTRA_TRIAL_CHOP = False
 
 r"""
     Dev note to self: Pretty unclear how the .mat payloads we're transferring seem to be _smaller_ than n_element bytes. The output spike trials, ~250 channels x ~100 timesteps are reasonably, 25K. But the data is only ~10x this for ~100x the trials.
@@ -333,9 +335,9 @@ class PittCOLoader(ExperimentalTaskLoader):
                     #     trial_spikes = trial_spikes[start_pad:-end_pad]
                     #     if session_vel is not None:
                     #         trial_vel = trial_vel[start_pad:-end_pad]
-                    if trial_spikes.size(0) < 10:
+                    if trial_spikes.size(0) == 0:
                         continue
-                    if trial_spikes.size(0) < round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms):
+                    if trial_spikes.size(0) < round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms) or not ALLOW_INTRA_TRIAL_CHOP:
                         other_args = {DataKey.bhvr_vel: trial_vel} if session_vel is not None else {}
                         if trial_mask is not None:
                             other_args[DataKey.bhvr_mask] = trial_mask
@@ -353,7 +355,7 @@ class PittCOLoader(ExperimentalTaskLoader):
                             save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', other_args)
 
                         end_of_trial = trial_spikes.size(0) % round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms)
-                        if end_of_trial > 10:
+                        if end_of_trial > 0:
                             trial_spikes_end = trial_spikes[-end_of_trial:]
                             if session_vel is not None:
                                 trial_vel_end = trial_vel[-end_of_trial:]
