@@ -433,20 +433,20 @@ class GallegoCOContextInfo(ReachingContextInfo):
 pitt_metadata = {}
 # get path relative to this file
 
-with open(Path(__file__).parent / 'pitt_type.yaml') as f:
-    pitt_task_subtype = yaml.load(f, Loader=yaml.FullLoader)
-    for date in pitt_task_subtype:
-        for session in pitt_task_subtype[date]:
-            session_num = int(list(session.keys())[0])
-            session_type = list(session.values())[0]
-            pitt_metadata[f'P2Home.data.{session_num:05d}'] = session_type
+# with open(Path(__file__).parent / 'pitt_type.yaml') as f:
+#     pitt_task_subtype = yaml.load(f, Loader=yaml.FullLoader)
+#     for date in pitt_task_subtype:
+#         for session in pitt_task_subtype[date]:
+#             session_num = int(list(session.keys())[0])
+#             session_type = list(session.values())[0]
+#             pitt_metadata[f'P2Home.data.{session_num:05d}'] = session_type
 
-# frankly JY no longer remembers how this was sourced
-with open(Path(__file__).parent / 'pitt_blacklist.csv') as f:
-    for line in f:
-        non_co_sessions = line.strip().split(',')
-        for session in non_co_sessions:
-            pitt_metadata[session] = 'default'
+# # frankly JY no longer remembers how this was sourced
+# with open(Path(__file__).parent / 'pitt_blacklist.csv') as f:
+#     for line in f:
+#         non_co_sessions = line.strip().split(',')
+#         for session in non_co_sessions:
+#             pitt_metadata[session] = 'default'
 
 @dataclass
 class BCIContextInfo(ReachingContextInfo):
@@ -541,6 +541,34 @@ class BCIContextInfo(ReachingContextInfo):
         infos = map(make_info, Path(root).glob("*"))
         return filter(lambda x: x is not None, infos)
 
+    @classmethod
+    def build_preproc(cls, datapath_folder_str: str, alias_prefix: str = ""):
+        datapath_folder = Path(datapath_folder_str)
+        if not datapath_folder.exists():
+            logger.warning(f"Datapath folder {datapath_folder} does not exist. Skipping.")
+            return []
+        def make_info(path: Path):
+            alias = path.stem
+            pieces = alias.split('_')
+            subject, _, session, _, session_set, *_ = pieces
+            task = ExperimentalTask.pitt_co
+            alias = f'{alias_prefix}{task.value}_{subject}_{session}_{session_set}'
+            subject = SubjectArrayRegistry.query_by_subject(subject)
+            return BCIContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=[
+                    'lateral_s1', 'medial_s1',
+                    'lateral_m1', 'medial_m1',
+                ],
+                alias=alias,
+                session=int(session),
+                session_set=int(session_set),
+                datapath=path,
+            )
+        return map(make_info, datapath_folder.glob("*.pth"))
+
+
 # Not all have S1 - JY would prefer registry to always be right rather than detecting this post-hoc during loading
 # So we do a pre-sweep and log down which sessions have which arrays here
 RTT_SESSION_ARRAYS = {
@@ -614,6 +642,32 @@ class RTTContextInfo(ContextInfo, _RTTContextInfoBase):
                 datapath=path,
             )
         return map(make_info, datapath_folder.glob("*.mat"))
+    
+    @classmethod
+    def build_preproc(cls, datapath_folder_str: str, alias_prefix: str = "", arrays=["M1"]):
+        r"""
+            For preprocessed splits produced by dataloaders and `split_eval`. Pytorch already.
+        """
+        datapath_folder = Path(datapath_folder_str)
+        if not datapath_folder.exists():
+            logger.warning(f"Datapath folder {datapath_folder} does not exist. Skipping.")
+            return []
+        
+        def make_info(path: Path):
+            subject, date, *tail = path.stem.split("_")
+            tail = '_'.join(tail)
+            subject = SubjectArrayRegistry.query_by_subject(subject)
+            date_hash = f"{date}_{tail}"
+            return RTTContextInfo(
+                subject=subject,
+                task=ExperimentalTask.odoherty_rtt,
+                _arrays=arrays,
+                alias=f"{alias_prefix}-{subject.name.value}-{date_hash}",
+                date_hash=date_hash,
+                datapath=path,
+            )
+        return map(make_info, datapath_folder.glob("*.pth"))
+
 
 
 @dataclass
@@ -691,29 +745,30 @@ class FalconContextInfo(ContextInfo):
                 subject = path.parts[-3].lower()
                 subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
                 # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
-                pieces = path.stem.split('_')
-                pre_set_pieces = pieces[:pieces.index('set')]
-                stem = '_'.join(pre_set_pieces)
+                # pieces = path.stem.split('_')
+                # pre_set_pieces = pieces[:pieces.index('set')]
+                # stem = '_'.join(pre_set_pieces)
                 return FalconContextInfo(
                     subject=subject,
                     task=task,
                     _arrays=arrays,
-                    alias=f"falcon_{subject.name.value}-{stem}",
+                    alias=f"falcon_{subject.name.value}-{path.stem}",
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_h2:
                 pass
             elif task == ExperimentalTask.falcon_m1:
                 # sub-MonkeyL-held-in-calib_ses-20120924_behavior+ecephys.nwb 
+                # test time: L_20121022_held_out_eval
                 subject = "m1"
                 # subject = path.split('_')[1]
-                session_date = str(path.stem).split('_')[-2]
+                # session_date = str(path.stem).split('_')[-2]
                 subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
                 return FalconContextInfo(
                     subject=subject,
                     task=task,
                     _arrays=arrays,
-                    alias=f"falcon_{subject.name.value}-{session_date}",
+                    alias=f"falcon_{subject.name.value}-{path.stem}",
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_m2:

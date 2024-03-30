@@ -25,7 +25,7 @@ setup(
         'argparse',
         'wandb',
         'einops',
-        'pytorch-lightning',
+        'pytorch-lightning==1.8.2', # APIs change by 2.0+
         'scikit-learn',
         'ordered-enum',
         'mat73',

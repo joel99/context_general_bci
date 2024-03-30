@@ -1,5 +1,5 @@
 #%%
-from typing import List
+from typing import List, Union
 from pathlib import Path
 import math
 import numpy as np
@@ -26,6 +26,10 @@ from context_general_bci.tasks import ExperimentalTask, ExperimentalTaskLoader, 
 
 
 CLAMP_MAX = 15
+NDT3_CAUSAL_SMOOTH_MS = 300
+CURSOR_TRANSLATE_AND_CLICK = [1, 2, 6] # hardcoded dims for relevant xy + clikc dims from quicklogger raw
+ALLOW_INTRA_TRIAL_CHOP = True
+ALLOW_INTRA_TRIAL_CHOP = False
 
 r"""
     Dev note to self: Pretty unclear how the .mat payloads we're transferring seem to be _smaller_ than n_element bytes. The output spike trials, ~250 channels x ~100 timesteps are reasonably, 25K. But the data is only ~10x this for ~100x the trials.
@@ -123,26 +127,73 @@ def load_trial(fn, use_ql=True, key='data', copy_keys=True):
                 out[k] = payload[k]
     return out
 
+def interpolate_nan(arr: Union[np.ndarray, torch.Tensor]):
+    if isinstance(arr, torch.Tensor):
+        arr = arr.numpy()
+    out = np.zeros_like(arr)
+    for i in range(arr.shape[1]):
+        x = arr[:, i]
+        nans = np.isnan(x)
+        non_nans = ~nans
+        x_interp = np.interp(np.flatnonzero(nans), np.flatnonzero(non_nans), x[non_nans])
+        x[nans] = x_interp
+        out[:, i] = x
+    return torch.as_tensor(out)
+
 @ExperimentalTaskRegistry.register
 class PittCOLoader(ExperimentalTaskLoader):
     name = ExperimentalTask.pitt_co
 
+    @classmethod
+    def get_kin_kernel(cls, causal_smooth_ms, sample_bin_ms=20) -> np.ndarray:
+        kernel = np.ones((int(causal_smooth_ms / sample_bin_ms), 1), dtype=np.float32) / (causal_smooth_ms / sample_bin_ms)
+        kernel[-kernel.shape[0] // 2:] = 0 # causal, including current timestep
+        return kernel
+
     @staticmethod
-    def get_velocity(position, kernel=np.ones((int(500 / 20), 2))/ (500 / 20)):
+    def smooth(position: Union[torch.Tensor, np.ndarray], kernel: np.ndarray) -> torch.Tensor:
+        # kernel: e.g. =np.ones((int(180 / 20), 1))/ (180 / 20)
         # Apply boxcar filter of 500ms - this is simply for Parity with Pitt decoding
-        # position = gaussian_filter1d(position, 2.5, axis=0) # This seems reasonable, but useless since we can't compare to Pitt codebase without below
-        int_position = pd.Series(position.flatten()).interpolate()
-        position = torch.tensor(int_position).view(-1, position.shape[-1])
-        position = F.conv1d(position.T.unsqueeze(1), torch.tensor(kernel).float().T.unsqueeze(1), padding='same')[:,0].T
-        vel = torch.as_tensor(np.gradient(position.numpy(), axis=0)).float() # note gradient preserves shape
+        # This is necessary since 1. our data reports are effector position, not effector command; this is a better target since serious effector failure should reflect in intent
+        # and 2. effector positions can be jagged, but intent is (presumably) not, even though intent hopefully reflects command, and 3. we're trying to report intent.
+        position = interpolate_nan(position)
+        # position = position - position[0] # zero out initial position
+        # Manually pad with edge values
+        # OK to pad because this is beginning and end of _set_ where we expect little derivative (but possibly lack of centering)
+        # assert kernel.shape[0] % 2 == 1, "Kernel must be odd (for convenience)"
+        pad_left, pad_right = int(kernel.shape[0] / 2), int(kernel.shape[0] / 2)
+        position = F.pad(position.T, (pad_left, pad_right), 'replicate')
+        return F.conv1d(position.unsqueeze(1), torch.tensor(kernel).float().T.unsqueeze(1))[:,0].T
 
-        # position = pd.Series(position.flatten()).interpolate().to_numpy().reshape(-1, 2) # remove intermediate nans
-        # position = convolve(position, kernel, mode='same')
-        # vel = torch.tensor(np.gradient(position, axis=0)).float()
-        # position = convolve(position, kernel, mode='same') # Nope. this applies along both dimensions. Facepalm.
+    @staticmethod
+    def get_velocity(position, kernel, do_smooth=True):
+        # kernel: np.ndarray, e.g. =np.ones((int(180 / 20), 1))/ (180 / 20)
+        # Apply boxcar filter of 500ms - this is simply for Parity with Pitt decoding
+        # This is necessary since 1. our data reports are effector position, not effector command; this is a better target since serious effector failure should reflect in intent
+        # and 2. effector positions can be jagged, but intent is (presumably) not, even though intent hopefully reflects command, and 3. we're trying to report intent.
+        if do_smooth:
+            position = PittCOLoader.smooth(position.numpy().astype(dtype=kernel.dtype), kernel=kernel)
+        else:
+            position = interpolate_nan(position)
+            position = torch.as_tensor(position)
+        return torch.as_tensor(np.gradient(position.numpy(), axis=0), dtype=float) # note gradient preserves shape
 
-        vel[vel.isnan()] = 0 # extra call to deal with edge values
-        return vel
+    # @staticmethod
+    # def get_velocity(position, kernel=np.ones((int(500 / 20), 2))/ (500 / 20)):
+    #     # Apply boxcar filter of 500ms - this is simply for Parity with Pitt decoding
+    #     # position = gaussian_filter1d(position, 2.5, axis=0) # This seems reasonable, but useless since we can't compare to Pitt codebase without below
+    #     int_position = pd.Series(position.flatten()).interpolate()
+    #     position = torch.tensor(int_position).view(-1, position.shape[-1])
+    #     position = F.conv1d(position.T.unsqueeze(1), torch.tensor(kernel).float().T.unsqueeze(1), padding='same')[:,0].T
+    #     vel = torch.as_tensor(np.gradient(position.numpy(), axis=0)).float() # note gradient preserves shape
+
+    #     # position = pd.Series(position.flatten()).interpolate().to_numpy().reshape(-1, 2) # remove intermediate nans
+    #     # position = convolve(position, kernel, mode='same')
+    #     # vel = torch.tensor(np.gradient(position, axis=0)).float()
+    #     # position = convolve(position, kernel, mode='same') # Nope. this applies along both dimensions. Facepalm.
+
+    #     vel[vel.isnan()] = 0 # extra call to deal with edge values
+    #     return vel
 
     @staticmethod
     def ReFIT(positions: torch.Tensor, goals: torch.Tensor, reaction_lag_ms=100, bin_ms=20, oracle_blend=0.25) -> torch.Tensor:
@@ -213,6 +264,8 @@ class PittCOLoader(ExperimentalTaskLoader):
                 'trial hidden time -> trial time hidden'
              ) # Trial x C x chop_size (time)
         def save_trial_spikes(spikes, i, other_data={}):
+            if DataKey.bhvr_vel in other_data:
+                other_data[DataKey.bhvr_vel] = other_data[DataKey.bhvr_vel].float()
             single_payload = {
                 DataKey.spikes: create_spike_payload(
                     spikes.clone(), arrays_to_use
@@ -222,9 +275,11 @@ class PittCOLoader(ExperimentalTaskLoader):
             single_path = cache_root / f'{dataset_alias}_{i}.pth'
             meta_payload['path'].append(single_path)
             torch.save(single_payload, single_path)
-
-        if not datapath.is_dir() and datapath.suffix == '.mat': # payload style, preproc-ed/binned elsewhere
-            payload = load_trial(datapath, key='thin_data')
+        if (not datapath.is_dir() and datapath.suffix == '.mat') or str(datapath).endswith('.pth'): # payload style, preproc-ed/binned elsewhere
+            if str(datapath).endswith('.pth'):
+                payload = torch.load(datapath)
+            else:
+                payload = load_trial(datapath, key='thin_data')
 
             # Sanitize
             spikes = payload['spikes']
@@ -244,14 +299,18 @@ class PittCOLoader(ExperimentalTaskLoader):
 
             if (
                 'position' in payload and \
-                task in [ExperimentalTask.observation, ExperimentalTask.ortho, ExperimentalTask.fbc, ExperimentalTask.unstructured] # and \ # Unstructured kinematics may be fake, mock data.
+                (task in [ExperimentalTask.observation, ExperimentalTask.ortho, ExperimentalTask.fbc, ExperimentalTask.unstructured] or \
+                 str(datapath).endswith('.pth')
+                 )  # and \ # Unstructured kinematics may be fake, mock data.
             ): # We only "trust" in the labels provided by obs (for now)
                 if len(payload['position']) == len(payload['trial_num']):
                     if exp_task_cfg.closed_loop_intention_estimation == "refit" and task in [ExperimentalTask.ortho, ExperimentalTask.fbc]:
                         # breakpoint()
                         session_vel = PittCOLoader.ReFIT(payload['position'], payload['target'], bin_ms=cfg.bin_size_ms)
                     else:
-                        session_vel = PittCOLoader.get_velocity(payload['position'])
+                        session_vel = PittCOLoader.get_velocity(payload['position'], kernel=cls.get_kin_kernel(NDT3_CAUSAL_SMOOTH_MS, cfg.bin_size_ms))
+                        if str(datapath).endswith('.pth'):
+                            session_vel = session_vel[:,CURSOR_TRANSLATE_AND_CLICK]
                     # if session_vel[-end_pad:].abs().max() < 0.001: # likely to be a small bump to reset for next trial.
                     #     should_clip = True
                 else:
@@ -260,6 +319,11 @@ class PittCOLoader(ExperimentalTaskLoader):
                 session_vel = None
             if exp_task_cfg.respect_trial_boundaries and not task in [ExperimentalTask.unstructured]:
                 for i in payload['trial_num'].unique():
+                    if DataKey.bhvr_mask in cfg.data_keys and 'active_assist' in payload: # for NDT3
+                        trial_mask = (payload['active_assist'] > 0).any(-1).unsqueeze(-1) # T x 1
+                        trial_mask = trial_mask[payload['trial_num'] == i] # T x 1 -> T' x 1
+                    else:
+                        trial_mask = None
                     trial_spikes = payload['spikes'][payload['trial_num'] == i]
                     # trim edges -- typically a trial starts with half a second of inter-trial and ends with a second of failure/inter-trial pad
                     # we assume intent labels are not reliable in this timeframe
@@ -271,23 +335,36 @@ class PittCOLoader(ExperimentalTaskLoader):
                     #     trial_spikes = trial_spikes[start_pad:-end_pad]
                     #     if session_vel is not None:
                     #         trial_vel = trial_vel[start_pad:-end_pad]
-                    if trial_spikes.size(0) < 10:
+                    if trial_spikes.size(0) == 0:
                         continue
-                    if trial_spikes.size(0) < round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms):
-                        save_trial_spikes(trial_spikes, i, {DataKey.bhvr_vel: trial_vel} if session_vel is not None else {})
+                    if trial_spikes.size(0) < round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms) or not ALLOW_INTRA_TRIAL_CHOP:
+                        other_args = {DataKey.bhvr_vel: trial_vel} if session_vel is not None else {}
+                        if trial_mask is not None:
+                            other_args[DataKey.bhvr_mask] = trial_mask
+                        save_trial_spikes(trial_spikes, i, other_args)
                     else:
                         chopped_spikes = chop_vector(trial_spikes)
                         if session_vel is not None:
                             chopped_vel = chop_vector(trial_vel)
+                        if trial_mask is not None:
+                            chopped_mask = chop_vector(trial_mask)
                         for j, subtrial_spikes in enumerate(chopped_spikes):
-                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', {DataKey.bhvr_vel: chopped_vel[j]} if session_vel is not None else {})
+                            other_args = {DataKey.bhvr_vel: chopped_vel[j]} if session_vel is not None else {}
+                            if trial_mask is not None:
+                                other_args[DataKey.bhvr_mask] = chopped_mask[j]
+                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', other_args)
 
                         end_of_trial = trial_spikes.size(0) % round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms)
-                        if end_of_trial > 10:
+                        if end_of_trial > 0:
                             trial_spikes_end = trial_spikes[-end_of_trial:]
                             if session_vel is not None:
                                 trial_vel_end = trial_vel[-end_of_trial:]
-                            save_trial_spikes(trial_spikes_end, f'{i}_end', {DataKey.bhvr_vel: trial_vel_end} if session_vel is not None else {})
+                            if trial_mask is not None:
+                                trial_mask_end = trial_mask[-end_of_trial:]
+                            other_args = {DataKey.bhvr_vel: trial_vel_end} if session_vel is not None else {}
+                            if trial_mask is not None:
+                                other_args[DataKey.bhvr_mask] = trial_mask_end
+                            save_trial_spikes(trial_spikes_end, f'{i}_end', other_args)
             else:
                 # chop both
                 spikes = chop_vector(spikes)

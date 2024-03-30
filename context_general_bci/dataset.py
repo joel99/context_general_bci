@@ -46,6 +46,22 @@ COVARIATE_LENGTH_KEY = 'covariate_length' # we need another length tracker for p
 COVARIATE_CHANNEL_KEY = 'covariate_channel_counts' # essentially for heldout channels only
 HELDOUT_CHANNEL_KEY = 'heldout_channel_counts'
 
+# match FalconConfig.hash_dataset() functionality to get a unique ID for a dataset that is provided by evaluator
+# also used to map multi-dataset to single sesison key
+def explicit_session_reduction(alias: str) -> str:
+    if 'FALCONH1' in alias:
+        alias = alias.replace('-', '_')
+        pieces = alias.split('_')
+        for piece in pieces:
+            if piece[0] == 'S':
+                return piece
+        raise ValueError(f"Could not find session in {alias}.")
+    if 'FALCONM1' in alias:
+        if 'behavior+ecephys' in alias:
+            return alias.split('_')[-2].split('-')[-1]
+        return alias.split('_')[1]
+    raise NotImplementedError(f"Session reduction not implemented for {alias}")
+
 logger = logging.getLogger(__name__)
 @dataclass
 class ContextAttrs:
@@ -135,6 +151,7 @@ class SpikingDataset(Dataset):
             assert self.cfg.serve_tokenized, 'codepaths assume serve_tokenized is true if serve_tokenized_flat is true'
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
+            
             if getattr(self.cfg, 'data_blacklist', ''):
                 # load txt
                 with open(self.cfg.data_blacklist, 'r') as f:
@@ -293,7 +310,11 @@ class SpikingDataset(Dataset):
                     raise Exception()
             elif k == MetaKey.session:
                 # never conflate sessions (even if they have the same tag)
-                meta[k] = context_meta.session_embed_id
+                if self.cfg.explicit_alias_to_session:
+                    print(f"Explicit session reduction for {context_meta.alias}: {explicit_session_reduction(context_meta.alias)}")
+                    meta[k] = explicit_session_reduction(context_meta.alias)
+                else:
+                    meta[k] = context_meta.session_embed_id
             elif k == MetaKey.unique:
                 continue # filled below
             elif k == MetaKey.subject:
@@ -475,7 +496,7 @@ class SpikingDataset(Dataset):
                         if k in [DataKey.spikes, DataKey.time, DataKey.position]:
                             # These keys have spatial dimensions that we will serve flat to maximize data throughput across heterogeneous trials
                             item = item.flatten(0, 1) # T S H -> Token H
-                        else:
+                        elif k in [DataKey.bhvr_vel, DataKey.heldout_spikes]:
                             covariate_key = k # will need separate padding, track for later
                     else: # pad in space
                         if k == DataKey.spikes: # B T S C H

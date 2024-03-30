@@ -376,6 +376,7 @@ class PittConfig(ExperimentalConfig):
 class DatasetConfig:
     root_dir: Path = Path("./data")
     preprocess_suffix: str = 'preprocessed'
+    explicit_alias_to_session: bool = False # If true, look at hardcoded map for session map (when essential that split datasets are associated with same session key)
 
     # if number of trials below this, try loading into memory to accelerate tuning
     # if 0, ignores.
