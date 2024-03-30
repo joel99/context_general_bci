@@ -13,7 +13,7 @@ from context_general_bci.config import DatasetConfig, DataKey, MetaKey
 from context_general_bci.config.presets import FlatDataConfig
 from context_general_bci.dataset import SpikingDataset
 from context_general_bci.tasks import ExperimentalTask
-
+from context_general_bci.tasks.pitt_co import CURSOR_TRANSLATE_AND_CLICK
 # task_query = 'H1'
 # task_query = 'M1'
 task_query = 'calib_odoherty_calib_rtt'

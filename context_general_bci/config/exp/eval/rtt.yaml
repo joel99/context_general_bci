@@ -39,6 +39,10 @@ dataset:
   datasets:
   - odoherty_rtt.*
   - calib_odoherty_calib_rtt.*
+  - eval_odoherty_eval_rtt.*
+  eval_datasets:
+  - eval_odoherty_eval_rtt.*
+  eval_ratio: 1.0
   behavior_dim: 2
 
 train:

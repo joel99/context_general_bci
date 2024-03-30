@@ -496,7 +496,7 @@ class SpikingDataset(Dataset):
                         if k in [DataKey.spikes, DataKey.time, DataKey.position]:
                             # These keys have spatial dimensions that we will serve flat to maximize data throughput across heterogeneous trials
                             item = item.flatten(0, 1) # T S H -> Token H
-                        else:
+                        elif k in [DataKey.bhvr_vel, DataKey.heldout_spikes]:
                             covariate_key = k # will need separate padding, track for later
                     else: # pad in space
                         if k == DataKey.spikes: # B T S C H

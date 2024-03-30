@@ -27,6 +27,7 @@ from context_general_bci.tasks import ExperimentalTask, ExperimentalTaskLoader, 
 
 CLAMP_MAX = 15
 NDT3_CAUSAL_SMOOTH_MS = 300
+CURSOR_TRANSLATE_AND_CLICK = [1, 2, 6] # hardcoded dims for relevant xy + clikc dims from quicklogger raw
 
 r"""
     Dev note to self: Pretty unclear how the .mat payloads we're transferring seem to be _smaller_ than n_element bytes. The output spike trials, ~250 channels x ~100 timesteps are reasonably, 25K. But the data is only ~10x this for ~100x the trials.
@@ -261,6 +262,8 @@ class PittCOLoader(ExperimentalTaskLoader):
                 'trial hidden time -> trial time hidden'
              ) # Trial x C x chop_size (time)
         def save_trial_spikes(spikes, i, other_data={}):
+            if DataKey.bhvr_vel in other_data:
+                other_data[DataKey.bhvr_vel] = other_data[DataKey.bhvr_vel].float()
             single_payload = {
                 DataKey.spikes: create_spike_payload(
                     spikes.clone(), arrays_to_use
@@ -304,6 +307,8 @@ class PittCOLoader(ExperimentalTaskLoader):
                         session_vel = PittCOLoader.ReFIT(payload['position'], payload['target'], bin_ms=cfg.bin_size_ms)
                     else:
                         session_vel = PittCOLoader.get_velocity(payload['position'], kernel=cls.get_kin_kernel(NDT3_CAUSAL_SMOOTH_MS, cfg.bin_size_ms))
+                        if str(datapath).endswith('.pth'):
+                            session_vel = session_vel[:,CURSOR_TRANSLATE_AND_CLICK]
                     # if session_vel[-end_pad:].abs().max() < 0.001: # likely to be a small bump to reset for next trial.
                     #     should_clip = True
                 else:
@@ -312,6 +317,11 @@ class PittCOLoader(ExperimentalTaskLoader):
                 session_vel = None
             if exp_task_cfg.respect_trial_boundaries and not task in [ExperimentalTask.unstructured]:
                 for i in payload['trial_num'].unique():
+                    if DataKey.bhvr_mask in cfg.data_keys and 'active_assist' in payload: # for NDT3
+                        trial_mask = (payload['active_assist'] > 0).any(-1).unsqueeze(-1) # T x 1
+                        trial_mask = trial_mask[payload['trial_num'] == i] # T x 1 -> T' x 1
+                    else:
+                        trial_mask = None
                     trial_spikes = payload['spikes'][payload['trial_num'] == i]
                     # trim edges -- typically a trial starts with half a second of inter-trial and ends with a second of failure/inter-trial pad
                     # we assume intent labels are not reliable in this timeframe
@@ -326,20 +336,33 @@ class PittCOLoader(ExperimentalTaskLoader):
                     if trial_spikes.size(0) < 10:
                         continue
                     if trial_spikes.size(0) < round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms):
-                        save_trial_spikes(trial_spikes, i, {DataKey.bhvr_vel: trial_vel} if session_vel is not None else {})
+                        other_args = {DataKey.bhvr_vel: trial_vel} if session_vel is not None else {}
+                        if trial_mask is not None:
+                            other_args[DataKey.bhvr_mask] = trial_mask
+                        save_trial_spikes(trial_spikes, i, other_args)
                     else:
                         chopped_spikes = chop_vector(trial_spikes)
                         if session_vel is not None:
                             chopped_vel = chop_vector(trial_vel)
+                        if trial_mask is not None:
+                            chopped_mask = chop_vector(trial_mask)
                         for j, subtrial_spikes in enumerate(chopped_spikes):
-                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', {DataKey.bhvr_vel: chopped_vel[j]} if session_vel is not None else {})
+                            other_args = {DataKey.bhvr_vel: chopped_vel[j]} if session_vel is not None else {}
+                            if trial_mask is not None:
+                                other_args[DataKey.bhvr_mask] = chopped_mask[j]
+                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', other_args)
 
                         end_of_trial = trial_spikes.size(0) % round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms)
                         if end_of_trial > 10:
                             trial_spikes_end = trial_spikes[-end_of_trial:]
                             if session_vel is not None:
                                 trial_vel_end = trial_vel[-end_of_trial:]
-                            save_trial_spikes(trial_spikes_end, f'{i}_end', {DataKey.bhvr_vel: trial_vel_end} if session_vel is not None else {})
+                            if trial_mask is not None:
+                                trial_mask_end = trial_mask[-end_of_trial:]
+                            other_args = {DataKey.bhvr_vel: trial_vel_end} if session_vel is not None else {}
+                            if trial_mask is not None:
+                                other_args[DataKey.bhvr_mask] = trial_mask_end
+                            save_trial_spikes(trial_spikes_end, f'{i}_end', other_args)
             else:
                 # chop both
                 spikes = chop_vector(spikes)

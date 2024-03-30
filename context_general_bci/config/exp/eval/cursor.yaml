@@ -17,8 +17,6 @@ model:
     task_weights: [1.0, 1.0]
     decode_time_pool: ''
     decode_normalizer: './data/zscore_calib_cursor_calib_broad_14d.pt'
-    pitt_co:
-      respect_trial_boundaries: True
   decoder_context_integration: 'cross_attn'
   dropout: 0.1
 dataset:
@@ -29,15 +27,21 @@ dataset:
 
   neurons_per_token: 32
   max_channels: 192
-  max_arrays: 1
+  max_arrays: 2
 
   data_keys:
   - DataKey.spikes
   - DataKey.bhvr_vel
   - DataKey.bhvr_mask
   datasets:
+  - calib_pitt_calib_broad.*
   - eval_pitt_eval_broad.*
-  behavior_dim: 2
+  eval_datasets:
+  - eval_pitt_eval_broad.*
+  eval_ratio: 1.0
+  behavior_dim: 3
+  pitt_co:
+    respect_trial_boundaries: True
 
 train:
   max_batch_size: 32
