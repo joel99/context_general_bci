@@ -672,10 +672,10 @@ class FalconContextInfo(ContextInfo):
             pre_set_pieces = pieces[:pieces.index('set')]
             stem = '_'.join(pre_set_pieces)
         elif task == ExperimentalTask.falcon_m1:
-            if 'behavior+ecephys' in stem:
+            if 'behavior+ecephys' in path.stem:
                 session_date = stem.split('_')[-2]
             else:
-                session_date = f'ses-{stem.split("_")[1]}'
+                session_date = f'ses-{path.stem.split("_")[1]}'
             return f"falcon_{subject.name.value}-{session_date}"
         return f"falcon_{subject.name.value}-{stem}"
 
