@@ -285,9 +285,10 @@ def run_exp(cfg : RootConfig) -> None:
         early_stop_cls = ProbeToFineTuneEarlyStopping if cfg.probe_finetune else EarlyStopping
         callbacks.append(
             early_stop_cls(
-                monitor='val_loss',
+                monitor=cfg.train.early_stop_metric,
+                mode='min' if 'loss' in cfg.train.early_stop_metric else 'max',
                 patience=cfg.train.patience, # Learning can be fairly slow, larger patience should allow overfitting to begin (which is when we want to stop)
-                min_delta=1e-5,
+                min_delta=0,
             )
         )
         if not cfg.probe_finetune and reset_early_stop:

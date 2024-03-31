@@ -996,7 +996,7 @@ class BrainBertInterface(pl.LightningModule):
         return metrics['loss']
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        metrics = self._step(batch, eval_mode=True, use_prefix=True, no_prefix_val=self.cfg.task.no_prefix_val)
+        metrics = self._step(batch)
         # all_metrics = []
         # if getattr(self.cfg, 'val_iters', 1) > 1:
         #     clean = deepcopy(batch) # not intended to be efficient, quick and dirty

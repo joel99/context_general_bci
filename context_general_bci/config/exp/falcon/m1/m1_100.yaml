@@ -6,9 +6,5 @@ dataset:
   scale_ratio: 1.0
 train:
   max_batch_size: 128
-  batch_size: 128
-  autoscale_batch_size: false
-  patience: 200
-
-sweep_cfg: 'h1_fine_grained_discrete'
-sweep_mode: 'grid'
+  batch_size: 64
+effective_bsz: 128

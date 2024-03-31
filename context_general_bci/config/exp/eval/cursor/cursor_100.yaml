@@ -7,4 +7,3 @@ dataset:
 train:
   max_batch_size: 64
   batch_size: 64
-  patience: 300

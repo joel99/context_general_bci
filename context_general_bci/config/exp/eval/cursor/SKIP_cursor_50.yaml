@@ -7,4 +7,5 @@ dataset:
 train:
   max_batch_size: 32
   batch_size: 32
-  patience: 300
+
+notes: "Skipped - 100 is trivial"
