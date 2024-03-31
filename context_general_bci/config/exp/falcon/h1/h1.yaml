@@ -6,6 +6,9 @@ defaults:
     - joint_bhvr_decode_flat
   - /dataset: flat
 model:
+  lr_ramp_steps: 50
+  lr_decay_steps: 1500
+  lr_interval: epoch
   causal: true
   neurons_per_token: 32
   session_embed_strategy: EmbedStrat.token

@@ -134,6 +134,7 @@ class BrainBertInterface(pl.LightningModule):
             'lr_init',
             'lr_schedule',
             'lr_ramp_steps',
+            'lr_ramp_ratio',
             'lr_ramp_init_factor',
             'lr_decay_steps',
             'lr_min',
@@ -1125,6 +1126,17 @@ class BrainBertInterface(pl.LightningModule):
                     eta_min=self.cfg.lr_min
                 ),
             ])
+        elif self.cfg.lr_schedule == 'cosine_timm':
+            from timm.scheduler import CosineLRScheduler
+            scheduler = CosineLRScheduler(
+                optimizer,
+                t_initial=self.cfg.lr_decay_steps, # 1 cycle
+                lr_min=self.cfg.lr_min,
+                warmup_lr_init=self.cfg.lr_ramp_init_factor * self.cfg.lr_init,
+                warmup_t=self.cfg.lr_ramp_ratio * self.cfg.lr_decay_steps if self.cfg.lr_ramp_ratio > 0 else self.cfg.lr_ramp_steps,
+                cycle_limit=1,
+                t_in_epochs=True, # WTF why was this false... what even IS this arg
+            )
         else:
             assert self.cfg.lr_schedule == 'fixed', f"Unknown lr_schedule {self.cfg.lr_schedule}"
         out = {
@@ -1134,6 +1146,15 @@ class BrainBertInterface(pl.LightningModule):
         if scheduler is not None:
             out['lr_scheduler'] = scheduler
         return out
+
+    def lr_scheduler_step(self, scheduler, metric):
+        if self.cfg.lr_schedule == 'cosine_timm':
+            if self.cfg.lr_interval == 'step':
+                scheduler.step(epoch=self.global_step)
+            else:
+                scheduler.step(epoch=self.current_epoch)
+        else:
+            scheduler.step()
 
     # def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
     #     super().on_load_checkpoint(checkpoint)
