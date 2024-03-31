@@ -51,7 +51,7 @@ train:
   batch_size: 64
   patience: 250
   early_stop_metric: val_kinematic_r2
-
+effective_bsz: 64
 sweep_cfg: simple_scratch
 sweep_mode: 'grid'
 notes: 'Cursor comparison with NDT3'

@@ -46,6 +46,7 @@ train:
   autoscale_batch_size: true
   patience: 250
   early_stop_metric: val_kinematic_r2
+effective_bsz: 128
 
 sweep_cfg: simple_scratch
 sweep_mode: 'grid'

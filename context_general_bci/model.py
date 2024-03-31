@@ -1147,14 +1147,15 @@ class BrainBertInterface(pl.LightningModule):
             out['lr_scheduler'] = scheduler
         return out
 
-    def lr_scheduler_step(self, scheduler, metric):
-        if self.cfg.lr_schedule == 'cosine_timm':
-            if self.cfg.lr_interval == 'step':
-                scheduler.step(epoch=self.global_step)
-            else:
-                scheduler.step(epoch=self.current_epoch)
-        else:
-            scheduler.step()
+    # Not needed - we keep epoch scheduling
+    # def lr_scheduler_step(self, scheduler, metric):
+    #     if self.cfg.lr_schedule == 'cosine_timm':
+    #         if self.cfg.lr_interval == 'step':
+    #             scheduler.step(epoch=self.global_step)
+    #         else:
+    #             scheduler.step(epoch=self.current_epoch)
+    #     else:
+    #         scheduler.step()
 
     # def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
     #     super().on_load_checkpoint(checkpoint)
