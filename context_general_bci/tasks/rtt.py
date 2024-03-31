@@ -65,8 +65,6 @@ class ODohertyRTTLoader(ExperimentalTaskLoader):
             full_spikes = chop_vector(spike_arr[..., 0]) # Already binned in splitting, just requesting chopping now
             bhvr_vars = {DataKey.bhvr_vel: cov}
         else:
-            spike_arr, bhvr_vars, context_arrays = cls.load_raw(datapath, cfg, context_arrays)
-            full_spikes = compress_vector(spike_arr, cfg.odoherty_rtt.chop_size_ms, cfg.bin_size_ms)
             assert cfg.odoherty_rtt.chop_size_ms % cfg.bin_size_ms == 0, "Chop size must be a multiple of bin size"
             with h5py.File(datapath, 'r') as h5file:
                 orig_timestamps = np.squeeze(h5file['t'][:])

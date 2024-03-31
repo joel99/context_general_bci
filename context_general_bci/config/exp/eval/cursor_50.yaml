@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - _cursor
+dataset:
+  scale_ratio: 0.5
+train:
+  max_batch_size: 32
+  batch_size: 32
+  patience: 300

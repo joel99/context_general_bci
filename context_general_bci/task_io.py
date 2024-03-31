@@ -1235,6 +1235,8 @@ class BehaviorRegression(TaskPipeline):
         # mask nans
         length_mask = length_mask & (~torch.isnan(bhvr_tgt).any(-1))
         if DataKey.bhvr_mask in batch:
+            # if not batch[DataKey.bhvr_mask].any():
+                # breakpoint()
             length_mask = length_mask & batch[DataKey.bhvr_mask][..., 0]
 
         if self.bhvr_mean is not None:

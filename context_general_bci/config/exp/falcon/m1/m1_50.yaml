@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - m1
+dataset:
+  scale_ratio: 0.5
+train:
+  max_batch_size: 64
+  batch_size: 64
+  autoscale_batch_size: false
+  patience: 200
+
+sweep_cfg: 'h1_fine_grained_discrete'
+sweep_mode: 'grid'

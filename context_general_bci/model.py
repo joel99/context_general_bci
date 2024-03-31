@@ -996,21 +996,21 @@ class BrainBertInterface(pl.LightningModule):
         return metrics['loss']
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        all_metrics = []
-        if getattr(self.cfg, 'val_iters', 1) > 1:
-            clean = deepcopy(batch) # not intended to be efficient, quick and dirty
-        for i in range(getattr(self.cfg, 'val_iters', 1)):
-            if i > 0:
-                batch = deepcopy(clean)
-            all_metrics.append(self._step(batch))
-        metrics = {}
-        for k in all_metrics[0]:
-            if isinstance(all_metrics[0][k], torch.Tensor):
-                metrics[k] = torch.stack([m[k] for m in all_metrics]).mean(0)
-            else:
-                # stacked = [m[k] for m in all_metrics]
-                metrics[k] = np.nanmean(np.vstack([m[k] for m in all_metrics]), 0)
-
+        metrics = self._step(batch, eval_mode=True, use_prefix=True, no_prefix_val=self.cfg.task.no_prefix_val)
+        # all_metrics = []
+        # if getattr(self.cfg, 'val_iters', 1) > 1:
+        #     clean = deepcopy(batch) # not intended to be efficient, quick and dirty
+        # for i in range(getattr(self.cfg, 'val_iters', 1)):
+        #     if i > 0:
+        #         batch = deepcopy(clean)
+        #     all_metrics.append(self._step(batch))
+        # metrics = {}
+        # for k in all_metrics[0]:
+        #     if isinstance(all_metrics[0][k], torch.Tensor):
+        #         metrics[k] = torch.stack([m[k] for m in all_metrics]).mean(0)
+        #     else:
+        #         # stacked = [m[k] for m in all_metrics]
+        #         metrics[k] = np.nanmean(np.vstack([m[k] for m in all_metrics]), 0)
         self.common_log(metrics, prefix='val' if dataloader_idx == 0 else 'eval', sync_dist=True, add_dataloader_idx=False)
         return metrics['loss']
 

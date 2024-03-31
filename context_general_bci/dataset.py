@@ -451,7 +451,10 @@ class SpikingDataset(Dataset):
                     per_zscore = self.z_score[trial[MetaKey.session]]
                     data_items[k] = (payload[k] - per_zscore['mean']) / per_zscore['std']
                 else:
-                    data_items[k] = payload[k]
+                    if k == DataKey.bhvr_mask and k not in payload: # rtt case, use all
+                        data_items[k] = torch.ones((payload[DataKey.bhvr_vel].size(0), 1), dtype=bool)
+                    else:
+                        data_items[k] = payload[k]
         out = {
             **data_items,
             **meta_items,
