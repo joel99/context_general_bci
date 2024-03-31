@@ -49,6 +49,6 @@ train:
   patience: 250
   early_stop_metric: val_kinematic_r2
 
-sweep_cfg: 'h1_fine_grained_discrete'
+sweep_cfg: simple_scratch
 sweep_mode: 'grid'
 notes: 'Cursor comparison with NDT3'
