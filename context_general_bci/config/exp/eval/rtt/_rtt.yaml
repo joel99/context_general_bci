@@ -51,7 +51,7 @@ dataset:
 train:
   max_batch_size: 2048
   batch_size: 2048
-  patience: 250
+  patience: 100 # 250 epochs too intense here
   early_stop_metric: val_kinematic_r2
 effective_bsz: 2048
 
