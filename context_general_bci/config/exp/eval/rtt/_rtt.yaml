@@ -52,7 +52,9 @@ train:
   max_batch_size: 2048
   batch_size: 2048
   patience: 100 # 250 epochs too intense here
-  early_stop_metric: val_kinematic_r2
+  # early_stop_metric: val_kinematic_r2
+  # for some reason, stopping with val_r2 is causing the run to end specifically for rtt, specifically really rapidly. we use val_loss in this case.
+  early_stop_metric: val_loss
 effective_bsz: 2048
 
 sweep_cfg: simple_scratch
