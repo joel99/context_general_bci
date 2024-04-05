@@ -138,11 +138,13 @@ class BrainBertInterface(pl.LightningModule):
             'lr_ramp_init_factor',
             'lr_decay_steps',
             'lr_min',
+            'lr_interval',
             'accelerate_new_params',
             'tune_decay',
             'val_iters',
             'extra_task_embed_ckpt',
             'extra_subject_embed_ckpt',
+            # 'session_embed_strategy', # Dangerous!
             'closed_loop_crop_bins'
         ]:
             setattr(self_copy, safe_attr, getattr(cfg, safe_attr))
@@ -1228,7 +1230,6 @@ def load_from_checkpoint(
         return old_model
     if cfg is not None:
         transfer_cfg(src_cfg=old_model.cfg, target_cfg=cfg)
-        # import pdb;pdb.set_trace()
         if old_model.diff_cfg(cfg):
             raise Exception("Unsupported config diff")
     else:
