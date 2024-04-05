@@ -11,13 +11,41 @@ import wandb
 
 from context_general_bci.config import RootConfig
 
+
+def nested_get(d, nested_key):
+    """
+    Access nested dictionary values using a dot-separated key string.
+    
+    Args:
+    - d (dict): The dictionary to search.
+    - nested_key (str): The nested key string, separated by dots.
+    
+    Returns:
+    - The value found at the nested key, or None if any key in the path doesn't exist.
+    """
+    keys = nested_key.split(".")
+    current_value = d
+    for key in keys:
+        # Use `get` to avoid KeyError if the key doesn't exist, returning None instead.
+        current_value = current_value.get(key)
+        if current_value is None:
+            return None
+    return current_value
+
 def wandb_query_experiment(
     experiment: Union[str, List[str]],
     wandb_user="joelye9",
     wandb_project="context_general_bci",
     order='created_at',
+    filter_unique_keys=[],
     **kwargs,
 ):
+    r"""
+        Returns latest runs matching the search criteria. 
+        Args:
+            order: created_at, updated_at (change for different run priority)
+            filter_unique_keys: list of dot-separated keys to filter all polled runs by
+    """
     if not isinstance(experiment, list):
         experiment = [experiment]
     api = wandb.Api()
@@ -26,7 +54,36 @@ def wandb_query_experiment(
         **kwargs
     }
     runs = api.runs(f"{wandb_user}/{wandb_project}", filters=filters, order=order)
+    if len(runs) > 0 and len(filter_unique_keys) > 0:
+        # filter out runs that are not unique by the keys
+        unique_runs = []
+        unique_vals = set()
+        # print(f"Filtering for latest {len(runs)} runs by {filter_unique_keys}")
+        for run in runs:
+            run_vals = tuple([nested_get(run.config, k) for k in filter_unique_keys])
+            # print(f"Checking {run.id}: {run_vals}")
+            if run_vals not in unique_vals:
+                unique_vals.add(run_vals)
+                unique_runs.append(run)
+        runs = unique_runs
     return runs
+
+# def wandb_query_experiment(
+#     experiment: Union[str, List[str]],
+#     wandb_user="joelye9",
+#     wandb_project="context_general_bci",
+#     order='created_at',
+#     **kwargs,
+# ):
+#     if not isinstance(experiment, list):
+#         experiment = [experiment]
+#     api = wandb.Api()
+#     filters = {
+#         'config.experiment_set': {"$in": experiment},
+#         **kwargs
+#     }
+#     runs = api.runs(f"{wandb_user}/{wandb_project}", filters=filters, order=order)
+#     return runs
 
 def get_best_ckpt_in_dir(ckpt_dir: Path, tag="val_loss", higher_is_better=False):
     if 'bps' in tag or 'r2' in tag:

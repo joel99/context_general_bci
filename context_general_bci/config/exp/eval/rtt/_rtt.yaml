@@ -27,11 +27,11 @@ dataset:
   max_length_ms: 2000
   max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
   # explicit_alias_to_session: true
-
   neurons_per_token: 32
   max_channels: 192
   max_arrays: 1
   odoherty_rtt:
+    chop_size_ms: 2000
     arrays: ["Indy-M1", "Loco-M1"]
     include_sorted: False
 
