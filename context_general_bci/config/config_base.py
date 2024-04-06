@@ -49,6 +49,7 @@ class Output(Enum):
     behavior = 'behavior'
     behavior_pred = 'behavior_pred'
     behavior_mask = 'behavior_mask'
+    padding = 'padding' # of length T, True if padding (for ndt3_comp, batch size > 1)
 
     # Debug
     pooled_features = 'pooled_features'

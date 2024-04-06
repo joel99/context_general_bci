@@ -843,6 +843,8 @@ class BrainBertInterface(pl.LightningModule):
                     batch[k] = update[k]
                 else:
                     batch_out[k] = update[k]
+        if batch[DataKey.bhvr_vel].shape[0] > 1: # account for padding
+            batch_out[Output.padding] = create_temporal_padding_mask(batch[DataKey.bhvr_vel], batch, length_key=COVARIATE_LENGTH_KEY)
 
         if self.data_attrs.serve_tokens_flat and Output.logrates in batch_out:
             batch_out[Output.logrates] = unflatten(batch_out[Output.logrates], batch_out['time'], batch_out['position'])

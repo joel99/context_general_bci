@@ -1,7 +1,7 @@
 #%%
 import os
 # set cuda to device 1
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 # Demonstrate pretraining scaling. Assumes evaluation metrics have been computed and merely assembles.
 import logging
 import sys
@@ -19,16 +19,32 @@ import pytorch_lightning as pl
 # Load BrainBertInterface and SpikingDataset to make some predictions
 from context_general_bci.config import RootConfig, ModelTask, Metric, Output, DataKey
 from context_general_bci.dataset import SpikingDataset
-from context_general_bci.model import transfer_model, logger, BrainBertInterface
-from context_general_bci.analyze_utils import stack_batch, get_dataloader, load_wandb_run, prep_plt
-from context_general_bci.utils import wandb_query_experiment, get_wandb_run, wandb_query_latest
+from context_general_bci.model import transfer_model
+from context_general_bci.analyze_utils import stack_batch, get_dataloader, load_wandb_run, prep_plt, get_best_ckpt_from_wandb_id, get_run_config
+from context_general_bci.utils import wandb_query_experiment, get_wandb_run
+
+
+from falcon_challenge.config import FalconConfig, FalconTask
+from falcon_challenge.evaluator import FalconEvaluator
+
+from context_general_bci.falcon_decoder import NDT2Decoder
+# from scripts.falcon_local import run_evaluate
 
 pl.seed_everything(0)
+
+# argparse the eval set
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--eval-set", "-e", type=str, required=True, choices=['falcon_h1', 'falcon_m1', 'cursor', 'rtt']
+)
+args = parser.parse_args()
+EVAL_SET = args.eval_set
 
 # EVAL_SET = "falcon_h1"
 # EVAL_SET = "falcon_m1"
 # EVAL_SET = "cursor"
-EVAL_SET = "rtt"
+# EVAL_SET = "rtt"
 
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
@@ -61,6 +77,13 @@ EVAL_DATASET_FUNC_MAP = {
     'falcon_m1': None, # TODO
     'cursor': 'eval_pitt_eval_broad.*',
     'rtt': 'eval_odoherty_eval_rtt.*'
+}
+
+SCALE_MAP = {
+    'falcon_h1': [0.25, 0.5, 1.0],
+    'falcon_m1': [0.25, 0.5, 1.0],
+    'cursor': [1.0],
+    'rtt': [0.25, 0.5, 1.0],
 }
 
 eval_paths = Path('./data/eval_metrics')
@@ -116,8 +139,7 @@ queries = [
 ]
 
 runs = []
-scales = [0.25, 0.5, 1.0]
-ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in scales]).reset_index()
+ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
 eval_metrics = {}
 
 def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
@@ -129,14 +151,25 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     data_attrs = dataset.get_data_attrs()
     cfg.model.task.tasks = [ModelTask.kinematic_decoding]
     model = transfer_model(src_model, cfg.model, data_attrs)
-    dataloader = get_dataloader(dataset, num_workers=4, batch_size=256)
+    dataloader = get_dataloader(dataset, num_workers=4, batch_size=256 if EVAL_SET != 'cursor' else 64)
+    # dataloader = get_dataloader(dataset, num_workers=4, batch_size=256)
     model.cfg.task.outputs = [Output.behavior, Output.behavior_pred]
-    outputs = stack_batch(trainer.predict(model, dataloader)) # Trial x Time x Dim, first dim may be list
+    trainer_preds = trainer.predict(model, dataloader)
+    outputs = stack_batch(trainer_preds) # Trial x Time x Dim, first dim may be list
     pred, true, masks = outputs[Output.behavior_pred], outputs[Output.behavior], outputs[Output.behavior_mask]
+    if Output.padding in outputs:
+        padding = outputs[Output.padding]
+    else:
+        padding = None
     if isinstance(pred, list):
         pred = torch.cat(pred, dim=0)
         true = torch.cat(true, dim=0)
         masks = torch.cat(masks, dim=0).squeeze(-1)
+        if padding is not None:
+            padding = torch.cat(padding, dim=0)
+        pred = pred[~padding]
+        true = true[~padding]
+        masks = masks[~padding]
     else:
         pred = pred.flatten(end_dim=-2)
         true = true.flatten(end_dim=-2)
@@ -158,9 +191,29 @@ for idx, run_row in ndt2_run_df.iterrows():
         dataset.subset_split(splits=['eval'])
         eval_r2 = get_single_eval(cfg, src_model, trainer, dataset=dataset)
         ndt2_run_df.at[idx, 'eval_r2'] = eval_r2  # Correct way to modify a DataFrame row
-    else:
-        print("Falcon run requested - please run the following commands.")
-        raise NotImplementedError
+    elif 'falcon' in run_row.eval_set:
+        cfg = get_run_config(run, tag='val_kinematic_r2')
+        ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag='val_kinematic_r2')
+        zscore_pth = cfg.model.task.decode_normalizer
+        split = run_row.eval_set.split('_')[1]
+        evaluator = FalconEvaluator(
+            eval_remote=False,
+            split=split)
+
+        task = getattr(FalconTask, split)
+        config = FalconConfig(task=task)
+
+        decoder = NDT2Decoder(
+            task_config=config,
+            model_ckpt_path=ckpt,
+            model_cfg_stem=f'{cfg.experiment_set}/{cfg.tag.split("-")[0]}',
+            zscore_path=zscore_pth,
+            dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')]
+        )
+        payload = evaluator.evaluate(decoder, phase='test')
+        eval_r2 = payload['result'][0][f'test_split_{split}']['Held Out R2']
+        ndt2_run_df.at[idx, 'eval_r2'] = eval_r2
+        print(ndt2_run_df.iloc[idx])
 
 #%%
 print(ndt2_run_df)

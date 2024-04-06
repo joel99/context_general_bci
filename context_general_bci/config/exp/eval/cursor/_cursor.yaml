@@ -19,7 +19,7 @@ model:
     mask_ratio: 0.25 # for efficiency
     task_weights: [1.0, 1.0]
     decode_time_pool: ''
-    decode_normalizer: './data/zscore_calib_cursor_calib_broad_3d.pt'
+    decode_normalizer: './data/zscore_calib_pitt_calib_broad_3d.pt'
   decoder_context_integration: 'cross_attn'
   dropout: 0.1
 dataset:
