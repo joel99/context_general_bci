@@ -142,7 +142,7 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     cfg.model.task.tasks = [ModelTask.kinematic_decoding]
     model = transfer_model(src_model, cfg.model, data_attrs)
     print(f"Eval on {len(dataset)} samples")
-    dataloader = get_dataloader(dataset, num_workers=4, batch_size=256 if EVAL_SET != 'cursor' else 64)
+    dataloader = get_dataloader(dataset, num_workers=4, batch_size=64 if EVAL_SET != 'cursor' else 64)
     # dataloader = get_dataloader(dataset, num_workers=4, batch_size=256)
     model.cfg.task.outputs = [Output.behavior, Output.behavior_pred]
     trainer_preds = trainer.predict(model, dataloader)
@@ -195,3 +195,36 @@ for idx, run_row in ndt2_run_df.iterrows():
 
 print(ndt2_run_df)
 #%%
+f = plt.figure(figsize=(6, 6))
+ax = prep_plt(f.gca())
+ax.scatter(true.cpu()[:1000].flatten(), pred.cpu()[:1000].flatten(), s=1)
+
+
+clip_intervals = np.arange(0.1, true.max(), 0.1)
+clip_r2s = []
+for clip in clip_intervals:
+    mask_clip = true < clip
+    r2_clip = r2_score(true[mask_clip], pred[mask_clip], multioutput='variance_weighted')
+    clip_r2s.append(r2_clip)
+    print(f"R2 over {len(pred[mask_clip])} samples < {clip}: {r2_clip:.3f}")
+# get percentile
+cov_max = torch.quantile(true, 0.999, dim=0)
+print(cov_max)
+#%%
+# print(true.cpu().shape)
+K = true.cpu().shape[1]
+f, axes = plt.subplots(K, figsize=(4, 16), layout='constrained')
+for k in range(K):
+    sns.histplot(true[:10000, k].cpu(), kde=False, color='blue', alpha=0.7, ax=axes[k], bins=100)
+    
+    # Annotate a vertical line for mean
+    axes[k].axvline(cov_max[k], color='k', linestyle='--', label='Mean')
+    axes[k].set_yscale('log')
+    # plt.legend()
+    # plt.title(f'Histogram for Dimension {k+1}')
+    # plt.xlabel('Value')
+    # plt.ylabel('Frequency')
+    # plt.show()
+# sns.histplot(true.cpu()[:10000].T)
+# logscale
+# plt.yscale('log')
