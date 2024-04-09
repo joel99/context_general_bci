@@ -1,7 +1,7 @@
 #%%
 import os
 # set cuda to device 1
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 # Demonstrate pretraining scaling. Assumes evaluation metrics have been computed and merely assembles.
 import logging
 import sys
@@ -32,19 +32,7 @@ from context_general_bci.falcon_decoder import NDT2Decoder
 
 pl.seed_everything(0)
 
-# argparse the eval set
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--eval-set", "-e", type=str, required=True, choices=['falcon_h1', 'falcon_m1', 'cursor', 'rtt']
-)
-args = parser.parse_args()
-EVAL_SET = args.eval_set
-
-# EVAL_SET = "falcon_h1"
-# EVAL_SET = "falcon_m1"
-# EVAL_SET = "cursor"
-# EVAL_SET = "rtt"
+EVAL_SET = "falcon_m1"
 
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
@@ -81,7 +69,8 @@ EVAL_DATASET_FUNC_MAP = {
 
 SCALE_MAP = {
     'falcon_h1': [0.25, 0.5, 1.0],
-    'falcon_m1': [0.25, 0.5, 1.0],
+    'falcon_m1': [1.0],
+    # 'falcon_m1': [0.25, 0.5, 1.0],
     'cursor': [0.25, 0.5, 1.0],
     'rtt': [0.25, 0.5, 1.0],
 }
@@ -148,14 +137,18 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
         dataset.subset_split(splits=['eval'])
     dataset.build_context_index()
     data_attrs = dataset.get_data_attrs()
+    dataset.set_crop_mode(1) # Flush start
+    breakpoint()
     cfg.model.task.tasks = [ModelTask.kinematic_decoding]
     model = transfer_model(src_model, cfg.model, data_attrs)
+    print(f"Eval on {len(dataset)} samples")
     dataloader = get_dataloader(dataset, num_workers=4, batch_size=256 if EVAL_SET != 'cursor' else 64)
     # dataloader = get_dataloader(dataset, num_workers=4, batch_size=256)
     model.cfg.task.outputs = [Output.behavior, Output.behavior_pred]
     trainer_preds = trainer.predict(model, dataloader)
     outputs = stack_batch(trainer_preds) # Trial x Time x Dim, first dim may be list
     pred, true, masks = outputs[Output.behavior_pred], outputs[Output.behavior], outputs[Output.behavior_mask]
+    breakpoint()
     if Output.padding in outputs:
         padding = outputs[Output.padding]
     else:
@@ -176,55 +169,29 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     pred = pred[masks]
     true = true[masks]
     r2 = r2_score(true, pred, multioutput='variance_weighted')
+    uniform_r2 = r2_score(true, pred, multioutput='uniform_average')
     print(f"R2 over {len(pred)} samples: {r2:.3f}")
-    return r2
+    print(f"Uniform R2: {uniform_r2:.3f}")
+    return r2, pred, true
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 ndt2_run_df['eval_r2'] = 0.
+
+# Do validation runs
 for idx, run_row in ndt2_run_df.iterrows():
+    # breakpoint()
     eval_set = EVAL_DATASET_FUNC_MAP[run_row.eval_set]
-    run = get_wandb_run(run_row.id, wandb_project="context_general_bci")
-    if eval_set is not None:
-        src_model, cfg, data_attrs = load_wandb_run(run, tag='val_kinematic_r2')
-        dataset = SpikingDataset(cfg.dataset, use_augment=False)
-        dataset.subset_split(splits=['eval'])
-        eval_r2 = get_single_eval(cfg, src_model, trainer, dataset=dataset)
-        ndt2_run_df.at[idx, 'eval_r2'] = eval_r2  # Correct way to modify a DataFrame row
-    elif 'falcon' in run_row.eval_set:
-        cfg = get_run_config(run, tag='val_kinematic_r2')
-        ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag='val_kinematic_r2')
-        zscore_pth = cfg.model.task.decode_normalizer
-        split = run_row.eval_set.split('_')[1]
-        evaluator = FalconEvaluator(
-            eval_remote=False,
-            split=split)
+    # run = get_wandb_run(run_row.id, wandb_project="context_general_bci")
+    run = get_wandb_run('m1_nokey-sweep-simple_scratch-asa6gu7s', wandb_project="context_general_bci") # hardcoded eval
+    src_model, cfg, data_attrs = load_wandb_run(run, tag='val_kinematic_r2')
+    cfg.dataset.datasets = ['falcon_FALCONM1.*eval']
+    cfg.dataset.eval_datasets = []
+    dataset = SpikingDataset(cfg.dataset, use_augment=False)
+    dataset.subset_split()
+    # train, val = dataset.create_tv_datasets()
+    # dataset = val
+    eval_r2, pred, true = get_single_eval(cfg, src_model, trainer, dataset=dataset)
+    ndt2_run_df.at[idx, 'eval_r2'] = eval_r2  # Correct way to modify a DataFrame row
 
-        task = getattr(FalconTask, split)
-        config = FalconConfig(task=task)
-
-        decoder = NDT2Decoder(
-            task_config=config,
-            model_ckpt_path=ckpt,
-            model_cfg_stem=f'{cfg.experiment_set}/{cfg.tag.split("-")[0]}',
-            zscore_path=zscore_pth,
-            dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')]
-        )
-        payload = evaluator.evaluate(decoder, phase='test')
-        eval_r2 = payload['result'][0][f'test_split_{split}']['Held Out R2']
-        if 'heldin_eval_r2' not in ndt2_run_df.columns:
-            ndt2_run_df['heldin_eval_r2'] = 0.
-        heldin_eval_r2 = payload['result'][0][f'test_split_{split}']['Held In R2']
-        ndt2_run_df.at[idx, 'eval_r2'] = eval_r2
-        ndt2_run_df.at[idx, 'heldin_eval_r2'] = heldin_eval_r2
-        print(ndt2_run_df.iloc[idx])
-
-#%%
 print(ndt2_run_df)
-import seaborn as sns
-ax = prep_plt()
-
-sns.lineplot(data=ndt2_run_df, x='scale_ratio', y='eval_r2', hue='eval_set', ax=ax)
-
-# save down
-eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
-ndt2_run_df.to_csv(eval_metrics_path, index=False)
+#%%

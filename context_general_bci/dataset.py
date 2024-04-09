@@ -178,10 +178,21 @@ class SpikingDataset(Dataset):
         self.cache = {}
         self.z_score = torch.load(self.cfg.z_score) if self.cfg.z_score else None
         self.augment = use_augment and bool(self.cfg.augmentations)
+        self.set_crop_mode(0)
 
     @property
     def loaded(self):
         return self.meta_df is not None
+
+    # Do allow cropping - guard for evaluation
+    def set_no_crop(self, no_crop: bool):
+        if no_crop:
+            self.crop_mode = -1
+        else:
+            self.crop_mode = 0
+
+    def set_crop_mode(self, mode: int):
+        self.crop_mode = mode
 
     @staticmethod
     def preprocess_path(cfg: DatasetConfig, session_path: Path, override_preprocess_path: bool) -> Path:
@@ -484,7 +495,12 @@ class SpikingDataset(Dataset):
             time_budget = time_budget.min(torch.tensor(self.max_bins))
         # TODO separate out/remove this cropping logic for flat spacetime
         crop_start_limit = (torch.tensor([b[DataKey.spikes].size(0) for b in batch]) - time_budget).max(torch.tensor(1))
-        crop_start = torch.randint(0, 10000, (len(batch),), dtype=torch.long) % crop_start_limit
+        if self.crop_mode == -1 and any( b[DataKey.time].max() > time_budget[i] for i, b in enumerate(batch)):
+            raise ValueError("Requested no cropping but some trials exceed token budget.")
+        elif self.crop_mode == 1:
+            crop_start = torch.zeros(len(batch), dtype=torch.long)
+        else:
+            crop_start = torch.randint(0, 10000, (len(batch),), dtype=torch.long) % crop_start_limit
         # ! currently, DataKey.time is with respect to trial time; what we really need is a time relative to the crop_start
         # ! we have several ways of instancing this, but we're picking the most convenient for now anticipating near future changes
         covariate_key = None

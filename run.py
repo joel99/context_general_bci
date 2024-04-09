@@ -287,6 +287,8 @@ def run_exp(cfg : RootConfig) -> None:
             early_stop_cls(
                 monitor=cfg.train.early_stop_metric,
                 mode='min' if 'loss' in cfg.train.early_stop_metric else 'max',
+                strict='r2' not in cfg.train.early_stop_metric, # kin r2 can be faulty...
+                check_finite='r2' not in cfg.train.early_stop_metric,
                 patience=cfg.train.patience, # Learning can be fairly slow, larger patience should allow overfitting to begin (which is when we want to stop)
                 min_delta=0,
             )
