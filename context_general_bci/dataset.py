@@ -60,6 +60,14 @@ def explicit_session_reduction(alias: str) -> str:
         if 'behavior+ecephys' in alias:
             return alias.split('_')[-2].split('-')[-1]
         return alias.split('_')[1]
+    if 'FALCONH2' in alias:
+        if 'sub-T5' in alias:
+            return alias.split('-')[-1]
+        return alias.split('-')[-1]
+    if 'FALCONM2' in alias:
+        if 'ses-' in alias:
+            return alias.split('ses-')[1].split('_')[0]
+        breakpoint()
     raise NotImplementedError(f"Session reduction not implemented for {alias}")
 
 logger = logging.getLogger(__name__)

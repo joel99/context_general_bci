@@ -714,6 +714,14 @@ class FalconContextInfo(ContextInfo):
             else:
                 session_date = f'ses-{stem.split("_")[1]}'
             return f"falcon_{subject.value}-{session_date}"
+        elif task == ExperimentalTask.falcon_h2:
+            # sub-T5-held-in-calib_ses-20220518.nwb 
+            session_date = stem.split('-')[-1]
+            return f"falcon_{subject.value}-{session_date}"
+        elif task == ExperimentalTask.falcon_m2:
+            # sub-MonkeyN-held-in-calib_ses-2020-10-19-Run1_behavior+ecephys.nwb
+            session_hash = stem.split('ses-')[1].split('_')[0]
+            return f"falcon_{subject.value}-{session_hash}"
         return f"falcon_{subject.value}-{stem}"
 
     @staticmethod
@@ -731,6 +739,14 @@ class FalconContextInfo(ContextInfo):
             else:
                 session_date = f'ses-{path.stem.split("_")[1]}'
             return f"falcon_{subject.name.value}-{session_date}"
+        elif task == ExperimentalTask.falcon_h2:
+            # sub-T5-held-in-calib_ses-20220518.nwb 
+            session_date = stem.split('-')[-1]
+            return f"falcon_{subject.value}-{session_date}"
+        elif task == ExperimentalTask.falcon_m2:
+            # sub-MonkeyN-held-in-calib_ses-2020-10-19-Run1_behavior+ecephys.nwb
+            session_hash = stem.split('ses-')[1].split('_')[0]
+            return f"falcon_{subject.value}-{session_hash}"
         return f"falcon_{subject.name.value}-{stem}"
 
     @classmethod
@@ -740,7 +756,8 @@ class FalconContextInfo(ContextInfo):
             logger.warning(f"Datapath folder {root} does not exist. Skipping.")
             return []
         def make_info(path: Path):
-            # path = ..../h1/
+            # Note aliases provided here will be explicitly reduced/assigned to sessions in a hardcoded `explicit_session_reduction`
+            # Since we need a pretty robust mapper for aliases coming from different places..
             if task == ExperimentalTask.falcon_h1:
                 subject = path.parts[-3].lower()
                 subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
@@ -756,7 +773,15 @@ class FalconContextInfo(ContextInfo):
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_h2:
-                pass
+                subject = 'h2'
+                subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+                return FalconContextInfo(
+                    subject=subject,
+                    task=task,
+                    _arrays=arrays,
+                    alias=f"falcon_{subject.name.value}-{path.stem}",
+                    datapath=path,
+                )
             elif task == ExperimentalTask.falcon_m1:
                 # sub-MonkeyL-held-in-calib_ses-20120924_behavior+ecephys.nwb 
                 # test time: L_20121022_held_out_eval
@@ -772,7 +797,15 @@ class FalconContextInfo(ContextInfo):
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_m2:
-                pass
+                subject = 'm2'
+                subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
+                return FalconContextInfo(
+                    subject=subject,
+                    task=task,
+                    _arrays=arrays,
+                    alias=f"falcon_{subject.name.value}-{path.stem}",
+                    datapath=path,
+                )
         if suffix:
             infos = map(make_info, root.glob(f"*{suffix}*.nwb"))
         else:
