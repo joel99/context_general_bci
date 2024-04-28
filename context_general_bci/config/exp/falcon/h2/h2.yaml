@@ -1,0 +1,55 @@
+# @package _global_
+
+defaults:
+  - /model: flat_enc_dec
+  - /model/task:
+    - joint_bhvr_decode_flat
+  - /dataset: flat
+model:
+  lr_ramp_steps: 50
+  lr_decay_steps: 1500
+  lr_interval: epoch
+  causal: true
+  neurons_per_token: 32
+  session_embed_strategy: EmbedStrat.token
+  transformer:
+    max_trial_length: 200 # 4 seconds
+    n_layers: 6
+  task:
+    mask_ratio: 0.25 # for efficiency
+    task_weights: [1.0, 1.0]
+    decode_time_pool: ''
+    decode_normalizer: ''
+    tasks: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding]
+    metrics: Metric.decode_acc
+    task_weights: [1.0, 20.0] # TODO toy
+  decoder_context_integration: 'cross_attn'
+  dropout: 0.1
+dataset:
+  bin_size_ms: 20
+  max_length_ms: 4000
+  max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
+  explicit_alias_to_session: true
+
+  neurons_per_token: 32
+  max_channels: 192
+  max_arrays: 1
+
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
+  - DataKey.bhvr_mask
+  datasets:
+  - falcon_FALCONH2.*
+  behavior_dim: 2
+
+train:
+  max_batch_size: 256
+  batch_size: 128
+  autoscale_batch_size: true
+  patience: 250
+  early_stop_metric: val_kinematic_r2
+effective_bsz: 128
+
+sweep_cfg: simple_scratch
+sweep_mode: 'grid'

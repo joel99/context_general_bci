@@ -149,7 +149,10 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
 
         *RTTContextInfo.build_preproc('./data/calib/odoherty_rtt/', alias_prefix='calib_odoherty_calib_rtt'),
         *BCIContextInfo.build_preproc('./data/calib/pitt_co_alter', alias_prefix='calib_pitt_calib_broad_'), 
+        *BCIContextInfo.build_preproc('./data/calib/pitt_grasp_alter', alias_prefix='calib_pitt_grasp_'), 
 
         *RTTContextInfo.build_preproc('./data/eval/odoherty_rtt/', alias_prefix='eval_odoherty_eval_rtt'),
         *BCIContextInfo.build_preproc('./data/eval/pitt_co_alter/', alias_prefix='eval_pitt_eval_broad_'),
+        *BCIContextInfo.build_preproc('./data/eval/pitt_grasp_alter', alias_prefix='eval_pitt_grasp_'), 
+        
     ])
