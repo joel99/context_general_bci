@@ -96,7 +96,7 @@ class SkinnyBehaviorRegression(nn.Module):
     """
 
     def __init__(
-        self, cfg: ModelConfig, data_attrs: DataAttrs,
+        self, cfg: ModelConfig, data_attrs: DataAttrs, batch_size: int = 1
     ):
         super().__init__()
         self.decode_cross_attn = True
@@ -129,8 +129,15 @@ class SkinnyBehaviorRegression(nn.Module):
             self.bhvr_mean = None
             self.bhvr_std = None
         max_timesteps = DECODER_HISTORY_MS // data_attrs.bin_size_ms
-        self.register_buffer('decode_token', repeat(torch.zeros(cfg.hidden_size), 'h -> 1 t h', t=max_timesteps))
-        self.register_buffer('decode_time', torch.arange(max_timesteps).unsqueeze(0)) # 20ms bins, 2s # 1 t
+        self.register_buffer(
+            'decode_token', 
+            repeat(torch.zeros(cfg.hidden_size), 'h -> b t h', t=max_timesteps, b=batch_size)
+        )
+        # self.decode_token = self.decode_token + 0.
+        self.register_buffer(
+            'decode_time', 
+            repeat(torch.arange(max_timesteps), 't -> b t', b=batch_size)
+        ) # 20ms bins, 2s # 1 t
         if self.causal and self.cfg.behavior_lag_lookahead:
             self.decode_time = self.decode_time + self.bhvr_lag_bins
 
@@ -141,16 +148,17 @@ class SkinnyBehaviorRegression(nn.Module):
             trial_context: torch.Tensor,
         ) -> torch.Tensor:
         r"""
-            in: assume B=1
-            return: B=1 x H
+            in: assume B (assuming time synced, hence we pull a single max time...s)
+            return: B x H
         """
-        # breakpoint()
+        batch = backbone_features.shape[0]
         max_time = src_time.max()
-        decode_token = self.decode_token[:, :max_time+1]
-        decode_time = self.decode_time[:, :max_time+1]
+        decode_token = self.decode_token[:batch, :max_time+1]# .expand(backbone_features.shape[0], -1, -1)
+        decode_time = self.decode_time[:batch, :max_time+1]# .expand(backbone_features.shape[0], -1)
 
         # backbone_features = temporal_mean_pool(src_time, backbone_features)
         # src_time = np.unique(src_time)
+        
         backbone_features: torch.Tensor = self.decoder(
             decode_token,
             decode_time,
@@ -173,9 +181,9 @@ class SkinnyBehaviorRegression(nn.Module):
 
 class BrainBertInterfaceDecoder(pl.LightningModule):
     r"""
-        I know I'll end up regretting this name.
+        batch size: expected (max) batch size for inference, used for preallocation
     """
-    def __init__(self, cfg: ModelConfig, data_attrs: DataAttrs):
+    def __init__(self, cfg: ModelConfig, data_attrs: DataAttrs, batch_size: int = 1):
         super().__init__() # store cfg
         self.save_hyperparameters(logger=False)
         self.cfg = cfg
@@ -195,7 +203,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             context_integration=cfg.transformer.context_integration,
             embed_space=cfg.transformer.embed_space,
         )
-        self.bind_io()
+        self.bind_io(batch_size=batch_size)
 
         self.neurons_per_token = self.cfg.neurons_per_token
         self.causal = self.cfg.causal
@@ -230,7 +238,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         recursive_diff_log(self_copy, cfg)
         return self_copy != cfg
 
-    def bind_io(self):
+    def bind_io(self, batch_size: int = 1):
         r"""
             Add context-specific input/output parameters.
             Has support for re-binding IO, but does _not_ check for shapes, which are assumed to be correct.
@@ -336,7 +344,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                 self.readin = nn.Embedding(self.cfg.max_neuron_count, spike_embed_dim, padding_idx=self.data_attrs.pad_token if self.data_attrs.pad_token else None) # I'm pretty confident we won't see more than 20 spikes in 20ms but we can always bump up
                 # Ignore pad token if set to 0 (we're doing 0 pad, not entirely legitimate but may be regularizing)
 
-        self.decoder = SkinnyBehaviorRegression(self.cfg, self.data_attrs)
+        self.decoder = SkinnyBehaviorRegression(self.cfg, self.data_attrs, batch_size=batch_size)
 
     def try_transfer(self, module_name: str, transfer_module: Any = None):
         if (module := getattr(self, module_name, None)) is not None:
@@ -435,6 +443,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
     ) -> torch.Tensor: # out is behavior, T x 2
         assert spikes.dtype in [torch.int64, torch.int32, torch.int16, torch.uint8]
         # breakpoint()
+        # from time import perf_counter
         spikes.clamp_(0, CLAMP_MAX)
         # pad C dim if necessary
         if spikes.size(2) % self.neurons_per_token:
@@ -470,6 +479,9 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             trial_context = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
             trial_context_without_flag = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
         state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
+        
+        # torch.cuda.synchronize()
+        # time_embed = perf_counter()
         features: torch.Tensor = self.backbone(
             state_in,
             times=time,
@@ -477,6 +489,9 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
             trial_context=trial_context,
             causal=self.causal,
         ) # B x Token x H (flat)
+        # torch.cuda.synchronize()
+        # time_end = perf_counter()
+        # print(f"time_backbone: {time_end - time_embed:.4f}")
         return self.decoder(
             features,
             time,
@@ -489,7 +504,13 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         #     # last_step_only=last_step_only,
         # )}
 
-def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data_attrs: DataAttrs, extra_embed_map: Dict[str, Tuple[Any, DataAttrs]] = {}):
+def transfer_model(
+    old_model: BrainBertInterface, 
+    new_cfg: ModelConfig, 
+    new_data_attrs: DataAttrs, 
+    extra_embed_map: Dict[str, Tuple[Any, DataAttrs]] = {},
+    batch_size: int = 1,
+):
     r"""
         Transfer model to new cfg and data_attrs.
         Intended to be for inference
@@ -509,7 +530,7 @@ def transfer_model(old_model: BrainBertInterface, new_cfg: ModelConfig, new_data
         new_cfg = old_model.cfg
     if new_data_attrs is None:
         new_data_attrs = old_model.data_attrs
-    new_cls = BrainBertInterfaceDecoder(cfg=new_cfg, data_attrs=new_data_attrs)
+    new_cls = BrainBertInterfaceDecoder(cfg=new_cfg, data_attrs=new_data_attrs, batch_size=batch_size)
     new_cls.backbone.load_state_dict(old_model.backbone.state_dict())
     new_cls.transfer_io(old_model)
     # TODO more safety in this loading... like the injector is unhappy
