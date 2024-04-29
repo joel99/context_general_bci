@@ -1,4 +1,7 @@
 #%%
+import os
+# set cuda to device 1
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print
@@ -46,6 +49,7 @@ query = 'h1'
 query = 'h1_200-sweep-simple_discrete-zmaaar1l'
 query = 'h1_hp-9w0oay57'
 query = 'h1_v2-sweep-h1_fine_grained_discrete-4j1mi057'
+query = 'm2_100-sweep-simple_scratch-efngjgo3'
 
 # wandb_run = wandb_query_latest(query, exact=True, allow_running=False)[0]
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
@@ -77,7 +81,8 @@ if pipeline_model:
 # target_dataset = 'observation_P4_10_2'
 # target_dataset = 'observation_P4_11_16'
 
-target_dataset = 'falcon_FALCONH1.*'
+# target_dataset = 'falcon_FALCONH1.*'
+target_dataset = 'falcon_FALCONM2.*'
 # target_dataset = 'odoherty_rtt-Indy-20160627_01'
 # cfg.dataset.datasets = ["odoherty_rtt-Indy-20160627_01"]
 # cfg.dataset.eval_datasets = ["odoherty_rtt-Indy-20160627_01"]
@@ -132,12 +137,23 @@ def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=0, **kwar
     )
 
 dataloader = get_dataloader(dataset)
-heldin_metrics = stack_batch(trainer.test(model, dataloader))
-heldin_outputs = stack_batch(trainer.predict(model, dataloader))
+heldin_metrics = stack_batch(trainer.test(model, dataloader), merge_tensor='stack')
+heldin_outputs = stack_batch(trainer.predict(model, dataloader), merge_tensor='stack')
+
+# heldin_metrics = stack_batch(trainer.test(model, dataloader))
+# heldin_outputs = stack_batch(trainer.predict(model, dataloader))
 # A note on fullbatch R2 calculation - in my experience by bsz 128 the minibatch R2 ~ fullbatch R2 (within 0.01); for convenience we use minibatch R2
 
 offset_bins = model.task_pipelines[ModelTask.kinematic_decoding.value].bhvr_lag_bins
 
+#%%
+for t in range(5):
+    print(dataset[t][DataKey.bhvr_vel].shape)
+    print(heldin_outputs[Output.behavior_pred][t].shape)
+
+print(len(dataset), len(heldin_outputs[Output.behavior_pred]))
+plt.plot(dataset[t][DataKey.bhvr_vel][:,0])
+plt.plot(heldin_outputs[Output.behavior_pred][t][:,0])
 #%%
 pred = heldin_outputs[Output.behavior_pred]
 pred = [p[offset_bins:] for p in pred]
@@ -149,12 +165,15 @@ if Output.behavior_mask in heldin_outputs:
 
 flat_pred = np.concatenate(pred) if isinstance(pred, list) else pred.flatten()
 flat_true = np.concatenate(true) if isinstance(true, list) else true.flatten()
-flat_pred = flat_pred[(flat_true != model.data_attrs.pad_token).any(-1)]
-flat_true = flat_true[(flat_true != model.data_attrs.pad_token).any(-1)]
+if Output.padding in heldin_outputs:
+    flat_in = ~np.concatenate(heldin_outputs[Output.padding]) if isinstance(heldin_outputs[Output.padding], list) else heldin_outputs[Output.padding].flatten()
+else:
+    flat_in = (flat_true != model.data_attrs.pad_token).any(-1)
+flat_pred = flat_pred[flat_in]
+flat_true = flat_true[flat_in]
 if Output.behavior_mask in heldin_outputs:
     flat_mask = np.concatenate(mask) if isinstance(mask, list) else mask.flatten()
-    flat_mask = flat_mask[(flat_true != model.data_attrs.pad_token).any(-1)]
-
+    flat_mask = flat_mask[flat_in]
     flat_pred = flat_pred[flat_mask[:, 0]]
     flat_true = flat_true[flat_mask[:, 0]]
 
@@ -168,12 +187,16 @@ df = pd.DataFrame({
 })
 from sklearn.metrics import r2_score
 full_batch_r2 = r2_score(flat_true, flat_pred, multioutput='variance_weighted')
-print(full_batch_r2)
+print(f"Full Weighted R2: {full_batch_r2:.3f}")
 # plot marginals
 g = sns.jointplot(x='true', y='pred', hue='coord', data=df, s=8, alpha=0.4)
 
 # set title
 g.fig.suptitle(f'{query} {mode} {target_dataset} Velocity R2: {full_batch_r2:.2f}')
+
+#%%)
+plt.plot(flat_pred[:500,0])
+plt.plot(flat_true[:500,0])
 
 #%%
 f = plt.figure(figsize=(10, 10))

@@ -1,7 +1,7 @@
 #%%
 import os
 # set cuda to device 1
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # Demonstrate pretraining scaling. Assumes evaluation metrics have been computed and merely assembles.
 import logging
 import sys
@@ -32,17 +32,20 @@ from context_general_bci.falcon_decoder import NDT2Decoder
 
 pl.seed_everything(0)
 
-EVAL_SET = "falcon_m1"
+EVAL_SET = "falcon_m2"
+# EVAL_SET = "falcon_m1"
 
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
     "falcon_m1": "m1_{scale_ratio}",
+    "falcon_m2": "m2_{scale_ratio}",
     "cursor": "cursor_{scale_ratio}",
     "rtt": "rtt_{scale_ratio}",
 }
 NDT2_EXPERIMENT_MAP = {
     "falcon_h1": "falcon/h1",
     "falcon_m1": "falcon/m1",
+    "falcon_m2": "falcon/m2",
     "cursor": "eval/cursor",
     "rtt": "eval/rtt",
 }

@@ -95,24 +95,39 @@ def get_dataloader(dataset: SpikingDataset, batch_size=100, num_workers=4, **kwa
         collate_fn=dataset.tokenized_collater
     )
 
-def stack_batch(batch_out: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+def stack_batch(
+        batch_out: List[Dict[str, torch.Tensor]],
+        merge_tensor='stack'
+    ) -> Dict[str, torch.Tensor]:
+    r"""
+        Convert a list of batch outputs to a single batch output.
+    """
+    # First convert a list of dicts into a dict of lists
     all_lists = defaultdict(list)
     for batch in batch_out:
         for k, v in batch.items():
             if isinstance(v, float) or isinstance(v, int):
                 v = [v]
-            all_lists[k].extend(v)
+            if v is not None:
+                all_lists[k].extend(v)
+    # Now stack the lists
     out = {}
     for k, v in all_lists.items():
         if isinstance(v[0], torch.Tensor):
             # try stack
-            if all(v2.size() == v[0].size() for v2 in v[1:]):
+            if merge_tensor == 'stack' and all(v2.size() == v[0].size() for v2 in v[1:]):
                 out[k] = torch.stack(v)
+            elif merge_tensor == 'cat' and all(v2.shape[1:] == v[0].shape[1:] for v2 in v[1:]):
+                if v[0].ndim == 0:
+                    out[k] = torch.stack(v)
+                else:
+                    out[k] = torch.cat(v, dim=0)
             else:
                 out[k] = v
-        else:
-            out[k] = torch.tensor(v).mean() # some metric
+        else: # For metrics
+            out[k] = torch.tensor(v).mean()
     return out
+
 
 
 # Compute Gauss window and std with respect to bins
