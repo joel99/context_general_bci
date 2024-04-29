@@ -16,9 +16,10 @@ from context_general_bci.tasks import ExperimentalTask
 from context_general_bci.tasks.pitt_co import CURSOR_TRANSLATE_AND_CLICK
 # task_query = 'H1'
 # task_query = 'M1'
-task_query = 'M2'
+# task_query = 'M2'
 # task_query = 'calib_odoherty_calib_rtt'
 # task_query = 'calib_pitt_calib_broad'
+task_query = 'calib_pitt_grasp'
 
 default_cfg: DatasetConfig = OmegaConf.create(FlatDataConfig())
 default_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]

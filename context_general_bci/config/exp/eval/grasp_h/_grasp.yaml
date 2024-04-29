@@ -13,18 +13,18 @@ model:
   neurons_per_token: 32
   session_embed_strategy: EmbedStrat.none
   transformer:
-    max_trial_length: 200 # 2 seconds
+    max_trial_length: 500 # 10 seconds
     n_layers: 6
   task:
     mask_ratio: 0.25 # for efficiency
     task_weights: [1.0, 1.0]
     decode_time_pool: ''
-    decode_normalizer: './data/zscore_calib_pitt_calib_broad_3d.pt' # TODO
+    decode_normalizer: './data/zscore_calib_pitt_grasp_1d.pt' # TODO
   decoder_context_integration: 'cross_attn'
   dropout: 0.1
 dataset:
   bin_size_ms: 20
-  max_length_ms: 4000
+  max_length_ms: 10000 # Can't fit much more than this on the old GPUs this is running on, and nonefficient attn
   max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
   # explicit_alias_to_session: true
 
@@ -42,7 +42,7 @@ dataset:
   eval_datasets:
   - eval_pitt_grasp.*
   eval_ratio: 1.0
-  behavior_dim: 3
+  behavior_dim: 1
   pitt_co:
     respect_trial_boundaries: True
 
