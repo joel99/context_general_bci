@@ -153,7 +153,7 @@ class P2(SubjectInfoPittChicago):
     ]
     # NB: We don't clone sensory like motor bc there's a small diff
 
-@SubjectArrayRegistry.register
+@SubjectArrayRegistry.register(other_aliases=['P3Lab', 'P3Home'])
 class P3(SubjectInfoPittChicago):
     # Layout shared across motor channels
     name = SubjectName.P3
@@ -192,7 +192,7 @@ class P3(SubjectInfoPittChicago):
         PittChicagoArrayInfo(array=_sensory_layout, pedestal_index=1)
     ]
 
-@SubjectArrayRegistry.register
+@SubjectArrayRegistry.register(other_aliases=['P4Lab', 'P4Home'])
 class P4(SubjectInfoPittChicago):
     # Identical to P3
     # Layout shared across motor channels

@@ -136,13 +136,23 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
 
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-in-calib', task=ExperimentalTask.falcon_m1),
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-out-calib', task=ExperimentalTask.falcon_m1),
+        
+        *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-in-calib', task=ExperimentalTask.falcon_h2),
+        *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-out-calib', task=ExperimentalTask.falcon_h2),
+        
+        *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-in-calib', task=ExperimentalTask.falcon_m2),
+        *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-out-calib', task=ExperimentalTask.falcon_m2),
+        
 
         # Not great to have this around, but debugging somethign critical
-        *FalconContextInfo.build_from_dir('./data/falcon/m1/eval', task=ExperimentalTask.falcon_m1),
+        # *FalconContextInfo.build_from_dir('./data/falcon/m1/eval', task=ExperimentalTask.falcon_m1),
 
         *RTTContextInfo.build_preproc('./data/calib/odoherty_rtt/', alias_prefix='calib_odoherty_calib_rtt'),
         *BCIContextInfo.build_preproc('./data/calib/pitt_co_alter', alias_prefix='calib_pitt_calib_broad_'), 
+        *BCIContextInfo.build_preproc('./data/calib/pitt_grasp_alter', alias_prefix='calib_pitt_grasp_'), 
 
         *RTTContextInfo.build_preproc('./data/eval/odoherty_rtt/', alias_prefix='eval_odoherty_eval_rtt'),
         *BCIContextInfo.build_preproc('./data/eval/pitt_co_alter/', alias_prefix='eval_pitt_eval_broad_'),
+        *BCIContextInfo.build_preproc('./data/eval/pitt_grasp_alter', alias_prefix='eval_pitt_grasp_'), 
+        
     ])

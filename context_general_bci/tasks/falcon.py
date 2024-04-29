@@ -23,7 +23,7 @@ from context_general_bci.subjects import SubjectInfo, create_spike_payload
 from context_general_bci.tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 
 # Load nwb file
-def bin_units(
+def _bin_units_old( # Used for M1/H1 runs
         units: pd.DataFrame,
         bin_size_s: float = 0.01,
         bin_end_timestamps: Optional[np.ndarray] = None
@@ -42,6 +42,72 @@ def bin_units(
     bin_edges = np.concatenate([np.array([-np.inf]), bin_end_timestamps])
     for idx, (_, unit) in enumerate(units.iterrows()):
         spike_cnt, _ = np.histogram(unit.spike_times, bins=bin_edges)
+        spike_arr[:, idx] = spike_cnt
+    return spike_arr
+
+
+# Load nwb file
+def bin_units(
+        units: pd.DataFrame,
+        bin_size_s: float = 0.02,
+        bin_timestamps: Optional[np.ndarray] = None,
+        is_timestamp_bin_start: bool = False,
+    ) -> np.ndarray:
+    r"""
+        Bin spikes given by an nwb units dataframe.
+        There is one bin per input timestamp. If timestamps are not provided, they are inferred from the spike times.
+        Timestamps are ideally provided spaced bin_size_s apart.
+        If not:
+        - if consecutive interval is greater than bin_size_s, then only the proximal bin_size_s interval is used.
+        - if consecutive interval is less than bin_size_s, spikes will be binned in the provided interval (i.e. those bins will be smaller than bin_size_s apart).
+            - Not outputting repeated spikes mainly because the implementation would be more complex (no single call to np.histogram)
+        Args:
+            units: df with only index (spike index) and spike times (list of times in seconds). From nwb.units.
+            bin_size_s: size of each bin to output in seconds.
+            bin_timestamps: array of timestamps indicating bin time in seconds.
+            is_timestamp_bin_start: if True, the bin is considered to start at the timestamp, otherwise it ends at the timestamp.
+        Returns:
+            array of spike counts per bin, per unit. Shape is (bins x units).
+    """
+    # Make even bins
+    if bin_timestamps is None:
+        end_time = units.spike_times.apply(lambda s: max(s) if len(s) else 0).max() + bin_size_s
+        bin_end_timestamps = np.arange(0, end_time, bin_size_s)
+        bin_mask = np.ones(len(bin_end_timestamps), dtype=bool)
+    else:
+        if is_timestamp_bin_start:
+            bin_end_timestamps = bin_timestamps + bin_size_s
+        else:
+            bin_end_timestamps = bin_timestamps
+        # Check contiguous else force cropping for even bins
+        gaps = np.diff(bin_end_timestamps)
+        if (gaps <= 0).any():
+            raise ValueError("bin_end_timestamps must be monotonically increasing.")
+        if not np.allclose(gaps, bin_size_s):
+            print(f"Warning: Input timestamps not spaced like requested {bin_size_s}. Outputting proximal bin spikes.")
+            # Adjust bin_end_timestamps to include bins at the end of discontinuities
+            new_bin_ends = [bin_end_timestamps[0]]
+            bin_mask = [True] # bool, True if bin ending at this timepoint should be included post mask (not padding)
+            for i, gap in enumerate(gaps):
+                if not np.isclose(gap, bin_size_s) and gap > bin_size_s:
+                    cur_bin_end = bin_end_timestamps[i+1]
+                    new_bin_ends.extend([cur_bin_end - bin_size_s, cur_bin_end])
+                    bin_mask.extend([False, True])
+                else:                        
+                    new_bin_ends.append(bin_end_timestamps[i+1])
+                    bin_mask.append(True)
+            bin_end_timestamps = np.array(new_bin_ends)
+            bin_mask = np.array(bin_mask)
+        else:
+            bin_mask = np.ones(len(bin_end_timestamps), dtype=bool)
+
+    # Make spikes
+    spike_arr = np.zeros((bin_mask.sum(), len(units)), dtype=np.uint8)
+    bin_edges = np.concatenate([np.array([bin_end_timestamps[0] - bin_size_s]), bin_end_timestamps])
+    for idx, (_, unit) in enumerate(units.iterrows()):
+        spike_cnt, _ = np.histogram(unit.spike_times, bins=bin_edges)
+        if bin_mask is not None:
+            spike_cnt = spike_cnt[bin_mask]
         spike_arr[:, idx] = spike_cnt
     return spike_arr
 
@@ -133,6 +199,71 @@ def load_files_m1(files: List):
     trial_dense = np.concatenate(out_trial, axis=0)
     return binned_units, emg_data, eval_mask, trial_dense
 
+def load_files_m2(files: List):
+    out_neural = []
+    out_cov = []
+    out_mask = []
+    out_trial = []
+    for fn in files:
+        with NWBHDF5IO(fn, 'r') as io:
+            nwbfile = io.read()
+            units = nwbfile.units.to_dataframe()
+            vel_container = nwbfile.acquisition['finger_vel']
+            labels = [ts for ts in vel_container.time_series]
+            vel_data = []
+            vel_timestamps = None
+            for ts in labels:
+                ts_data = vel_container.get_timeseries(ts)
+                vel_data.append(ts_data.data[:])
+                vel_timestamps = ts_data.timestamps[:]
+            vel_data = np.vstack(vel_data).T
+            # TODO check bin timestamp appropriate?
+            binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=vel_timestamps, is_timestamp_bin_start=True)
+
+            eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
+
+            trial_change = np.zeros(vel_timestamps.shape[0], dtype=bool)
+            trial_info = nwbfile.trials.to_dataframe().reset_index()
+            switch_inds = np.searchsorted(vel_timestamps, trial_info.start_time)
+            trial_change[switch_inds] = True
+            trial_dense = np.cumsum(trial_change)
+            out_neural.append(binned_units)
+            out_cov.append(vel_data)
+            out_mask.append(eval_mask)
+            out_trial.append(trial_dense)
+    binned_units = np.concatenate(out_neural, axis=0)
+    cov_data = np.concatenate(out_cov, axis=0)
+    eval_mask = np.concatenate(out_mask, axis=0)
+    trial_dense = np.concatenate(out_trial, axis=0)
+    return binned_units, cov_data, eval_mask, trial_dense
+
+def load_files_h2(files: List):
+    out_neural = []
+    out_cov = []
+    out_mask = []
+    out_trial = []
+    for fn in files:
+        with NWBHDF5IO(fn, 'r') as io:
+            nwbfile = io.read()
+            binned_spikes = nwbfile.acquisition['binned_spikes'].data[()]
+            time = nwbfile.acquisition['binned_spikes'].timestamps[()]
+            eval_mask = nwbfile.acquisition['eval_mask'].data[()].astype(bool)
+            trial_info = (
+                nwbfile.trials.to_dataframe()
+                .reset_index()
+            )
+            trial_change = np.concatenate([[False], np.diff(time) > 0.02])
+            trial_dense = np.cumsum(trial_change)
+            out_neural.append(binned_spikes)
+            out_cov.append(trial_info.cue.values)
+            out_mask.append(eval_mask)
+            out_trial.append(trial_dense)
+    binned_units = np.concatenate(out_neural, axis=0)
+    cov_data = np.concatenate(out_cov, axis=0)
+    eval_mask = np.concatenate(out_mask, axis=0)
+    trial_dense = np.concatenate(out_trial, axis=0)
+    return binned_units, cov_data, eval_mask, trial_dense
+
 @ExperimentalTaskRegistry.register
 class FalconLoader(ExperimentalTaskLoader):
     name = ExperimentalTask.falcon_h1
@@ -156,11 +287,12 @@ class FalconLoader(ExperimentalTaskLoader):
         if task == ExperimentalTask.falcon_h1:
             binned, kin, kin_mask, trials = load_files_h1([datapath])
         elif task == ExperimentalTask.falcon_h2:
-            raise NotImplementedError("Falcon H2 not implemented")
+            binned, kin, kin_mask, trials = load_files_h2([datapath])
+            breakpoint() # Don't think the shapes will line up
         elif task == ExperimentalTask.falcon_m1:
             binned, kin, kin_mask, trials = load_files_m1([datapath])
         elif task == ExperimentalTask.falcon_m2:
-            raise NotImplementedError("Falcon M2 not implemented")
+            binned, kin, kin_mask, trials = load_files_m2([datapath])
         meta_payload = {}
         meta_payload['path'] = []
 

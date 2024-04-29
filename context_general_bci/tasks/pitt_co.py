@@ -317,6 +317,17 @@ class PittCOLoader(ExperimentalTaskLoader):
                     session_vel = None
             else:
                 session_vel = None
+                
+            if (
+                'force' in payload
+            ):
+                # override! For grasp experiments
+                session_vel = PittCOLoader.smooth(
+                    payload['force'],
+                    kernel=cls.get_kin_kernel(
+                        NDT3_CAUSAL_SMOOTH_MS,
+                        sample_bin_ms=cfg.bin_size_ms)
+                    ) # Gary doesn't compute velocity, just absolute. We follow suit.
             if exp_task_cfg.respect_trial_boundaries and not task in [ExperimentalTask.unstructured]:
                 for i in payload['trial_num'].unique():
                     if DataKey.bhvr_mask in cfg.data_keys and 'active_assist' in payload: # for NDT3

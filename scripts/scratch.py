@@ -2,15 +2,21 @@
 import shutil
 from pathlib import Path
 import os
-os.mkdir('./data/eval/pitt_co_alter')
-for p in Path('./data/eval/pitt_co').glob("*.pth"):
-# for p in Path('./data/calib/pitt_co').glob("*.pth"):
-    print(p)
-    # move to pitt_co_alter
-    new_name = f"P2Lab_{'_'.join(p.name.split('_')[1:])}"
-    print(new_name)
-    shutil.copy(p, f'./data/eval/pitt_co_alter/{new_name}')
-
+source = 'pitt_co'
+source = 'pitt_grasp'
+for folder in ['eval', 'calib']:
+    if not os.path.exists(f'./data/{folder}/{source}_alter'):
+        os.mkdir(f'./data/{folder}/{source}_alter')
+    for p in Path(f'./data/{folder}/{source}').glob("*.pth"):
+        print(p)
+        # move to pitt_co_alter
+        loc = 'Home' if 'Home' in p.name.split('_')[0] else 'Lab'
+        subj = p.name.split('_')[0].replace('Lab', '').replace('Home', '')
+        rename_subj = REDACT_MAP[subj]
+        new_name = f"{rename_subj}{loc}_{'_'.join(p.name.split('_')[1:])}"
+        print(new_name)
+        shutil.copy(p, f'./data/{folder}/{source}_alter/{new_name}')
+exit(0)
 #%%
 import logging
 import sys

@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - m2
+dataset:
+  scale_ratio: 1.0
+train:
+  max_batch_size: 256
+  batch_size: 64
+effective_bsz: 128
