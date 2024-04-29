@@ -4,11 +4,6 @@ from pathlib import Path
 import os
 source = 'pitt_co'
 source = 'pitt_grasp'
-# REDACT_MAP = {
-#     'CRS02b': 'P2',
-#     'CRS07': 'P3',
-#     'CRS08': 'P4',
-# }
 for folder in ['eval', 'calib']:
     if not os.path.exists(f'./data/{folder}/{source}_alter'):
         os.mkdir(f'./data/{folder}/{source}_alter')
