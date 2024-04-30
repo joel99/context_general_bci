@@ -750,7 +750,7 @@ class FalconContextInfo(ContextInfo):
         return f"falcon_{subject.name.value}-{stem}"
 
     @classmethod
-    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix='', is_dandi=True):
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], suffix='', is_dandi=True, alias_prefix=''):
         root = Path(root)
         if not root.exists():
             logger.warning(f"Datapath folder {root} does not exist. Skipping.")
@@ -793,7 +793,7 @@ class FalconContextInfo(ContextInfo):
                     subject=subject,
                     task=task,
                     _arrays=arrays,
-                    alias=f"falcon_{subject.name.value}-{path.stem}",
+                    alias=f"falcon_{alias_prefix}{subject.name.value}-{path.stem}",
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_m2:
@@ -803,7 +803,7 @@ class FalconContextInfo(ContextInfo):
                     subject=subject,
                     task=task,
                     _arrays=arrays,
-                    alias=f"falcon_{subject.name.value}-{path.stem}",
+                    alias=f"falcon_{alias_prefix}{subject.name.value}-{path.stem}",
                     datapath=path,
                 )
         if suffix:

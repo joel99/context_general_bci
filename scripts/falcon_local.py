@@ -43,24 +43,24 @@ def run_evaluate(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--evaluation", type=str, required=True, choices=["local", "remote"]
+        "--evaluation", "-e", type=str, default='local', choices=["local", "remote"], 
     )
     parser.add_argument(
-        "--model-path", type=str, default='./local_data/ndt2_h1_sample.pth'
+        "--model-path", "-m", type=str, default='./local_data/ndt2_h1_sample.pth'
     )
     parser.add_argument(
-        "--config-stem", type=str, default='falcon/h1/h1',
+        "--config-stem", "-c", type=str, default='falcon/h1/h1',
         help="Name in context-general-bci codebase for config. \
             Currently, directly referencing e.g. a local yaml is not implemented unclear how to get Hydra to find it in search path."
     )
     parser.add_argument(
-        "--zscore-path", type=str, default='./local_data/ndt2_zscore_h1.pt'
+        "--zscore-path", "-z", type=str, default='./local_data/ndt2_zscore_h1.pt'
     )
     parser.add_argument(
-        '--split', type=str, choices=['h1', 'h2', 'm1', 'm2'], default='h1',
+        '--split', "-s", type=str, choices=['h1', 'h2', 'm1', 'm2'], default='h1',
     )
     parser.add_argument(
-        '--phase', choices=['minival', 'test'], default='minival'
+        '--phase', "-p", choices=['minival', 'test'], default='minival'
     )
     args = parser.parse_args()
 

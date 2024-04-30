@@ -66,7 +66,13 @@ def explicit_session_reduction(alias: str) -> str:
         return alias.split('-')[-1]
     if 'FALCONM2' in alias:
         if 'ses-' in alias:
+            # sub-MonkeyN-held-in-calib_ses-2020-10-20-Run2_behavior+ecephys.nwb
             return alias.split('ses-')[1].split('_')[0]
+        elif 'minival' in alias:
+            # falcon_minival_FALCONM2-sub-MonkeyNRun1_20201019_held_in_minival
+            run_num = alias.split('Run')[-1].split('_')[0]
+            date_str = alias.split('_')[-4]
+            return f'{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}-Run{run_num}'
         breakpoint()
     raise NotImplementedError(f"Session reduction not implemented for {alias}")
 

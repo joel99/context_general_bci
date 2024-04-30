@@ -83,11 +83,9 @@ if pipeline_model:
 
 # target_dataset = 'falcon_FALCONH1.*'
 target_dataset = 'falcon_FALCONM2.*'
-# target_dataset = 'odoherty_rtt-Indy-20160627_01'
-# cfg.dataset.datasets = ["odoherty_rtt-Indy-20160627_01"]
-# cfg.dataset.eval_datasets = ["odoherty_rtt-Indy-20160627_01"]
+target_dataset = 'falcon_minival_FALCONM2.*'
 
-# cfg.dataset.datasets = [target_dataset]
+cfg.dataset.datasets = [target_dataset]
 # cfg.dataset.eval_datasets = [target_dataset]
 # cfg.dataset.eval_datasets = []
 # cfg.dataset.eval_ratio = 0.5
@@ -101,9 +99,9 @@ if cfg.dataset.eval_datasets and mode == 'test':
 else:
     # Mock training procedure to identify val data
     dataset.subset_split() # remove test data
-    train, val = dataset.create_tv_datasets()
-    dataset = train
-    dataset = val
+    # train, val = dataset.create_tv_datasets()
+    # dataset = train
+    # dataset = val
 
 # dataset.subset_by_key([ctx.id], MetaKey.session)
 # print("Subset length: ", len(dataset))

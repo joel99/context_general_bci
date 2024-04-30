@@ -453,7 +453,6 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         # unsqueezes are to add batch dim
         time = torch.arange(t, device=spikes.device).unsqueeze(0).unsqueeze(-1).expand(b, t, c).flatten(1)
         position = torch.arange(c, device=spikes.device).unsqueeze(0).unsqueeze(0).expand(b, t, c).flatten(1)
-
         # * Quirk (to fix) of decoding process - context tokens receive flag for encoder but not for decoder...
         # breakpoint()
         trial_context_with_flag = []
@@ -482,6 +481,7 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         
         # torch.cuda.synchronize()
         # time_embed = perf_counter()
+        # breakpoint()
         features: torch.Tensor = self.backbone(
             state_in,
             times=time,

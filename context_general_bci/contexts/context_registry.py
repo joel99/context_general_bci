@@ -143,6 +143,8 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-in-calib', task=ExperimentalTask.falcon_m2),
         *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-out-calib', task=ExperimentalTask.falcon_m2),
         
+        *FalconContextInfo.build_from_dir('./data/m2/minival/', task=ExperimentalTask.falcon_m2, alias_prefix='minival_'),
+        # *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-in-minival', task=ExperimentalTask.falcon_m2, alias_prefix='minival_'),
 
         # Not great to have this around, but debugging somethign critical
         # *FalconContextInfo.build_from_dir('./data/falcon/m1/eval', task=ExperimentalTask.falcon_m1),
