@@ -12,7 +12,7 @@ from sklearn.metrics import r2_score
 
 # Run this block to eval on minival
 FALCON_MINIVAL = False
-FALCON_MINIVAL = True
+# FALCON_MINIVAL = True
 
 if FALCON_MINIVAL:
     from context_general_bci.utils import suppress_default_registry
@@ -51,6 +51,9 @@ query = 'h1_v2-sweep-h1_fine_grained_discrete-4j1mi057'
 query = 'h1_v2-sweep-h1_fine_grained_discrete-v6luzk35'
 query = 'h1_nopool_cross-sweep-h1_fine_grained_discrete-rasu7u1w'
 query = 'm1-sweep-h1_fine_grained_discrete-4p66vrl8'
+
+query = 'm2_100-sweep-simple_scratch-efngjgo3'
+
 wandb_run = wandb_query_latest(query, allow_running=True, use_display=True)[0]
 print(wandb_run.id)
 
@@ -67,7 +70,8 @@ cfg.model.task.outputs = [
 ]
 target = [
     # 'falcon_FALCONH1.*',
-    'falcon_FALCONM1.*',
+    # 'falcon_FALCONM1.*',
+    'falcon_minival_FALCONM2.*',
 ]
 
 cfg.dataset.datasets = target
@@ -81,9 +85,9 @@ dataset = SpikingDataset(cfg.dataset)
 prompt = None
 pl.seed_everything(0)
 data_attrs = dataset.get_data_attrs()
-if not FALCON_MINIVAL:
-    train, val = dataset.create_tv_datasets()
-    dataset = val
+# if not FALCON_MINIVAL:
+    # train, val = dataset.create_tv_datasets()
+    # dataset = val
 print("Eval length: ", len(dataset))
 print(data_attrs)
 model = transfer_model(src_model, cfg.model, data_attrs)

@@ -772,7 +772,6 @@ class BrainBertInterface(pl.LightningModule):
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
         """
-        # breakpoint()
         if self.data_attrs.serve_tokens and not self.data_attrs.serve_tokens_flat:
             raise NotImplementedError
         # there are data keys and meta keys, that might be coming in unbatched
@@ -882,7 +881,6 @@ class BrainBertInterface(pl.LightningModule):
         r"""
             last_step_only: Only predict final timestep kinematic. Useful for online prediction.
         """
-        # breakpoint()
         features = self(batch)
         # Just run kinematic predict
         out = self.task_pipelines[ModelTask.kinematic_decoding.value](

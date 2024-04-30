@@ -122,7 +122,7 @@ if pipeline_model:
 
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
 # def get_dataloader(dataset: SpikingDataset, batch_size=300, num_workers=1, **kwargs) -> DataLoader:
-def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=0, **kwargs) -> DataLoader:
+def get_dataloader(dataset: SpikingDataset, batch_size=1, num_workers=0, **kwargs) -> DataLoader:
 # def get_dataloader(dataset: SpikingDataset, batch_size=16, num_workers=1, **kwargs) -> DataLoader:
 # def get_dataloader(dataset: SpikingDataset, batch_size=128, num_workers=1, **kwargs) -> DataLoader:
 # def get_dataloader(dataset: SpikingDataset, batch_size=200, num_workers=1, **kwargs) -> DataLoader:
