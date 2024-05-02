@@ -1,7 +1,7 @@
 #%%
 import os
 # set cuda to device 1
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # Demonstrate pretraining scaling. Assumes evaluation metrics have been computed and merely assembles.
 import logging
 import sys
@@ -33,37 +33,50 @@ from context_general_bci.falcon_decoder import NDT2Decoder
 pl.seed_everything(0)
 
 # argparse the eval set
+import sys
 import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--eval-set", "-e", type=str, required=True, choices=['falcon_h1', 'falcon_m1', 'cursor', 'rtt']
-)
-args = parser.parse_args()
-EVAL_SET = args.eval_set
 
-# EVAL_SET = "falcon_h1"
-# EVAL_SET = "falcon_m1"
-# EVAL_SET = "cursor"
-# EVAL_SET = "rtt"
+num_workers = 4 # for main eval block.
+if 'ipykernel' in sys.modules:
+    print("Running in a Jupyter notebook.")
+    # EVAL_SET = "falcon_h1"
+    # EVAL_SET = "falcon_m1"
+    EVAL_SET = "cursor"
+    # EVAL_SET = "rtt"
+    EVAL_SET = "grasp_h"
+else:
+    # This indicates the code is likely running in a shell or other non-Jupyter environment
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--eval-set", "-e", type=str, required=True, choices=['falcon_h1', 'falcon_m1', 'falcon_m2', 'cursor', 'rtt', 'grasp_h']
+    )
+    args = parser.parse_args()
+    EVAL_SET = args.eval_set
 
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
     "falcon_m1": "m1_{scale_ratio}",
+    "falcon_m2": "m2_{scale_ratio}",
     "cursor": "cursor_{scale_ratio}",
     "rtt": "rtt_{scale_ratio}",
+    "grasp_h": "grasp_{scale_ratio}",
 }
 NDT2_EXPERIMENT_MAP = {
     "falcon_h1": "falcon/h1",
     "falcon_m1": "falcon/m1",
+    "falcon_m2": "falcon/m2",
     "cursor": "eval/cursor",
     "rtt": "eval/rtt",
+    "grasp_h": "eval/grasp_h",
 }
 
 EXPERIMENT_MAP = {
     "falcon_h1": "v4/tune/falcon_h1",
     "falcon_m1": "v4/tune/falcon_m1",
+    "falcon_m2": "v4/tune/falcon_m2",
     "cursor": "v4/tune/cursor",
     "rtt": "v4/tune/rtt",
+    "grasp_h": "v4/tune/grasp_h",
 }
 
 UNIQUE_BY = {
@@ -75,15 +88,19 @@ UNIQUE_BY = {
 EVAL_DATASET_FUNC_MAP = {
     'falcon_h1': None, # TODO
     'falcon_m1': None, # TODO
+    'falcon_m2': None,
     'cursor': 'eval_pitt_eval_broad.*',
-    'rtt': 'eval_odoherty_eval_rtt.*'
+    'rtt': 'eval_odoherty_eval_rtt.*',
+    "grasp_h": "eval_pitt_grasp_h.*",
 }
 
 SCALE_MAP = {
     'falcon_h1': [0.25, 0.5, 1.0],
     'falcon_m1': [0.25, 0.5, 1.0],
+    'falcon_m2': [0.25, 0.5, 1.0],
     'cursor': [0.25, 0.5, 1.0],
     'rtt': [0.25, 0.5, 1.0],
+    'grasp_h': [0.25, 0.5, 1.0],
 }
 
 eval_paths = Path('./data/eval_metrics')
@@ -116,7 +133,7 @@ def run_list_to_df(runs, eval_set_name: str):
         'eval_set': map(lambda r: eval_set_name, runs),
         'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], runs),
     }
-    if eval_set_name in ['rtt', 'cursor']: # Not separate pipeline
+    if eval_set_name in ['rtt', 'cursor', 'grasp_h']: # Not separate pipeline
         df_dict['eval_report'] = map(lambda r: r.summary['eval_kinematic_r2']['max'], runs)
     return pd.DataFrame(df_dict)
 
@@ -150,8 +167,13 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     data_attrs = dataset.get_data_attrs()
     cfg.model.task.tasks = [ModelTask.kinematic_decoding]
     model = transfer_model(src_model, cfg.model, data_attrs)
-    dataloader = get_dataloader(dataset, num_workers=4, batch_size=256 if EVAL_SET != 'cursor' else 64)
-    # dataloader = get_dataloader(dataset, num_workers=4, batch_size=256)
+    if EVAL_SET == 'cursor':
+        batch_size = 64 
+    elif EVAL_SET == 'grasp_h':
+        batch_size = 8
+    else:
+        batch_size = 256
+    dataloader = get_dataloader(dataset, num_workers=4, batch_size=batch_size)
     model.cfg.task.outputs = [Output.behavior, Output.behavior_pred]
     trainer_preds = trainer.predict(model, dataloader)
     outputs = stack_batch(trainer_preds) # Trial x Time x Dim, first dim may be list

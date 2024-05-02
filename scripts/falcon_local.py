@@ -33,7 +33,8 @@ def run_evaluate(
         model_ckpt_path=model_path,
         model_cfg_stem=config_stem,
         zscore_path=zscore_path,
-        dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=phase)]
+        dataset_handles=[x.stem for x in evaluator.get_eval_files(phase=phase)],
+        batch_size=1
     )
 
 

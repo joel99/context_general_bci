@@ -7,5 +7,3 @@ dataset:
 train:
   max_batch_size: 32
   batch_size: 32
-
-notes: "Skipped - 100 is trivial"

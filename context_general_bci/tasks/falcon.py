@@ -125,7 +125,7 @@ def load_nwb_h1(fn: str):
         # labels = [l.strip() for l in nwbfile.acquisition['OpenLoopKinematics'].description.split(',')]
         # epochs = nwbfile.epochs.to_dataframe()
         return (
-            bin_units(units, bin_end_timestamps=timestamps),
+            bin_units(units, bin_timestamps=timestamps),
             kin,
             kin_mask,
             trial_num,
@@ -175,7 +175,7 @@ def load_files_m1(files: List):
                 emg_timestamps.append(timestamps)
             emg_data = np.vstack(emg_data).T
             emg_timestamps = emg_timestamps[0]
-            binned_units = bin_units(units, bin_size_s=0.02, bin_end_timestamps=emg_timestamps)
+            binned_units = bin_units(units, bin_size_s=0.02, bin_timestamps=emg_timestamps)
 
             eval_mask = nwbfile.acquisition['eval_mask'].data[:].astype(bool)
 
