@@ -18,7 +18,7 @@ try:
 except:
     logger.info("pynwb not installed, please install with `conda install -c conda-forge pynwb`")
 
-from context_general_bci.config import DataKey, DatasetConfig, ExperimentalConfig
+from context_general_bci.config import DataKey, DatasetConfig, FalconConfig
 from context_general_bci.subjects import SubjectInfo, create_spike_payload
 from context_general_bci.tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
 
@@ -297,20 +297,38 @@ class FalconLoader(ExperimentalTaskLoader):
         meta_payload['path'] = []
 
         arrays_to_use = context_arrays
-        for trial_id in np.unique(trials):
-            trial_spikes = binned[trials == trial_id]
-            if len(trial_spikes) < 5:
-                logger.warning(f"Skipping trial {trial_id} with only {len(trial_spikes)} bins")
-                continue
-            trial_vel = kin[trials == trial_id]
-            single_payload = {
-                DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg, spike_bin_size_ms=cfg.bin_size_ms),
-                DataKey.bhvr_vel: torch.tensor(trial_vel.copy(), dtype=torch.float32), # need float, not double
-                DataKey.bhvr_mask: torch.tensor(kin_mask[trials == trial_id].copy()).unsqueeze(-1),
-            }
-            single_path = cache_root / f'{trial_id}.pth'
-            meta_payload['path'].append(single_path)
-            torch.save(single_payload, single_path)
+        exp_task_cfg: FalconConfig = getattr(cfg, task.value)
+        if exp_task_cfg.respect_trial_boundaries:
+            for trial_id in np.unique(trials):
+                trial_spikes = binned[trials == trial_id]
+                if len(trial_spikes) < 5:
+                    logger.warning(f"Skipping trial {trial_id} with only {len(trial_spikes)} bins")
+                    continue
+                trial_vel = kin[trials == trial_id]
+                single_payload = {
+                    DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg, spike_bin_size_ms=cfg.bin_size_ms),
+                    DataKey.bhvr_vel: torch.tensor(trial_vel.copy(), dtype=torch.float32), # need float, not double
+                    DataKey.bhvr_mask: torch.tensor(kin_mask[trials == trial_id].copy()).unsqueeze(-1),
+                }
+                single_path = cache_root / f'{trial_id}.pth'
+                meta_payload['path'].append(single_path)
+                torch.save(single_payload, single_path)
+        else:
+            chop_size_bins = exp_task_cfg.chop_size_ms // cfg.bin_size_ms
+            for i in range(0, binned.shape[0], chop_size_bins):
+                trial_spikes = binned[i:i+chop_size_bins]
+                if len(trial_spikes) < 5:
+                    logger.warning(f"Skipping trial {i} with only {len(trial_spikes)} bins")
+                    continue
+                trial_vel = kin[i:i+chop_size_bins]
+                single_payload = {
+                    DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg, spike_bin_size_ms=cfg.bin_size_ms),
+                    DataKey.bhvr_vel: torch.tensor(trial_vel.copy(), dtype=torch.float32), # need float, not double
+                    DataKey.bhvr_mask: torch.tensor(kin_mask[i:i+chop_size_bins].copy()).unsqueeze(-1),
+                }
+                single_path = cache_root / f'{i}.pth'
+                meta_payload['path'].append(single_path)
+                torch.save(single_payload, single_path)
         return pd.DataFrame(meta_payload)
 
 ExperimentalTaskRegistry.register_manual(ExperimentalTask.falcon_h2, FalconLoader)

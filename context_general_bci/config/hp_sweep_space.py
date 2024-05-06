@@ -5,6 +5,10 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    'chop': {
+        'dataset.augment_crop_length_ms': { 100, 200, 300, 400, 500, 750, 1000, 1250, 1500},
+        'model.lr_init': [1e-4, 3e-4],
+    },
     'simple_scratch': {
         'model.hidden_size': {
             'feasible_points': [512, 1024], # Since NDT2 exps didn't show signif effect of hidden size, but now we're seeing it

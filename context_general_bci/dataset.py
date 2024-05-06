@@ -369,7 +369,7 @@ class SpikingDataset(Dataset):
     def apply_augment(self, data: Dict[DataKey, torch.Tensor]):
         sampled_ops = np.random.choice(self.cfg.augmentations, self.cfg.randaug_num) # RandAugment
         for op in sampled_ops:
-            data = augmentations[op](data)
+            data = augmentations[op](data, self.cfg)
         return data
 
     def __getitem__(self, index):

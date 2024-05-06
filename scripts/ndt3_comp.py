@@ -1,7 +1,7 @@
 #%%
 import os
 # set cuda to device 1
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # Demonstrate pretraining scaling. Assumes evaluation metrics have been computed and merely assembles.
 import logging
 import sys
