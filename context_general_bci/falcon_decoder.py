@@ -81,6 +81,14 @@ class NDT2Decoder(BCIDecoder):
             self.batch_size,
             task_config.n_channels
         ), dtype=torch.uint8, device='cuda:0')
+    
+    def set_batch_size(self, batch_size: int):
+        super().set_batch_size(batch_size)
+        self.observation_buffer = torch.zeros((
+            self.observation_buffer.shape[0],
+            batch_size,
+            self.observation_buffer.shape[2]
+        ), dtype=torch.uint8, device='cuda:0')
 
     def reset(self, dataset_tags: List[Path] = [""]):
         self.set_steps = 0
