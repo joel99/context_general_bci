@@ -36,8 +36,9 @@ class NDT2Decoder(BCIDecoder):
             model_ckpt_path: str,
             model_cfg_stem: str,
             zscore_path: str,
+            max_bins: int,
             dataset_handles: List[str] = [],
-            batch_size: int = 1
+            batch_size: int = 1,
         ):
         r"""
             Loading NDT2 requires both weights and model config. Weight loading through a checkpoint is standard.
@@ -77,7 +78,7 @@ class NDT2Decoder(BCIDecoder):
 
         assert task_config.bin_size_ms == cfg.dataset.bin_size_ms, "Bin size mismatch, transform not implemented."
         self.observation_buffer = torch.zeros((
-            cfg.dataset.max_length_ms // task_config.bin_size_ms, 
+            max_bins, 
             self.batch_size,
             task_config.n_channels
         ), dtype=torch.uint8, device='cuda:0')

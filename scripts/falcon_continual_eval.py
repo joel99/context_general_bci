@@ -49,6 +49,11 @@ else:
     args = parser.parse_args()
     EVAL_SET = args.eval_set
 
+if EVAL_SET == "m1":
+    queries = ["m1_chop"]
+elif EVAL_SET == "m2":
+    queries = ["m2_chop", "m2_chop_2s"]
+
 NDT2_EXPERIMENT_MAP = {
     "m1": "falcon/m1",
     "m2": "falcon/m2",
@@ -66,6 +71,10 @@ HP_MAP = {
 }
 
 eval_paths = Path('./data/falcon_continual')
+eval_paths.mkdir(parents=True, exist_ok=True)
+eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
+eval_df_so_far = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
+
 def get_runs_for_query(variant: str, crop_length_ms: float, eval_set: str, exp_map=None, project="context_general_bci"):
     r"""
         variant: init_from_id
@@ -88,11 +97,11 @@ def run_list_to_df(runs, eval_set_name: str):
     filter_runs = [r for r in runs if 'val_kinematic_r2' in r.summary and 'max' in r.summary['val_kinematic_r2']]
     print(f"Filtered {len(runs)} to {len(filter_runs)} with proper metrics")
     df_dict = {
-        'id': map(lambda r: r.id, runs),
-        'variant': map(lambda r: r.config['tag'], runs),
-        'augment_chop_length_ms': map(lambda r: r.config['dataset']['augment_crop_length_ms'], runs),
-        'eval_set': map(lambda r: eval_set_name, runs),
-        'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], runs),
+        'id': map(lambda r: r.id, filter_runs),
+        'variant': map(lambda r: r.config['tag'], filter_runs),
+        'augment_chop_length_ms': map(lambda r: r.config['dataset']['augment_crop_length_ms'], filter_runs),
+        'eval_set': map(lambda r: eval_set_name, filter_runs),
+        'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], filter_runs),
     }
     return pd.DataFrame(df_dict)
 
@@ -106,17 +115,31 @@ def get_run_df_for_query(variant: str, crop_length_ms: float, eval_set: str, met
     run_df = run_list_to_df(runs, eval_set)
     return get_best_run_per_sweep(run_df, metric=metric)
 
-def get_ndt2_run_df_for_query(crop_length_ms: float, eval_set: str):
+def get_ndt2_run_df_for_query(query, crop_length_ms: float, eval_set: str):
     # only "scratch" runs compared for ndt2
-    return get_run_df_for_query(f"{eval_set}_chop", crop_length_ms, eval_set, project="context_general_bci", exp_map=NDT2_EXPERIMENT_MAP)
+    return get_run_df_for_query(query, crop_length_ms, eval_set, project="context_general_bci", exp_map=NDT2_EXPERIMENT_MAP)
 
 runs = []
-ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(hp, EVAL_SET) for hp in HP_MAP[EVAL_SET]]).reset_index()
+query_dfs = []
+for query in queries:
+    query_dfs.extend([get_ndt2_run_df_for_query(query, hp, EVAL_SET) for hp in HP_MAP[EVAL_SET]])
+eval_df = pd.concat(query_dfs).reset_index(drop=True)
+
+if len(eval_df_so_far):
+    if 'index' in eval_df_so_far:
+        eval_df_so_far.drop(columns=['index'], inplace=True)
+    # eval_df_so_far zero to nan
+    eval_df_so_far['eval_r2'] = eval_df_so_far['eval_r2'].replace(0, np.nan)
+    # eval_df_so_far drop nan
+    eval_df_so_far = eval_df_so_far.dropna(subset=['eval_r2'])
+    eval_df = eval_df[~eval_df.id.isin(eval_df_so_far.id)].reset_index(drop=True)
+# print(eval_df_so_far['variant'].unique())
+print(eval_df['variant'].unique())
 
 #%%
 eval_metrics = {}
-ndt2_run_df['eval_r2'] = 0.
-for idx, run_row in ndt2_run_df.iterrows():
+eval_df['eval_r2'] = 0.
+for idx, run_row in eval_df.iterrows():
     run = get_wandb_run(run_row.id, wandb_project="context_general_bci")
     cfg = get_run_config(run, tag='val_kinematic_r2')
     ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag='val_kinematic_r2')
@@ -136,17 +159,18 @@ for idx, run_row in ndt2_run_df.iterrows():
         model_ckpt_path=ckpt,
         model_cfg_stem=f'{cfg.experiment_set}/{cfg.tag.split("-")[0]}',
         zscore_path=zscore_pth,
+        max_bins=cfg.dataset.augment_crop_length_ms // config.bin_size_ms,
         dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')],
         batch_size=8
     )
     payload = evaluator.evaluate(decoder, phase='test')
     eval_r2 = payload['result'][0][f'test_split_{split}']['Held Out R2']
-    if 'heldin_eval_r2' not in ndt2_run_df.columns:
-        ndt2_run_df['heldin_eval_r2'] = 0.
+    if 'heldin_eval_r2' not in eval_df.columns:
+        eval_df['heldin_eval_r2'] = 0.
     heldin_eval_r2 = payload['result'][0][f'test_split_{split}']['Held In R2']
-    ndt2_run_df.at[idx, 'eval_r2'] = eval_r2
-    ndt2_run_df.at[idx, 'heldin_eval_r2'] = heldin_eval_r2
-    print(ndt2_run_df.iloc[idx])
+    eval_df.at[idx, 'eval_r2'] = eval_r2
+    eval_df.at[idx, 'heldin_eval_r2'] = heldin_eval_r2
+    print(eval_df.iloc[idx])
 
 #%%
 # print(ndt2_run_df)
@@ -156,5 +180,6 @@ for idx, run_row in ndt2_run_df.iterrows():
 # sns.lineplot(data=ndt2_run_df, x='augment_chop_length_ms', y='eval_r2', hue='eval_set', ax=ax)
 
 # save down
-eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
-ndt2_run_df.to_csv(eval_metrics_path, index=False)
+eval_df = pd.concat([eval_df, eval_df_so_far]).reset_index(drop=True)
+# eval_df = eval_df.drop_duplicates(subset=['variant'], keep='first').reset_index(drop=True)
+eval_df.to_csv(eval_metrics_path, index=False)

@@ -7,7 +7,7 @@
 sweep_space = {
     'chop': {
         'dataset.augment_crop_length_ms': {
-            'feasible_points': [ 100, 200, 300, 400, 500, 750, 1000, 1250, 1500 ]
+            'feasible_points': [ 100, 200, 300, 400, 500, 750, 1000, 1250, 1500, 2000, 2500, 3000 ]
         },
         'model.lr_init': {
             'feasible_points': [1e-4, 3e-4]
