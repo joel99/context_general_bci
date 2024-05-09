@@ -48,7 +48,15 @@ else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--eval-set", "-e", type=str, required=True, choices=['falcon_h1', 'falcon_m1', 'falcon_m2', 'cursor', 'rtt', 'grasp_h']
+        "--eval-set", "-e", type=str, required=True, choices=[
+            'falcon_h1', 
+            'falcon_m1', 
+            'falcon_m1_continual',
+            'falcon_m2', 
+            'falcon_m2_continual',
+            'cursor', 
+            'rtt', 
+            'grasp_h']
     )
     args = parser.parse_args()
     EVAL_SET = args.eval_set
@@ -56,7 +64,9 @@ else:
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
     "falcon_m1": "m1_{scale_ratio}",
+    "falcon_m1_continual": "m1_{scale_ratio}_continual",
     "falcon_m2": "m2_{scale_ratio}",
+    "falcon_m2_continual": "m2_{scale_ratio}_continual",
     "cursor": "cursor_{scale_ratio}",
     "rtt": "rtt_{scale_ratio}",
     "grasp_h": "grasp_{scale_ratio}",
@@ -64,31 +74,27 @@ TAG_MAP = {
 NDT2_EXPERIMENT_MAP = {
     "falcon_h1": "falcon/h1",
     "falcon_m1": "falcon/m1",
+    "falcon_m1_continual": "falcon/m1",
     "falcon_m2": "falcon/m2",
+    "falcon_m2_continual": "falcon/m2",
     "cursor": "eval/cursor",
     "rtt": "eval/rtt",
     "grasp_h": "eval/grasp_h",
-}
-
-EXPERIMENT_MAP = {
-    "falcon_h1": "v4/tune/falcon_h1",
-    "falcon_m1": "v4/tune/falcon_m1",
-    "falcon_m2": "v4/tune/falcon_m2",
-    "cursor": "v4/tune/cursor",
-    "rtt": "v4/tune/rtt",
-    "grasp_h": "v4/tune/grasp_h",
 }
 
 UNIQUE_BY = {
     "model.lr_init", 
     "model.hidden_size", 
     "dataset.scale_ratio",
+    "dataset.falcon_m2.respect_trial_boundaries",
 }
 
 EVAL_DATASET_FUNC_MAP = {
     'falcon_h1': None, # TODO
     'falcon_m1': None, # TODO
+    'falcon_m1_continual': None, # TODO
     'falcon_m2': None,
+    'falcon_m2_continual': None,
     'cursor': 'eval_pitt_eval_broad.*',
     'rtt': 'eval_odoherty_eval_rtt.*',
     "grasp_h": "eval_pitt_grasp_h.*",
@@ -97,14 +103,16 @@ EVAL_DATASET_FUNC_MAP = {
 SCALE_MAP = {
     'falcon_h1': [0.25, 0.5, 1.0],
     'falcon_m1': [0.25, 0.5, 1.0],
+    'falcon_m1_continual': [0.25, 0.5, 1.0],
     'falcon_m2': [0.25, 0.5, 1.0],
+    'falcon_m2_continual': [0.25, 0.5, 1.0],
     'cursor': [0.25, 0.5, 1.0],
     'rtt': [0.25, 0.5, 1.0],
     'grasp_h': [0.25, 0.5, 1.0],
 }
 
 eval_paths = Path('./data/eval_metrics')
-def get_runs_for_query(variant: str, scale_ratio: float, eval_set: str, project="ndt3", exp_map=EXPERIMENT_MAP):
+def get_runs_for_query(variant: str, scale_ratio: float, eval_set: str, project="ndt3", exp_map=NDT2_EXPERIMENT_MAP):
     r"""
         variant: init_from_id
     """
@@ -126,12 +134,17 @@ def get_runs_for_query(variant: str, scale_ratio: float, eval_set: str, project=
 def run_list_to_df(runs, eval_set_name: str):
     filter_runs = [r for r in runs if 'val_kinematic_r2' in r.summary and 'max' in r.summary['val_kinematic_r2']]
     print(f"Filtered {len(runs)} to {len(filter_runs)} with proper metrics")
+    if 'continual' in eval_set_name:
+        eval_crop = eval_set_name.replace('_continual', '')
+    else:
+        eval_crop = eval_set_name
     df_dict = {
-        'id': map(lambda r: r.id, runs),
-        'variant': map(lambda r: r.config['tag'], runs),
-        'scale_ratio': map(lambda r: r.config['dataset']['scale_ratio'], runs),
-        'eval_set': map(lambda r: eval_set_name, runs),
-        'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], runs),
+        'id': map(lambda r: r.id, filter_runs),
+        'variant': map(lambda r: r.config['tag'], filter_runs),
+        'scale_ratio': map(lambda r: r.config['dataset']['scale_ratio'], filter_runs),
+        "respect_trial_boundaries": map(lambda r: r.config['dataset'][eval_crop].get('respect_trial_boundaries', True), runs),
+        'eval_set': map(lambda r: eval_set_name, filter_runs),
+        'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], filter_runs),
     }
     if eval_set_name in ['rtt', 'cursor', 'grasp_h']: # Not separate pipeline
         df_dict['eval_report'] = map(lambda r: r.summary['eval_kinematic_r2']['max'], runs)
@@ -219,17 +232,25 @@ for idx, run_row in ndt2_run_df.iterrows():
         split = run_row.eval_set.split('_')[1]
         evaluator = FalconEvaluator(
             eval_remote=False,
-            split=split)
+            split=split,
+            continual='continual' in run_row.variant)
 
         task = getattr(FalconTask, split)
         config = FalconConfig(task=task)
-
+        breakpoint()
+        if '_continual' in run_row.eval_set:
+            eval_crop = run_row.eval_set.replace('_continual', '')
+            max_bins = getattr(cfg.dataset, eval_crop).chop_size_ms // config.bin_size_ms
+        else:
+            max_bins = cfg.dataset.max_length_ms // config.bin_size_ms
         decoder = NDT2Decoder(
             task_config=config,
             model_ckpt_path=ckpt,
             model_cfg_stem=f'{cfg.experiment_set}/{cfg.tag.split("-")[0]}',
             zscore_path=zscore_pth,
-            dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')]
+            max_bins=max_bins,
+            dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')],
+            batch_size=8 if 'continual' in run_row.variant else 1,
         )
         payload = evaluator.evaluate(decoder, phase='test')
         eval_r2 = payload['result'][0][f'test_split_{split}']['Held Out R2']
