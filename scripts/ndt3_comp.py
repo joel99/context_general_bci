@@ -170,6 +170,20 @@ queries = [
 
 runs = []
 ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
+eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
+eval_df_so_far = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
+
+ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
+if len(eval_df_so_far) and False:
+    if 'index' in eval_df_so_far:
+        eval_df_so_far.drop(columns=['index'], inplace=True)
+    # eval_df_so_far zero to nan
+    eval_df_so_far['eval_r2'] = eval_df_so_far['eval_r2'].replace(0, np.nan)
+    # eval_df_so_far drop nan
+    eval_df_so_far = eval_df_so_far.dropna(subset=['eval_r2'])
+    ndt2_run_df = ndt2_run_df[~ndt2_run_df.id.isin(eval_df_so_far.id)].reset_index(drop=True)
+
+
 eval_metrics = {}
 def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     pl.seed_everything(0)
@@ -237,10 +251,8 @@ for idx, run_row in ndt2_run_df.iterrows():
 
         task = getattr(FalconTask, split)
         config = FalconConfig(task=task)
-        breakpoint()
-        if '_continual' in run_row.eval_set:
-            eval_crop = run_row.eval_set.replace('_continual', '')
-            max_bins = getattr(cfg.dataset, eval_crop).chop_size_ms // config.bin_size_ms
+        if '_continual' in run_row.variant:
+            max_bins = cfg.dataset.augment_crop_length_ms // config.bin_size_ms
         else:
             max_bins = cfg.dataset.max_length_ms // config.bin_size_ms
         decoder = NDT2Decoder(
@@ -253,10 +265,10 @@ for idx, run_row in ndt2_run_df.iterrows():
             batch_size=8 if 'continual' in run_row.variant else 1,
         )
         payload = evaluator.evaluate(decoder, phase='test')
-        eval_r2 = payload['result'][0][f'test_split_{split}']['Held Out R2']
+        eval_r2 = payload['result'][0][f'test_split_{split}']['Held Out R2 Mean']
         if 'heldin_eval_r2' not in ndt2_run_df.columns:
             ndt2_run_df['heldin_eval_r2'] = 0.
-        heldin_eval_r2 = payload['result'][0][f'test_split_{split}']['Held In R2']
+        heldin_eval_r2 = payload['result'][0][f'test_split_{split}']['Held In R2 Mean']
         ndt2_run_df.at[idx, 'eval_r2'] = eval_r2
         ndt2_run_df.at[idx, 'heldin_eval_r2'] = heldin_eval_r2
         print(ndt2_run_df.iloc[idx])
@@ -269,5 +281,8 @@ ax = prep_plt()
 sns.lineplot(data=ndt2_run_df, x='scale_ratio', y='eval_r2', hue='eval_set', ax=ax)
 
 # save down
-eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
+ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
+# drop duplicates by variant stem, prefer new
+ndt2_run_df = ndt2_run_df.drop_duplicates(subset=['variant'], keep='first').reset_index(drop=True)
+
 ndt2_run_df.to_csv(eval_metrics_path, index=False)

@@ -10,7 +10,7 @@ from einops import rearrange
 
 from hydra import compose, initialize_config_module
 
-from falcon_challenge.config import FalconConfig
+from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.interface import BCIDecoder
 
 from context_general_bci.utils import suppress_default_registry
@@ -69,6 +69,12 @@ class NDT2Decoder(BCIDecoder):
             MetaKey.session.name: sorted([self._task_config.hash_dataset(handle) for handle in dataset_handles]),
             MetaKey.task.name: [self.exp_task],
         }
+        if task_config.task == FalconTask.m2 and context_idx[MetaKey.session.name][0].startswith('Run'): # 0.3.5 style formatting for M2, back compat patch
+            def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
+                run_str, run_date = run.split('_')
+                return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}-{run_str}'
+            for i in range(len(context_idx[MetaKey.session.name])):
+                context_idx[MetaKey.session.name][i] = remap_run(context_idx[MetaKey.session.name][i])
         data_attrs = DataAttrs.from_config(cfg.dataset, context=ContextAttrs(**context_idx))
         cfg.model.task.decode_normalizer = zscore_path
         model = load_from_checkpoint(model_ckpt_path, cfg=cfg.model, data_attrs=data_attrs)
@@ -97,6 +103,11 @@ class NDT2Decoder(BCIDecoder):
         dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
         meta_keys = []
         for dataset_tag in dataset_tags:
+            if self._task_config.task == FalconTask.m2 and not self.model.data_attrs.context.session[0].startswith('Run'): # 0.3.5 style formatting for M2, back compat patch
+                def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
+                    run_str, run_date = run.split('_')
+                    return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}-{run_str}'
+                dataset_tag = remap_run(dataset_tag)
             if dataset_tag not in self.model.data_attrs.context.session:
                 raise ValueError(f"Dataset tag {dataset_tag} not found in calibration sets {self.model.data_attrs.context.session} - did you calibrate on this dataset?")
             meta_keys.append(self.model.data_attrs.context.session.index(dataset_tag))

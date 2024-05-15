@@ -6,7 +6,7 @@ dataset:
   scale_ratio: 1.0
   falcon_m1:
     respect_trial_boundaries: False
-    chop_size_ms: 2000
+    chop_size_ms: 4000
   augmentations: ['explicit_crop_time']
   augment_crop_length_ms: 1000
   # Note that specifically 1s chop to 1s directly without augmentation is several pts worse, exacerbated for from scratch models.
