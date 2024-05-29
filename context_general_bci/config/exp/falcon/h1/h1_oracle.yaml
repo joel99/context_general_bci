@@ -54,11 +54,14 @@ dataset:
   behavior_dim: 7
 
 train:
-  max_batch_size: 32
-  batch_size: 32
+  # max_batch_size: 32
+  # batch_size: 32
+  max_batch_size: 8
+  batch_size: 8
   patience: 250
   early_stop_metric: val_kinematic_r2
-effective_bsz: 32
+effective_bsz: 8
+# effective_bsz: 32
 
 fragment_datasets: True
 
