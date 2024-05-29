@@ -4,6 +4,7 @@
 #SBATCH -p gpu
 #SBATCH -c 6
 #SBATCH -t 48:00:00
+#SBATCH -x mind-1-13
 #SBATCH --mem 40G
 #SBATCH --output=slurm_logs/%j.out
 

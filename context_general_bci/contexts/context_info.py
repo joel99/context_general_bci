@@ -759,7 +759,8 @@ class FalconContextInfo(ContextInfo):
             # Note aliases provided here will be explicitly reduced/assigned to sessions in a hardcoded `explicit_session_reduction`
             # Since we need a pretty robust mapper for aliases coming from different places..
             if task == ExperimentalTask.falcon_h1:
-                subject = path.parts[-3].lower()
+                subject = 'h1'
+                # subject = path.parts[-3].lower()
                 subject = SubjectArrayRegistry.query_by_subject(f'falcon_{subject}')
                 # Do not differentiate phase split OR set in session for easy transfer - phase split follows set annotation
                 # pieces = path.stem.split('_')

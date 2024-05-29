@@ -21,11 +21,9 @@ dataset:
   - falcon_FALCONM2-sub-MonkeyN.*_20201118_held_out_in_day_oracle
   - falcon_FALCONM2-sub-MonkeyN.*_20201119_held_out_in_day_oracle
   - falcon_FALCONM2-sub-MonkeyN.*_20201124_held_out_in_day_oracle
-  eval_ratio: 0.0
 train:
   max_batch_size: 256
   batch_size: 64
 effective_bsz: 128
-fragment_dataset: True
 sweep_cfg: 'simple_scratch'
 sweep_mode: 'grid'

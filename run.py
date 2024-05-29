@@ -118,6 +118,7 @@ def launcher(cfg: RootConfig, init_args, additional_cli_flags, meta_flags):
         return
     print('launching: ', ' '.join(unique_flags))
     if getattr(cfg, 'serial_run', False):
+        # subprocess.run(['echo', 'run.py', *unique_flags])
         subprocess.run(['python', 'run.py', *unique_flags])
     else:
         subprocess.run(['sbatch', launch_script, *unique_flags])

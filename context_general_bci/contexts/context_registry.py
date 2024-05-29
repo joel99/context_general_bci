@@ -88,7 +88,7 @@ class ContextRegistry:
         if not isinstance(datapath, Path):
             datapath = Path(datapath)
         found = self.search_index[self.search_index.datapath == datapath.resolve()]
-        assert len(found) == 1
+        assert len(found) == 1, f"Found {len(found)} items for datapath {datapath}"
         return self._registry[found.iloc[0]['id']]
 
     def query_by_id(self, id: str) -> ContextInfo:
@@ -134,10 +134,12 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         *FalconContextInfo.build_from_dir('./data/h1/held_in_calib', task=ExperimentalTask.falcon_h1, suffix='calib', is_dandi=False),
         *FalconContextInfo.build_from_dir('./data/h1/held_out_calib', task=ExperimentalTask.falcon_h1, suffix='calib', is_dandi=False),
 
+        *FalconContextInfo.build_from_dir('./data/falcon/h1_oracle/', task=ExperimentalTask.falcon_h1, is_dandi=False),
+
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-in-calib', task=ExperimentalTask.falcon_m1),
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-out-calib', task=ExperimentalTask.falcon_m1),
         
-        # *FalconContextInfo.build_from_dir('./data/falcon/m1/NWB_FALCON_v7_unsorted/held_out_oracle', task=ExperimentalTask.falcon_m1),
+        *FalconContextInfo.build_from_dir('./data/falcon/m1/NWB_FALCON_v7_unsorted/held_out_oracle', task=ExperimentalTask.falcon_m1),
         
         *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-in-calib', task=ExperimentalTask.falcon_h2),
         *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-out-calib', task=ExperimentalTask.falcon_h2),
@@ -145,7 +147,9 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-in-calib', task=ExperimentalTask.falcon_m2),
         *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-out-calib', task=ExperimentalTask.falcon_m2),
         
-        *FalconContextInfo.build_from_dir('./data/m2/minival/', task=ExperimentalTask.falcon_m2, alias_prefix='minival_'),
+        *FalconContextInfo.build_from_dir('./data/falcon/m2_oracle/', task=ExperimentalTask.falcon_m2),
+        
+        # *FalconContextInfo.build_from_dir('./data/m2/minival/', task=ExperimentalTask.falcon_m2, alias_prefix='minival_'),
         # *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-in-minival', task=ExperimentalTask.falcon_m2, alias_prefix='minival_'),
 
         # Not great to have this around, but debugging somethign critical

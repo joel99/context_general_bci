@@ -19,12 +19,11 @@ dataset:
   - falcon_FALCONM1-L_20121004_held_out_oracle
   - falcon_FALCONM1-L_20121017_held_out_oracle
   - falcon_FALCONM1-L_20121024_held_out_oracle
-  eval_ratio: 0.0
 train:
   max_batch_size: 128
   batch_size: 64
 
-fragment_datasets: True
+fragment_datasets: False
 effective_bsz: 128
 sweep_cfg: 'simple_scratch'
 sweep_mode: 'grid'

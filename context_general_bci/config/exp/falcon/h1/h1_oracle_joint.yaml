@@ -36,15 +36,31 @@ dataset:
   - DataKey.spikes
   - DataKey.bhvr_vel
   - DataKey.bhvr_mask
-  behavior_dim: 7
   datasets:
-  - falcon_FALCONH1.*_calib
+  - falcon_FALCONH1-S0_.*_calib
+  - falcon_FALCONH1-S1_.*_calib
+  - falcon_FALCONH1-S2_.*_calib
+  - falcon_FALCONH1-S3_.*_calib
+  - falcon_FALCONH1-S4_.*_calib
+  - falcon_FALCONH1-S5_.*_calib
+  - falcon_FALCONH1-S6_.*_oracle
+  - falcon_FALCONH1-S7_.*_oracle
+  - falcon_FALCONH1-S8_.*_oracle
+  - falcon_FALCONH1-S9_.*_oracle
+  - falcon_FALCONH1-S10_.*_oracle
+  - falcon_FALCONH1-S11_.*_oracle
+  - falcon_FALCONH1-S12_.*_oracle
+  eval_ratio: 0
+  behavior_dim: 7
+
 train:
   max_batch_size: 32
   batch_size: 32
   patience: 250
   early_stop_metric: val_kinematic_r2
 effective_bsz: 32
+
+fragment_datasets: False
 
 sweep_cfg: 'simple_scratch'
 sweep_mode: 'grid'

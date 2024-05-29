@@ -59,6 +59,9 @@ def explicit_session_reduction(alias: str) -> str:
     if 'FALCONM1' in alias:
         if 'behavior+ecephys' in alias:
             return alias.split('_')[-2].split('-')[-1]
+        elif 'oracle' in alias:
+            # falcon_FALCONM1-L_20121004_held_out_oracle
+            return alias.split('_')[-4]
         return alias.split('_')[1]
     if 'FALCONH2' in alias:
         if 'sub-T5' in alias:
@@ -73,7 +76,13 @@ def explicit_session_reduction(alias: str) -> str:
             run_num = alias.split('Run')[-1].split('_')[0]
             date_str = alias.split('_')[-4]
             return f'{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}-Run{run_num}'
-        breakpoint()
+        elif 'oracle' in alias:
+            # falcon_FALCONM2-sub-MonkeyNRun1_20201030_held_out_in_day_oracle
+            run_num = alias.split('Run')[-1].split('_')[0]
+            date_str = alias.split('_')[-6]
+            return f'{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}-Run{run_num}'
+        else:
+            breakpoint()
     raise NotImplementedError(f"Session reduction not implemented for {alias}")
 
 logger = logging.getLogger(__name__)
