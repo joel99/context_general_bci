@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - m1
+model:
+  hidden_size: 512
+dataset:
+  scale_ratio: 1.0
+  falcon_m1:
+    respect_trial_boundaries: False
+    chop_size_ms: 4000
+  augmentations: ['explicit_crop_time']
+  datasets:
+  # Held-in models
+  - falcon_FALCONM1-sub-MonkeyL-held-in-calib.*
+  - falcon_FALCONM1-L_*_held_out_oracle
+train:
+  max_batch_size: 128
+  batch_size: 64
+effective_bsz: 128
+sweep_cfg: chop

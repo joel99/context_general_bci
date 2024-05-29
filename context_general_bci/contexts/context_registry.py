@@ -137,6 +137,8 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-in-calib', task=ExperimentalTask.falcon_m1),
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-out-calib', task=ExperimentalTask.falcon_m1),
         
+        # *FalconContextInfo.build_from_dir('./data/falcon/m1/NWB_FALCON_v7_unsorted/held_out_oracle', task=ExperimentalTask.falcon_m1),
+        
         *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-in-calib', task=ExperimentalTask.falcon_h2),
         *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-out-calib', task=ExperimentalTask.falcon_h2),
         
