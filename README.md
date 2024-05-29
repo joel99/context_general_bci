@@ -45,8 +45,8 @@ Implementing a new task or dataset involves a few steps, since the codebase gene
 6. Sweeping: NDT2 codebase supports basic SLURM-based hyperparameter sweeping. This is done by specifying a `sweep_cfg` key in the experimental configuration; which will pull sweep settings from `hp_sweep_space.py`. See `context_general_bci/exp/falcon/h1/` for examples.
 7. Evaluation: Different inference procedures are scattered throughout `scripts`. Basic utilities are available for pulling a checkpoint and config related to a specific W&B ID, but for proper deployment additional code will be needed to handle the specifics of your application.
 
-## Decoding applications
-While NDT2 is a self-supervised pretraining method, you may be interested in its decoding application. Please see the [FALCON-challenge codebase](https://github.com/snel-repo/falcon-challenge) for an example flow for preparaing NDT2 as a decoder.
+## Decoding applications (FALCON)
+While NDT2 is initially described as a self-supervised pretraining method, you may be interested in its decoding application. Please see the [FALCON-challenge codebase](https://github.com/snel-repo/falcon-challenge) for an example flow for preparaing NDT2 as a decoder. Configs used to produce FALCON baselines are available under `config/exp/falcon`. For example, to reproduce the M2 checkpoints, run `python run.py +exp/falcon/m2_chop_2s`.
 
 
 ## Checkpoints
@@ -56,6 +56,9 @@ Note analysis scripts aren't build around manual checkpoint loading; but `model.
 Two example checkpoints are provided:
 - one from [task scaling](https://wandb.ai/joelye9/context_general_bci/runs/ydv48n02?workspace=user-joelye9): [Checkpoint](https://drive.google.com/file/d/18UgglFKPu6ev5Db4xDtj7aOfzAX4aZy1/view?usp=share_link)
 - one from [Indy multisession RTT](https://wandb.ai/joelye9/context_general_bci/runs/uych1wae?workspace=user-joelye9): [Checkpoint](https://drive.google.com/file/d/1hhC4n1UyiYjCcv1nlO6ESljNhr8qVlUF/view?usp=share_link).
+
+Checkpoints for the FALCON baselines will be provided soon.
+
 
 ## Other Notes
 - The codebase was actually developed in Python 3.10 but this release uses 3.9 for compatibility with `onnx`. Exact numerical reproduction of paper results is not asserted, but please file an issue if large discrepancies with reported results arise.
