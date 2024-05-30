@@ -30,6 +30,8 @@ def nested_get(d, nested_key):
         current_value = current_value.get(key)
         if current_value is None:
             return None
+    if isinstance(current_value, list):
+        return tuple(current_value)
     return current_value
 
 def wandb_query_experiment(

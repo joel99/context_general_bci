@@ -166,7 +166,10 @@ def run_exp(cfg : RootConfig) -> None:
             launcher(cfg, init_args, additional_cli_flags, meta_flags)
 
         for dataset in cfg.dataset.datasets:
-            cfg_trial = {'dataset.datasets': [dataset], 'dataset.eval_datasets': [dataset]}
+            if cfg.dataset.eval_datasets:
+                cfg_trial = {'dataset.datasets': [dataset], 'dataset.eval_datasets': [dataset]}
+            else:
+                cfg_trial = {'dataset.datasets': [dataset]}
             run_cfg(cfg_trial)
         exit(0)
 
