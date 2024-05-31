@@ -36,7 +36,7 @@ num_workers = 4 # for main eval block.
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
     # VARIANT = 'h1_single'
-    VARIANT = 'm2_single'
+    # VARIANT = 'm2_single'
     VARIANT = 'm1_single'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
@@ -97,6 +97,7 @@ def get_own_day_r2(row):
             return row[f'Held Out {row.dataset} R2']
     print(row)
     raise ValueError(f"Unknown dataset {row.dataset}")
+
 ndt2_run_df['dataset'] = ndt2_run_df.variant.apply(reduce_dataset_from_variant)
 ndt2_run_df['Heldout_Accuracy'] = ndt2_run_df.apply(get_own_day_r2, axis=1)
 
@@ -122,3 +123,28 @@ print(ndt2_run_df[['dataset', 'Heldout_Accuracy']])
 
 print(grouped_heldout_accuracy(ndt2_run_df))
 print(grouped_heldin_accuracy(ndt2_run_df))
+
+def compute_other_held_in_mean_perf(df):
+    if 'h1' in df.variant.iloc[0]:
+        subset = df[df.dataset.isin(['S0', 'S1', 'S2', 'S3', 'S4', 'S5'])]
+        subset['Other_Accuracy'] = subset.apply(lambda row: sum(
+            [row[f'Held In {held_in} R2'] for held_in in ['S0', 'S1', 'S2', 'S3', 'S4', 'S5'] if held_in != row.dataset]) / 5, axis=1)
+    elif 'm2' in df.variant.iloc[0]:
+        subset = df[df.dataset.isin(['20201019', '20201020', '20201027', '20201028'])]
+        subset['Other_Accuracy'] = subset.apply(lambda row: sum(
+            [row[f'Held In {held_in} R2'] for held_in in ['20201019', '20201020', '20201027', '20201028'] if held_in != row.dataset]) / 3, axis=1)
+    elif 'm1' in df.variant.iloc[0]:
+        subset = df[df.dataset.isin(DATASET_HELDINOUT_MAP['m1']['held_in'])]
+        subset['Other_Accuracy'] = subset.apply(lambda row: sum(
+            [row[f'Held In {held_in} R2'] for held_in in DATASET_HELDINOUT_MAP['m1']['held_in'] if held_in != row.dataset]) / (len(DATASET_HELDINOUT_MAP['m1']['held_in']) - 1), axis=1)
+    else:
+        raise ValueError(f"Unknown variant {df.variant.iloc[0]}")
+    # find the best row
+    best_held_in_day = subset.loc[subset.groupby('eval_set')['Other_Accuracy'].idxmax()]
+    return best_held_in_day
+    # return best_hexld_in_day
+
+static_row = compute_other_held_in_mean_perf(ndt2_run_df)
+print(f"Static")
+print(static_row['eval_r2'])
+print(static_row['Held Out R2 Std.'])

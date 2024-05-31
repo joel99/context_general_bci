@@ -1014,6 +1014,8 @@ class BrainBertInterface(pl.LightningModule):
         #     else:
         #         # stacked = [m[k] for m in all_metrics]
         #         metrics[k] = np.nanmean(np.vstack([m[k] for m in all_metrics]), 0)
+        if Metric.kinematic_r2 in metrics and DataKey.bhvr_mask in batch and batch[DataKey.bhvr_mask].isnan().all():
+            metrics[Metric.kinematic_r2] = metrics[Metric.kinematic_r2].zero_() # Just a bad batch with no kinematic data, don't fail the run
         self.common_log(metrics, prefix='val' if dataloader_idx == 0 else 'eval', sync_dist=True, add_dataloader_idx=False)
         return metrics['loss']
 
