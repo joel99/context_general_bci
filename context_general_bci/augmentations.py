@@ -40,10 +40,12 @@ def explicit_crop_time(raw_payload: Dict[DataKey, torch.Tensor], cfg: DatasetCon
     time_length = None
     for arr in raw_payload[DataKey.spikes]:
         if time_length is None:
-            time_length = raw_payload[DataKey.spikes][arr].shape[0]
+            time_length = raw_payload[DataKey.spikes][arr].shape[0] # assumes uniform time. this is pre-tokenization, so # of spikes counts as number of timesteps
+            # time_length = raw_payload[DataKey.spikes][arr].shape[0] # assumes uniform time
             start_time = random.randint(0, max(time_length - crop_length, 0))
         aug_spike[arr] = apply_crop(raw_payload[DataKey.spikes][arr], start_time, crop_length)
-
+    # if time_length < crop_length:
+        # raise ValueError(f"Time length {time_length} is less than crop length {crop_length}")
     aug_payload[DataKey.spikes] = aug_spike
 
     for key, val in raw_payload.items():

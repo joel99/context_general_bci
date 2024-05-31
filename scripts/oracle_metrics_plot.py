@@ -146,5 +146,6 @@ def compute_other_held_in_mean_perf(df):
 
 static_row = compute_other_held_in_mean_perf(ndt2_run_df)
 print(f"Static")
+print(static_row['heldin_eval_r2'])
 print(static_row['eval_r2'])
 print(static_row['Held Out R2 Std.'])

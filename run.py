@@ -392,7 +392,6 @@ def run_exp(cfg : RootConfig) -> None:
     if num_workers == 0:
         logger.warning("Num workers is 0, DEBUGGING.")
     logger.info("Preparing to fit...")
-
     val_datasets = [val]
     if cfg.dataset.eval_datasets:
         val_datasets.append(eval_dataset)

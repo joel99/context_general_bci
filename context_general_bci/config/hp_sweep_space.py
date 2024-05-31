@@ -5,6 +5,38 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    'chop_coarse_500ms': {
+        'dataset.augment_crop_length_ms': {
+            'feasible_points': [ 200, 500 ]
+        },
+        'model.lr_init': {
+            'feasible_points': [1e-4, 3e-4]
+        },
+    },
+    'chop_coarse_1s': {
+        'dataset.augment_crop_length_ms': {
+            'feasible_points': [ 200, 500, 800, 1000 ]
+        },
+        'model.lr_init': {
+            'feasible_points': [1e-4, 3e-4]
+        },
+    },
+    'chop_coarse_2s': {
+        'dataset.augment_crop_length_ms': {
+            'feasible_points': [ 200, 500, 800, 1000, 2000 ]
+        },
+        'model.lr_init': {
+            'feasible_points': [1e-4, 3e-4]
+        },
+    },
+    'chop_coarse_4s': {
+        'dataset.augment_crop_length_ms': {
+            'feasible_points': [ 200, 500, 800, 1000, 2000, 4000 ]
+        },
+        'model.lr_init': {
+            'feasible_points': [1e-4, 3e-4]
+        },
+    },
     'chop': {
         'dataset.augment_crop_length_ms': {
             'feasible_points': [ 100, 200, 300, 400, 500, 750, 1000, 1250, 1500, 2000, 2500, 3000 ]
