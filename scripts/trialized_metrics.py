@@ -89,10 +89,9 @@ eval_metrics_path = eval_paths / f"{eval_set}_{'trialized' if TRIALIZED_EVAL els
 eval_metrics = {}
 ndt2_run_df['eval_r2'] = 0.
 for idx, run_row in ndt2_run_df.iterrows():
-    run = get_wandb_run(run_row.id, wandb_project="context_general_bci")
     ckpt = ckpts[VARIANT]
     zscore_pth = norms[VARIANT]
-    split = run_row.eval_set
+    split = VARIANT
     evaluator = FalconEvaluator(
         eval_remote=False,
         split=split,
@@ -101,7 +100,7 @@ for idx, run_row in ndt2_run_df.iterrows():
 
     task = getattr(FalconTask, split)
     config = FalconConfig(task=task)
-    max_bins = run_row['history']
+    max_bins = int(run_row['history'] / 20) # history in ms / 20ms bins
     decoder = NDT2Decoder(
         task_config=config,
         model_ckpt_path=ckpt,
