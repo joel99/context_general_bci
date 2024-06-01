@@ -58,6 +58,8 @@ def get_ndt2_run_df_for_variant(variant):
 # ndt2_run_df = pd.concat([get_ndt2_run_df_for_variant(variant) for variant in ['h1', 'm1', 'm2']])
 ndt2_run_df = pd.concat([get_ndt2_run_df_for_variant(variant) for variant in ['h1', 'm2']])
 print(ndt2_run_df.variant.unique())
+#%%
+pd.read_csv(eval_paths / f'm2_trialized_ndt2_trialized.csv')
     
 #%%
 from context_general_bci.analyze_utils import prep_plt
