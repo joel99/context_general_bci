@@ -121,7 +121,8 @@ trialized_model_scores = {
     }
 }
 
-palette = sns.color_palette(n_colors=2)
+
+palette = sns.color_palette("Paired", n_colors=4)
 f = plt.figure(figsize=(6,6))
 ax = prep_plt(f.gca(), big=True)
 
@@ -145,8 +146,8 @@ def plot_single(ax, split, df):
         data=df_long,
         x='augment_chop_length_ms',
         y='r2_value',
-        hue='in_out',
-        style='type',  # Use metric to control linestyle (solid vs. dashed)
+        hue='type',
+        style='in_out',  # Use metric to control linestyle (solid vs. dashed)
         ax=ax,
         legend=False, # Remove default legend
         palette=palette,
@@ -155,7 +156,7 @@ def plot_single(ax, split, df):
         data=df_long,
         x='augment_chop_length_ms',
         y='r2_value',
-        hue='in_out',
+        hue='type',
         # style='metric',  # Use metric to control linestyle (solid vs. dashed)
         ax=ax,
         legend=False, # Remove default legend
@@ -164,38 +165,42 @@ def plot_single(ax, split, df):
 
     def plot_base_mean_std(mean, std, label, color, style):
         ax.axhline(y=mean, color=color, linestyle=style, label=label)
-        ax.axhspan(
-            mean - std,
-            mean + std,
-            color=color, alpha=0.1
-        )
+        # ax.axhspan(
+        #     mean - std,
+        #     mean + std,
+        #     color=color, alpha=0.1
+        # )
+    
+    # Heldin-heldout eval: Line style
+    # Trialized model vs continual model: Primary Color
+    # Trialized vs continual eval: Secondary color (Darker for continual eval)
     plot_base_mean_std(
         trialized_model_scores[split]['continual']['eval_r2'],
         trialized_model_scores[split]['continual']['Held Out R2 Std.'],
         'Continual Eval R2',
-        palette[0],
-        '-.'
+        palette[2],
+        '-'
     )
     plot_base_mean_std(
         trialized_model_scores[split]['continual']['heldin_eval_r2'],
         trialized_model_scores[split]['continual']['Held In R2 Std.'],
         'Continual Heldin Eval R2',
-        palette[1],
-        '-.'
+        palette[2],
+        '--'
     )
     plot_base_mean_std(
         trialized_model_scores[split]['trialized']['eval_r2'],
         trialized_model_scores[split]['trialized']['Held Out R2 Std.'],
         'Trialized Eval R2',
-        palette[0],
-        ':',
+        palette[3],
+        '-',
     )
     plot_base_mean_std(
         trialized_model_scores[split]['trialized']['heldin_eval_r2'],
         trialized_model_scores[split]['trialized']['Held In R2 Std.'],
         'Trialized Heldin Eval R2',
-        palette[1],
-        ':',
+        palette[3],
+        '--',
     )
     
     # Customize linestyles
