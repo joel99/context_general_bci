@@ -46,8 +46,12 @@ else:
             'm2',
         ]
     )
+    parser.add_argument(
+        "--trialized", "-t", action='store_true'
+    )
     args = parser.parse_args()
     VARIANT = args.variant
+    TRIALIZED_EVAL = args.trialized # still requires hardcode override in package - manually do this
 eval_set = VARIANT
 
 TAG_MAP = {
@@ -137,7 +141,7 @@ ndt2_run_df = get_ndt2_run_df_for_query(VARIANT)
 
 print(ndt2_run_df)
 
-eval_metrics_path = eval_paths / f"{eval_set}_continual_ndt2.csv"
+eval_metrics_path = eval_paths / f"{eval_set}_{'trialized' if TRIALIZED_EVAL else 'continual'}_ndt2.csv"
 eval_df_so_far = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
 
 ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
@@ -160,12 +164,12 @@ for idx, run_row in ndt2_run_df.iterrows():
     split = run_row.eval_set
     if split == 'm2':
         zscore_pth = "" # Forgot to provide this but training worked fine
+    breakpoint()
     evaluator = FalconEvaluator(
         eval_remote=False,
         split=split,
         verbose=True
     )
-    print(evaluator.get_eval_files(phase='test'))
 
     task = getattr(FalconTask, split)
     config = FalconConfig(task=task)
@@ -177,7 +181,7 @@ for idx, run_row in ndt2_run_df.iterrows():
         zscore_path=zscore_pth,
         max_bins=max_bins,
         dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')],
-        batch_size=8,
+        batch_size=1 if TRIALIZED_EVAL else 8,
     )
     payload = evaluator.evaluate(decoder, phase='test')
     result = payload['result'][0][f'test_split_{split}']
