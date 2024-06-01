@@ -164,7 +164,7 @@ for idx, run_row in ndt2_run_df.iterrows():
     split = run_row.eval_set
     if split == 'm2':
         zscore_pth = "" # Forgot to provide this but training worked fine
-    breakpoint()
+    # breakpoint()
     evaluator = FalconEvaluator(
         eval_remote=False,
         split=split,
@@ -201,6 +201,6 @@ for idx, run_row in ndt2_run_df.iterrows():
 #%%
 ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
 # drop duplicates by variant stem, prefer new
-ndt2_run_df = ndt2_run_df.drop_duplicates(subset=['variant'], keep='first').reset_index(drop=True)
+# ndt2_run_df = ndt2_run_df.drop_duplicates(subset=['variant'], keep='first').reset_index(drop=True)
 
 ndt2_run_df.to_csv(eval_metrics_path, index=False)
