@@ -137,6 +137,7 @@ queries = [
 runs = []
 
 ndt2_run_df = get_ndt2_run_df_for_query(VARIANT)
+print(ndt2_run_df)
 # ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
 eval_metrics_path = eval_paths / f"{eval_set}_eval_ndt2.csv"
 eval_df_so_far = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()

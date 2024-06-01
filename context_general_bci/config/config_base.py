@@ -10,6 +10,7 @@ LENGTH = 'length'
 # config is typed
 class Architecture(Enum):
     ndt = 'ndt'
+    rnn = 'rnn' # RNN baseline for FALCON
 
 class ModelTask(Enum):
     next_step_prediction = 'next_step'

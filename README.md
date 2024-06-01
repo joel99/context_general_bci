@@ -47,11 +47,15 @@ Implementing a new task or dataset involves a few steps, since the codebase gene
 
 ## Decoding applications (FALCON)
 While NDT2 is initially described as a self-supervised pretraining method, you may be interested in its decoding application. Please see the [FALCON-challenge codebase](https://github.com/snel-repo/falcon-challenge) for an example flow for preparaing NDT2 as a decoder. Configs used to produce FALCON baselines are available under `config/exp/falcon`. For example, to reproduce the M2 checkpoints, run `python run.py +exp/falcon/m2_chop_2s`.
-
+The config used for the Joint baselines are:
+- H1: `falcon/h1_100`
+- M1: `falcon/m1_100_continual`
+- M2: `falcon/m2_100_continual`
+Checkpoints for these runs are available [here](https://drive.google.com/drive/u/0/folders/1ijvmPcbyjHlLEoWWSSZrNm1bBojGgrZG).
 
 ## Checkpoints
 Given the relatively lightweight training process we recommend training your own model to then analyze. This will require overwriting the default wandb settings with your own.
-Note analysis scripts aren't build around manual checkpoint loading; but `model.load_from_checkpoint(<download_path>)` can be used with public checkpoints.
+Note analysis scripts aren't build around manual checkpoint path loading; but `model.load_from_checkpoint(<download_path>)` can be used with public checkpoints.
 
 Two example checkpoints are provided:
 - one from [task scaling](https://wandb.ai/joelye9/context_general_bci/runs/ydv48n02?workspace=user-joelye9): [Checkpoint](https://drive.google.com/file/d/18UgglFKPu6ev5Db4xDtj7aOfzAX4aZy1/view?usp=share_link)
