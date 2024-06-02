@@ -28,13 +28,13 @@ dataset:
   datasets: 
   # Held-in models
   - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-19.*
-  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-20.*
-  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-27.*
-  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-28.*
-  - falcon_FALCONM2-sub-MonkeyN.*_20201030_held_out_in_day_oracle
-  - falcon_FALCONM2-sub-MonkeyN.*_20201118_held_out_in_day_oracle
-  - falcon_FALCONM2-sub-MonkeyN.*_20201119_held_out_in_day_oracle
-  - falcon_FALCONM2-sub-MonkeyN.*_20201124_held_out_in_day_oracle
+  # - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-20.*
+  # - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-27.*
+  # - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-28.*
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201030_held_out_in_day_oracle
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201118_held_out_in_day_oracle
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201119_held_out_in_day_oracle
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201124_held_out_in_day_oracle
   eval_ratio: 0.0
 train:
   # max_batch_size: 256
@@ -46,7 +46,7 @@ train:
   patience: 250
 effective_bsz: 32
 # effective_bsz: 128
-# fragment_datasets: False
-fragment_datasets: True
+fragment_datasets: False
+# fragment_datasets: True
 sweep_cfg: 'rnn_basic'
 sweep_mode: 'grid'

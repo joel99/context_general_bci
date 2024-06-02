@@ -1,23 +1,20 @@
 # @package _global_
 
 defaults:
-  - /model: rnn # TODO
-  - /dataset: flat
+  - /model: rnn
+  - /dataset: base
 model:
-  lr_ramp_steps: 50
-  lr_decay_steps: 1500
-  lr_interval: epoch
-  causal: true
-  neurons_per_token: 32
   task:
     decode_normalizer: './data/zscore_h1_7d.pt'
-  dropout: 0.1
 dataset:
-  bin_size_ms: 20
   max_length_ms: 4000
+  max_tokens: 8192
   explicit_alias_to_session: true
-  max_channels: 192
+
+  neurons_per_token: 32
+  max_channels: 176
   max_arrays: 1
+
   data_keys:
   - DataKey.spikes
   - DataKey.bhvr_vel
@@ -44,9 +41,10 @@ train:
   batch_size: 8
   patience: 250
   early_stop_metric: val_kinematic_r2
+  autoscale_batch_size: true
 effective_bsz: 8
 
 fragment_datasets: True
 
-sweep_cfg: 'simple_scratch'
+sweep_cfg: 'rnn_basic'
 sweep_mode: 'grid'

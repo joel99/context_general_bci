@@ -140,11 +140,13 @@ cs.store(group="model", name="nlb", node=NLBModelConfig)
 @dataclass
 class SimpleRNNTaskConfig(TaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.kinematic_decoding])
-    pass # TODO elaborate
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
+    decode_strategy: EmbedStrat = EmbedStrat.project
 
 @dataclass 
 class SimpleRNNModelConfig(ModelConfig):
     task: TaskConfig = field(default_factory=SimpleRNNTaskConfig)
+    arch: Architecture = Architecture.rnn
     readin_strategy: EmbedStrat = EmbedStrat.none
     session_embed_strategy: EmbedStrat = EmbedStrat.none
     transform_space: bool = False

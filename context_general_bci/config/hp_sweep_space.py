@@ -5,6 +5,17 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    'rnn_basic': {
+        # "model.dropout": {
+            # 'feasible_points': [0.2]
+        # }, # Lower dropout systematically worse in smoketest, to match compute we use same # of search points for RNN / NDT
+        "model.hidden_size": {
+            'feasible_points': [128, 256]
+        },
+        'model.lr_init': {
+            'feasible_points': [1e-4, 3e-4, 5e-4],
+        },
+    },
     'chop_coarse_500ms': {
         'dataset.augment_crop_length_ms': {
             'feasible_points': [ 200, 500 ]

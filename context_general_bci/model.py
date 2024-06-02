@@ -104,13 +104,18 @@ class BrainBertInterface(pl.LightningModule):
                     embed_space=cfg.transformer.embed_space,
                 )
         elif self.cfg.arch == Architecture.rnn:
-            self.backbone = nn.LSTM(
-                self.data_attrs.max_channel_count,
-                self.cfg.hidden_size,
-                num_layers=self.cfg.decoder_layers,
-                dropout=self.cfg.dropout,
-                bidirectional=False,
+            self.backbone = nn.Sequential(
+                nn.Dropout(self.cfg.dropout),
+                nn.LSTM(
+                    self.data_attrs.max_channel_count,
+                    self.cfg.hidden_size,
+                    num_layers=self.cfg.decoder_layers,
+                    dropout=self.cfg.dropout, # non-applicable for 1 layer network
+                    bidirectional=False,
+                    batch_first=True,
+                )
             )
+            self.backbone.out_size = self.cfg.hidden_size
             logger.warning(f"RNN backbone only has minimal support; for FALCON supervised decoding path. Most features may break, without good errors.")
         else:
             raise NotImplementedError
@@ -661,11 +666,11 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
-        breakpoint()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
         if self.cfg.arch == Architecture.rnn:
-            outputs, (hn, cn) = self.backbone(state_in) # TODO verify shape, batch_first, etc.
-            breakpoint()
+            # state_in of shape B T A H -> B T H
+            state_in = state_in.flatten(2, 3)
+            outputs, (hn, cn) = self.backbone(state_in)
         else:
             temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
             if DataKey.extra in batch and not self.data_attrs.serve_tokens_flat: # serve_tokens_flat is enc dec, don't integrate extra (query) tokens in enc
@@ -1002,6 +1007,9 @@ class BrainBertInterface(pl.LightningModule):
                 self.log(f'{prefix}_{m.value}', metrics[m], **kwargs)
 
     def training_step(self, batch, batch_idx):
+        if DataKey.bhvr_mask in batch and not batch[DataKey.bhvr_mask].any() and self.cfg.arch == Architecture.rnn:
+            # No loss, just return - https://github.com/Lightning-AI/pytorch-lightning/issues/17407
+            return torch.tensor(0.0,requires_grad=True,device=self.device)
         if [ModelTask.shuffle_infill in self.cfg.task.tasks] and (self.cfg.log_token_proc_throughput or self.cfg.log_token_seen_throughput):
             self.token_proc_approx += batch[DataKey.spikes].size(0) * batch[DataKey.spikes].size(1)
             self.token_seen_approx += (batch[LENGTH_KEY].sum() * (1 - self.cfg.task.mask_ratio)).item()
@@ -1014,7 +1022,7 @@ class BrainBertInterface(pl.LightningModule):
                 if self.cfg.log_token_seen_throughput:
                     token_count_approx = self.all_gather(self.token_seen_approx).sum()
                     self.log('token_seen', token_count_approx, rank_zero_only=True)
-
+        
         self.common_log(metrics, prefix='train')
         return metrics['loss']
 
@@ -1342,3 +1350,45 @@ def unflatten(
     ] = flat_data
     assembled = assembled.flatten(start_dim=2)
     return assembled
+
+# https://github.com/Lightning-AI/pytorch-lightning/issues/17407
+from pytorch_lightning.plugins.precision.native_amp import _optimizer_handles_unscaling
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
+from pytorch_lightning.plugins.precision import NativeMixedPrecisionPlugin
+from torch.optim.lbfgs import LBFGS
+
+
+class CustomMixedPrecisionPlugin(NativeMixedPrecisionPlugin):
+
+    def optimizer_step(  # type: ignore[override]
+        self,
+        optimizer,
+        model,
+        closure,
+        **kwargs,
+    ):
+        if self.scaler is None:
+            # skip scaler logic, as bfloat16 does not require scaler
+            return super().optimizer_step(optimizer, model=model, closure=closure, **kwargs)
+        if isinstance(optimizer, LBFGS):
+            raise MisconfigurationException("AMP and the LBFGS optimizer are not compatible.")
+        closure_result = closure()
+
+        # EDIT: moved this to the top
+        skipped_backward = closure_result is None
+
+        # EDIT: added the second condition
+        if not _optimizer_handles_unscaling(optimizer) and not skipped_backward:
+            # Unscaling needs to be performed here in case we are going to apply gradient clipping.
+            # Optimizers that perform unscaling in their `.step()` method are not supported (e.g., fused Adam).
+            # Note: `unscale` happens after the closure is executed, but before the `on_before_optimizer_step` hook.
+            self.scaler.unscale_(optimizer)
+
+        self._after_closure(model, optimizer)
+        # in manual optimization, the closure does not return a value
+        if not model.automatic_optimization or not skipped_backward:
+            # note: the scaler will skip the `optimizer.step` if nonfinite gradients are found
+            step_output = self.scaler.step(optimizer, **kwargs)
+            self.scaler.update()
+            return step_output
+        return closure_result
