@@ -1,0 +1,52 @@
+# @package _global_
+
+defaults:
+  - /model: rnn # TODO
+  - /dataset: flat
+model:
+  lr_ramp_steps: 50
+  lr_decay_steps: 1500
+  lr_interval: epoch
+  causal: true
+  neurons_per_token: 32
+  task:
+    decode_normalizer: './data/zscore_h1_7d.pt'
+  dropout: 0.1
+dataset:
+  bin_size_ms: 20
+  max_length_ms: 4000
+  explicit_alias_to_session: true
+  max_channels: 192
+  max_arrays: 1
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
+  - DataKey.bhvr_mask
+  datasets:
+  - falcon_FALCONH1-S0_.*_calib
+  - falcon_FALCONH1-S1_.*_calib
+  - falcon_FALCONH1-S2_.*_calib
+  - falcon_FALCONH1-S3_.*_calib
+  - falcon_FALCONH1-S4_.*_calib
+  - falcon_FALCONH1-S5_.*_calib
+  - falcon_FALCONH1-S6_.*_oracle
+  - falcon_FALCONH1-S7_.*_oracle
+  - falcon_FALCONH1-S8_.*_oracle
+  - falcon_FALCONH1-S9_.*_oracle
+  - falcon_FALCONH1-S10_.*_oracle
+  - falcon_FALCONH1-S11_.*_oracle
+  - falcon_FALCONH1-S12_.*_oracle
+  eval_ratio: 0
+  behavior_dim: 7
+
+train:
+  max_batch_size: 8
+  batch_size: 8
+  patience: 250
+  early_stop_metric: val_kinematic_r2
+effective_bsz: 8
+
+fragment_datasets: True
+
+sweep_cfg: 'simple_scratch'
+sweep_mode: 'grid'

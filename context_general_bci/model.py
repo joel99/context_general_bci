@@ -90,18 +90,30 @@ class BrainBertInterface(pl.LightningModule):
                 f"Neurons per token served by data ({self.data_attrs.neurons_per_token}) must match model token size {self.cfg.neurons_per_token}"
         if self.data_attrs.serve_tokens_flat:
             assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
-        assert self.cfg.arch == Architecture.ndt, "ndt is all you need"
-        if self.cfg.transformer.n_layers == 0: # debug for parity
-            self.backbone = nn.Identity()
-            self.backbone.out_size = self.cfg.hidden_size
-        else:
-            self.backbone = SpaceTimeTransformer(
-                self.cfg.transformer,
-                max_spatial_tokens=data_attrs.max_spatial_tokens,
-                debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
-                context_integration=getattr(cfg.transformer, 'context_integration', 'in_context'),
-                embed_space=cfg.transformer.embed_space,
+        
+        if self.cfg.arch == Architecture.ndt:                
+            if self.cfg.transformer.n_layers == 0: # debug for parity
+                self.backbone = nn.Identity()
+                self.backbone.out_size = self.cfg.hidden_size
+            else:
+                self.backbone = SpaceTimeTransformer(
+                    self.cfg.transformer,
+                    max_spatial_tokens=data_attrs.max_spatial_tokens,
+                    debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
+                    context_integration=getattr(cfg.transformer, 'context_integration', 'in_context'),
+                    embed_space=cfg.transformer.embed_space,
+                )
+        elif self.cfg.arch == Architecture.rnn:
+            self.backbone = nn.LSTM(
+                self.data_attrs.max_channel_count,
+                self.cfg.hidden_size,
+                num_layers=self.cfg.decoder_layers,
+                dropout=self.cfg.dropout,
+                bidirectional=False,
             )
+            logger.warning(f"RNN backbone only has minimal support; for FALCON supervised decoding path. Most features may break, without good errors.")
+        else:
+            raise NotImplementedError
         self.bind_io()
         self.novel_params: List[str] = [] # for fine-tuning
         num_updates = sum(tp.does_update_root for tp in self.task_pipelines.values())
@@ -287,6 +299,8 @@ class BrainBertInterface(pl.LightningModule):
                 self.readin = ContextualMLP(channel_count, self.cfg.hidden_size, self.cfg)
             elif self.cfg.readin_strategy == EmbedStrat.readin_cross_attn:
                 self.readin = ReadinCrossAttention(channel_count, self.cfg.hidden_size, self.data_attrs, self.cfg)
+            elif self.cfg.readin_strategy == EmbedStrat.none:
+                self.readin = nn.Identity()
         if self.cfg.readout_strategy == EmbedStrat.unique_project:
             self.readout = ReadinMatrix(
                 self.cfg.hidden_size,
@@ -647,42 +661,46 @@ class BrainBertInterface(pl.LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # returns backbone features B T S H
-        # breakpoint()
+        breakpoint()
         state_in, trial_context, temporal_context = self._prepare_inputs(batch)
-        temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
-        if DataKey.extra in batch and not self.data_attrs.serve_tokens_flat: # serve_tokens_flat is enc dec, don't integrate extra (query) tokens in enc
-            state_in = torch.cat([state_in, batch[DataKey.extra]], dim=1)
-            if temporal_padding_mask is not None: # Implicit - if we have extra that warrants padding, base certainly warrants padding
-                extra_padding_mask = create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
-                temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
+        if self.cfg.arch == Architecture.rnn:
+            outputs, (hn, cn) = self.backbone(state_in) # TODO verify shape, batch_first, etc.
+            breakpoint()
+        else:
+            temporal_padding_mask = create_temporal_padding_mask(state_in, batch)
+            if DataKey.extra in batch and not self.data_attrs.serve_tokens_flat: # serve_tokens_flat is enc dec, don't integrate extra (query) tokens in enc
+                state_in = torch.cat([state_in, batch[DataKey.extra]], dim=1)
+                if temporal_padding_mask is not None: # Implicit - if we have extra that warrants padding, base certainly warrants padding
+                    extra_padding_mask = create_temporal_padding_mask(batch[DataKey.extra], batch, length_key=COVARIATE_LENGTH_KEY)
+                    temporal_padding_mask = torch.cat([temporal_padding_mask, extra_padding_mask], dim=1)
 
-        # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
-        # But we do want to exclude fully-padded arrays from computation
-        if self.data_attrs.serve_tokens_flat:
-            space_padding_mask = None
-        elif self.data_attrs.serve_tokens:
-            assert not DataKey.extra in batch, 'not implemented'
-            allocated_space_tokens = torch.ceil(batch[CHANNEL_KEY] / self.cfg.neurons_per_token).sum(1) # B
-            space_comparison = torch.arange(state_in.size(2), device=state_in.device)[None, :]
-            space_padding_mask = space_comparison >= allocated_space_tokens[:, None] # -> B A
-        else:
-            assert not DataKey.extra in batch, 'not implemented'
-            space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
-        if self.cfg.transformer.n_layers == 0:
-            outputs = state_in
-        else:
-            outputs: torch.Tensor = self.backbone(
-                state_in,
-                trial_context=trial_context,
-                temporal_context=temporal_context,
-                temporal_padding_mask=temporal_padding_mask,
-                space_padding_mask=space_padding_mask,
-                causal=self.cfg.causal,
-                times=batch.get(DataKey.time, None),
-                positions=batch.get(DataKey.position, None),
-            ) # B x T x S x H or B x Token x H (flat)
-        # if outputs.isnan().any():
-            # import pdb;pdb.set_trace()
+            # Note that fine-grained channel mask doesn't matter in forward (sub-token padding is handled in loss calculation externally)
+            # But we do want to exclude fully-padded arrays from computation
+            if self.data_attrs.serve_tokens_flat:
+                space_padding_mask = None
+            elif self.data_attrs.serve_tokens:
+                assert not DataKey.extra in batch, 'not implemented'
+                allocated_space_tokens = torch.ceil(batch[CHANNEL_KEY] / self.cfg.neurons_per_token).sum(1) # B
+                space_comparison = torch.arange(state_in.size(2), device=state_in.device)[None, :]
+                space_padding_mask = space_comparison >= allocated_space_tokens[:, None] # -> B A
+            else:
+                assert not DataKey.extra in batch, 'not implemented'
+                space_padding_mask = batch[CHANNEL_KEY] == 0  if CHANNEL_KEY in batch else None # b x a of ints < c
+            if self.cfg.transformer.n_layers == 0:
+                outputs = state_in
+            else:
+                outputs: torch.Tensor = self.backbone(
+                    state_in,
+                    trial_context=trial_context,
+                    temporal_context=temporal_context,
+                    temporal_padding_mask=temporal_padding_mask,
+                    space_padding_mask=space_padding_mask,
+                    causal=self.cfg.causal,
+                    times=batch.get(DataKey.time, None),
+                    positions=batch.get(DataKey.position, None),
+                ) # B x T x S x H or B x Token x H (flat)
+            # if outputs.isnan().any():
+                # import pdb;pdb.set_trace()
         return outputs
 
     def _step(self, batch: Dict[str, torch.Tensor], eval_mode=False) -> Dict[str, torch.Tensor]:
@@ -772,6 +790,8 @@ class BrainBertInterface(pl.LightningModule):
             batch should provide info needed by model. (responsibility of user)
             Output is always batched (for now)
         """
+        if self.cfg.arch == Architecture.rnn:
+            raise NotImplementedError
         if self.data_attrs.serve_tokens and not self.data_attrs.serve_tokens_flat:
             raise NotImplementedError
         # there are data keys and meta keys, that might be coming in unbatched

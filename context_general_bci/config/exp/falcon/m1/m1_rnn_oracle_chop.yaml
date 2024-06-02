@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - m1
+model:
+  hidden_size: 512
+dataset:
+  scale_ratio: 1.0
+  falcon_m1:
+    respect_trial_boundaries: False
+    chop_size_ms: 4000
+  augmentations: ['explicit_crop_time']
+  datasets:
+  # Held-in models
+  - falcon_FALCONM1-sub-MonkeyL-held-in-calib_ses-20120924.*
+  - falcon_FALCONM1-sub-MonkeyL-held-in-calib_ses-20120926.*
+  - falcon_FALCONM1-sub-MonkeyL-held-in-calib_ses-20120927.*
+  - falcon_FALCONM1-sub-MonkeyL-held-in-calib_ses-20120928.*
+  - falcon_FALCONM1-L_20121004_held_out_oracle
+  - falcon_FALCONM1-L_20121017_held_out_oracle
+  - falcon_FALCONM1-L_20121024_held_out_oracle
+  eval_ratio: 0.0
+train:
+  max_batch_size: 32
+  batch_size: 16 # reduced 4x
+
+fragment_datasets: True
+effective_bsz: 32 # reduced 4x
+sweep_cfg: 'simple_scratch'
+sweep_mode: 'grid'

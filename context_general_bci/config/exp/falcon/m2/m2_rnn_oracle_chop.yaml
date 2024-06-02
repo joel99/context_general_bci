@@ -1,0 +1,35 @@
+# @package _global_
+
+defaults:
+  - m2
+  - /model: rnn
+model:
+  hidden_size: 512
+dataset:
+  scale_ratio: 1.0
+  falcon_m2:
+    respect_trial_boundaries: False
+    chop_size_ms: 2000
+  augmentations: ['explicit_crop_time']
+  datasets: 
+  # Held-in models
+  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-19.*
+  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-20.*
+  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-27.*
+  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-28.*
+  # - falcon_FALCONM2-sub-MonkeyN-held-in-calib.*
+  - falcon_FALCONM2-sub-MonkeyN.*_20201030_held_out_in_day_oracle
+  - falcon_FALCONM2-sub-MonkeyN.*_20201118_held_out_in_day_oracle
+  - falcon_FALCONM2-sub-MonkeyN.*_20201119_held_out_in_day_oracle
+  - falcon_FALCONM2-sub-MonkeyN.*_20201124_held_out_in_day_oracle
+  eval_ratio: 0.0
+train:
+  # max_batch_size: 256
+  # batch_size: 64
+  max_batch_size: 32
+  batch_size: 32
+effective_bsz: 32
+# effective_bsz: 128
+fragment_datasets: True
+sweep_cfg: 'simple_scratch'
+sweep_mode: 'grid'
