@@ -74,14 +74,14 @@ ndt2_run_df = pd.DataFrame({
 })
 
 ckpts = {
-    'h1': '/home/joy47/projects/stability-benchmark/local_data/ndt2_h1_sample.pth',
-    'm1': '/home/joy47/projects/stability-benchmark/local_data/ndt2_m1_sample.pth',
-    'm2': '/home/joy47/projects/stability-benchmark/local_data/ndt2_m2_sample.pth'
+    'h1': '../stability-benchmark/local_data/ndt2_h1_sample.pth',
+    'm1': '../stability-benchmark/local_data/ndt2_m1_sample.pth',
+    'm2': '../projects/stability-benchmark/local_data/ndt2_m2_sample.pth'
 }
 norms = {
-    'h1': '/home/joy47/projects/stability-benchmark/local_data/ndt2_zscore_h1.pt',
-    'm1': '/home/joy47/projects/stability-benchmark/local_data/ndt2_zscore_m1.pt',
-    'm2': '/home/joy47/projects/stability-benchmark/local_data/ndt2_zscore_m2.pt'
+    'h1': '../stability-benchmark/local_data/ndt2_zscore_h1.pt',
+    'm1': '../stability-benchmark/local_data/ndt2_zscore_m1.pt',
+    'm2': '../stability-benchmark/local_data/ndt2_zscore_m2.pt'
 }
     
 
