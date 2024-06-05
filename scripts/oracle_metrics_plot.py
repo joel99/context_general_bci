@@ -33,11 +33,20 @@ import sys
 import argparse
 
 num_workers = 4 # for main eval block.
+
+r"""
+
+    Log of joint oracle runs:
+    H1: https://wandb.ai/joelye9/context_general_bci/runs/vsy0lf7t?nw=nwuserjoelye9
+    M1: https://wandb.ai/joelye9/context_general_bci/runs/qf08kuj2?nw=nwuserjoelye9
+    M2: https://wandb.ai/joelye9/context_general_bci/runs/gr0kyzum/overview?nw=nwuserjoelye9
+"""
+
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
-    # VARIANT = 'h1_single'
+    VARIANT = 'h1_single'
     # VARIANT = 'm2_single'
-    VARIANT = 'm1_single'
+    # VARIANT = 'm1_single'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()
@@ -60,9 +69,11 @@ eval_paths.mkdir(exist_ok=True, parents=True)
 eval_metrics_path = eval_paths / f"{eval_set}_eval_ndt2.csv"
 ndt2_run_df = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
 
+ndt2_run_df
 #%%
-ndt2_run_df.head()
-ndt2_run_df = ndt2_run_df[~ndt2_run_df.variant.isin(['h1_oracle_joint-sweep-simple_scratch'])]
+ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'h1_oracle_joint-sweep-simple_scratch']
+ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'm1_oracle_joint-sweep-simple_scratch']
+ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'm2_oracle_joint-sweep-simple_scratch']
 def reduce_dataset_from_variant(variant):
     if 'm2' in variant:
         if 'ses' in variant:

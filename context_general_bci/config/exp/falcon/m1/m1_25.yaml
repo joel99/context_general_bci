@@ -1,9 +1,0 @@
-# @package _global_
-
-defaults:
-  - m1
-dataset:
-  scale_ratio: 0.25
-train:
-  max_batch_size: 32
-  batch_size: 32

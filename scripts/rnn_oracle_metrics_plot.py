@@ -31,9 +31,9 @@ import argparse
 num_workers = 4 # for main eval block.
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
-    # VARIANT = 'h1_single'
-    VARIANT = 'm1_single'
-    # VARIANT = 'm2_single'
+    VARIANT = 'h1_single'
+    # VARIANT = 'm1_single'
+    VARIANT = 'm2_single'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()

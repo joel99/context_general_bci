@@ -141,6 +141,7 @@ print(ndt2_run_df)
 # ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
 eval_metrics_path = eval_paths / f"{eval_set}_eval_ndt2.csv"
 eval_df_so_far = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
+# eval_df_so_far = pd.DataFrame()
 
 ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
 if len(eval_df_so_far):
@@ -172,6 +173,30 @@ for idx, run_row in ndt2_run_df.iterrows():
         max_bins = cfg.dataset.augment_crop_length_ms // config.bin_size_ms
     else:
         max_bins = cfg.dataset.max_length_ms // config.bin_size_ms
+    if 'single' in VARIANT and 'frag' in run_row.variant:
+        # Parse out the key
+        print(run_row.variant)
+        if split == 'h1':
+            force_static_key = run_row.variant.split('FALCONH1-')[1].split('_')[0]
+        elif split == 'm1':
+            if 'FALCONM1-L_' in run_row.variant:
+                force_static_key = run_row.variant.split('FALCONM1-L_')[1].split('_')[0]
+            else:
+                force_static_key = run_row.variant.split('ses-')[1].split('.*')[0]
+            # breakpoint()
+        elif split == 'm2':
+            if 'ses-' in run_row.variant:
+                force_static_key = run_row.variant.split('ses-', 1)[1].split('.*')[0]
+            else:
+                # m2_oracle_chop-frag-falcon_FALCONM2-sub-MonkeyN.*_20201030_held_out_in_day_oracle-sweep-simple_scratch
+                date_str = run_row.variant.split('*_')[-1].split('_')[0]
+                force_static_key = f'{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}' # -Run{run_num}'
+                # ['2020-10-19-Run1', '2020-10-20-Run1', '2020-10-27-Run1', '2020-10-28-Run1', '2020-10-30-Run1', '2020-11-18-Run1', '2020-11-19-Run1', '2020-11-24-Run1', '2020-10-19-Run2', '2020-10-20-Run2', '2020-10-27-Run2', '2020-10-30-Run2', '2020-11-24-Run2']
+        else:
+            raise ValueError(f"Unknown split {split}")
+        print(f'reduced to {force_static_key}')
+    else:
+        force_static_key = ''
     decoder = NDT2Decoder(
         task_config=config,
         model_ckpt_path=ckpt,
@@ -180,6 +205,7 @@ for idx, run_row in ndt2_run_df.iterrows():
         max_bins=max_bins,
         dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')],
         batch_size=8,
+        force_static_key=force_static_key
     )
     payload = evaluator.evaluate(decoder, phase='test')
     result = payload['result'][0][f'test_split_{split}']
