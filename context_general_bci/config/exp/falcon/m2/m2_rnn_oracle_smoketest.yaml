@@ -1,0 +1,52 @@
+# @package _global_
+
+defaults:
+  - /model: rnn
+  - /dataset: base
+model:
+  task:
+    decode_normalizer: './data/zscore_m2_2d.pt'
+dataset:
+  max_length_ms: 4000
+  max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
+  explicit_alias_to_session: true
+
+  neurons_per_token: 32
+  max_channels: 96 # Now it matters...
+  max_arrays: 1
+
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
+  - DataKey.bhvr_mask
+  behavior_dim: 2
+  scale_ratio: 1.0
+  falcon_m2:
+    respect_trial_boundaries: False
+    chop_size_ms: 2000
+  augmentations: ['explicit_crop_time']
+  datasets: 
+  # Held-in models
+  - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-19.*
+  # - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-20.*
+  # - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-27.*
+  # - falcon_FALCONM2-sub-MonkeyN-held-in-calib_ses-2020-10-28.*
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201030_held_out_in_day_oracle
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201118_held_out_in_day_oracle
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201119_held_out_in_day_oracle
+  # - falcon_FALCONM2-sub-MonkeyN.*_20201124_held_out_in_day_oracle
+  eval_ratio: 0.0
+train:
+  # max_batch_size: 256
+  # batch_size: 64
+  max_batch_size: 32
+  batch_size: 32
+  early_stop_metric: val_kinematic_r2
+  autoscale_batch_size: true
+  patience: 250
+effective_bsz: 32
+# effective_bsz: 128
+fragment_datasets: False
+# fragment_datasets: True
+sweep_cfg: 'rnn_basic'
+sweep_mode: 'grid'

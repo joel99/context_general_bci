@@ -25,7 +25,7 @@ from context_general_bci.model_slim import transfer_model
 def format_array_name(subject: str):
     return f'FALCON{subject}-M1'
 
-class NDT2Decoder(BCIDecoder):
+class RNNDecoder(BCIDecoder):
     r"""
         For the FALCON challenge
     """
@@ -39,7 +39,6 @@ class NDT2Decoder(BCIDecoder):
             max_bins: int,
             dataset_handles: List[str] = [],
             batch_size: int = 1,
-            force_static_key: str = '' # If true, ignore data attrs and just load the only key fit in the single session model (for oracle single day baselines)
         ):
         r"""
             Loading NDT2 requires both weights and model config. Weight loading through a checkpoint is standard.
@@ -63,26 +62,18 @@ class NDT2Decoder(BCIDecoder):
         propagate_config(cfg)
         pl.seed_everything(seed=cfg.seed)
 
+        r"""
+            This infra is copy-pasted but unnecessary as no per-context parameters are available for RNN.
+        """
         self.subject = getattr(SubjectName, f'falcon_{task_config.task.name}')
-        if force_static_key:
-        # if force_static_key and False:
-            sessions = [force_static_key]
-            self.forced = True
-        else:
-            sessions = sorted([self._task_config.hash_dataset(handle) for handle in dataset_handles])
-            if task_config.task == FalconTask.m2:
-                def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
-                    # Remove explicit run
-                    if run.startswith('Run'):
-                        run_date = run.split('_')[1]
-                        return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}' # -{run_str}'
-                    else:
-                        run_date = '-'.join(run.split('-')[:-1])
-                        return run_date
-                sessions = [remap_run(run) for run in sessions]
-            elif self._task_config.task == FalconTask.h1:
-                sessions = [i.split('_set_')[0] for i in sessions]
-            self.forced = False
+        sessions = sorted([self._task_config.hash_dataset(handle) for handle in dataset_handles])
+        if task_config.task == FalconTask.m2 and sessions[0].startswith('Run'): # 0.3.5 style formatting for M2, back compat patch
+            def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
+                run_str, run_date = run.split('_')
+                return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}-{run_str}'
+            sessions = [remap_run(run) for run in sessions]
+        elif self._task_config.task == FalconTask.h1:
+            sessions = [i.split('_set_')[0] for i in sessions]
         context_idx = {
             MetaKey.array.name: [format_array_name(self.subject)],
             MetaKey.subject.name: [self.subject],
@@ -115,28 +106,7 @@ class NDT2Decoder(BCIDecoder):
     def reset(self, dataset_tags: List[Path] = [""]):
         self.set_steps = 0
         self.observation_buffer.zero_()
-        dataset_tags = [self._task_config.hash_dataset(dset.stem) for dset in dataset_tags]
-        meta_keys = []
-        if self.forced:
-            self.meta_key = torch.zeros(len(dataset_tags), device='cuda:0', dtype=torch.long)
-        else:
-            for dataset_tag in dataset_tags:
-                if self._task_config.task == FalconTask.m2:
-                    def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
-                        # Remove explicit run
-                        if run.startswith('Run'):
-                            run_date = run.split('_')[1]
-                            return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}' # -{run_str}'
-                        else:
-                            run_date = '-'.join(run.split('-')[:-1])
-                            return run_date
-                    dataset_tag = remap_run(dataset_tag)
-                elif self._task_config.task == FalconTask.h1:
-                    dataset_tag = dataset_tag.split('_set_')[0]
-                if dataset_tag not in self.model.data_attrs.context.session:
-                    raise ValueError(f"Dataset tag {dataset_tag} not found in calibration sets {self.model.data_attrs.context.session} - did you calibrate on this dataset?")
-                meta_keys.append(self.model.data_attrs.context.session.index(dataset_tag))
-            self.meta_key = torch.tensor(meta_keys, device='cuda:0')
+        self.cur_batch = len(dataset_tags)
 
     def predict(self, neural_observations: np.ndarray):
         r"""
@@ -145,9 +115,10 @@ class NDT2Decoder(BCIDecoder):
             return:
                 out: (batch, n_dims)
         """
+        # breakpoint()
         self.observe(neural_observations)
         decoder_in = rearrange(self.observation_buffer[-self.set_steps:], 't b c -> b t c 1')
-        out = self.model(decoder_in[:len(self.meta_key)], self.meta_key)
+        out = self.model(decoder_in[:self.cur_batch])
         return out.cpu().numpy()
 
     def observe(self, neural_observations: np.ndarray):

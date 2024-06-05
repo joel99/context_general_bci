@@ -138,6 +138,44 @@ class NLBModelConfig(ModelConfig):
 cs.store(group="model", name="nlb", node=NLBModelConfig)
 
 @dataclass
+class SimpleRNNTaskConfig(TaskConfig):
+    tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.kinematic_decoding])
+    metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
+    decode_strategy: EmbedStrat = EmbedStrat.project
+
+@dataclass 
+class SimpleRNNModelConfig(ModelConfig):
+    task: TaskConfig = field(default_factory=SimpleRNNTaskConfig)
+    arch: Architecture = Architecture.rnn
+    readin_strategy: EmbedStrat = EmbedStrat.none
+    session_embed_strategy: EmbedStrat = EmbedStrat.none
+    transform_space: bool = False
+    hidden_size: int = 128
+    decoder_layers: int = 1
+    weight_decay: float = 0.01
+    dropout: float = 0.2
+    
+    # TODO schedule
+    lr_ramp_steps: int = 100
+    lr_decay_steps: int = 2500
+
+    """
+    Notes from YA
+    model_dim:
+        hidden_dim: 76
+        input_dim: 192
+        n_layers: 1
+        output_dim: 2
+    model_hparams:
+        dropout: 0.5517067792984223
+        gauss_noise: true
+        learn_rate: 0.008138520448393726
+        weight_decay: 0.004892947184380708        
+    """
+
+cs.store(group="model", name="rnn", node=SimpleRNNModelConfig)
+
+@dataclass
 class BhvrDecodeFlatTaskConfig(FlatEncDecTaskConfig):
     tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.kinematic_decoding])
     metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])

@@ -92,34 +92,36 @@ def temporal_mean_pool(time: torch.Tensor, backbone_features: torch.Tensor):
 
 class SkinnyBehaviorRegression(nn.Module):
     r"""
-        For online. Do not use for training.
+        For online/inference. Do not use for training.
     """
 
     def __init__(
         self, cfg: ModelConfig, data_attrs: DataAttrs, batch_size: int = 1
     ):
         super().__init__()
-        self.decode_cross_attn = True
-        assert cfg.decoder_context_integration == 'cross_attn', "Only cross attn supported for now"
         self.cfg = cfg.task
+        if cfg.arch == Architecture.rnn:
+            self.decode_cross_attn = False
+        else:
+            self.decode_cross_attn = True
+            assert cfg.decoder_context_integration == 'cross_attn', "Only cross attn supported for now"
 
-        self.time_pad = cfg.transformer.max_trial_length
-        self.decoder = SpaceTimeTransformerDecoderScript(
-            cfg.transformer,
-            max_spatial_tokens=0,
-            n_layers=cfg.decoder_layers,
-            allow_embed_padding=True,
-            context_integration=cfg.decoder_context_integration,
-            embed_space=False
-        )
-
+            self.time_pad = cfg.transformer.max_trial_length
+            self.decoder = SpaceTimeTransformerDecoderScript(
+                cfg.transformer,
+                max_spatial_tokens=0,
+                n_layers=cfg.decoder_layers,
+                allow_embed_padding=True,
+                context_integration=cfg.decoder_context_integration,
+                embed_space=False
+            )
         self.out = nn.Linear(cfg.hidden_size, data_attrs.behavior_dim)
         self.causal = cfg.causal
         self.spacetime = cfg.transform_space
         self.bhvr_lag_bins = round(self.cfg.behavior_lag / data_attrs.bin_size_ms)
         assert self.bhvr_lag_bins >= 0, "behavior lag must be >= 0, code not thought through otherwise"
 
-        if getattr(self.cfg, 'decode_normalizer', ''):
+        if self.cfg.decode_normalizer:
             # See `data_kin_global_stat`
             zscore_path = Path(self.cfg.decode_normalizer)
             assert zscore_path.exists(), f'normalizer path {zscore_path} does not exist'
@@ -128,51 +130,57 @@ class SkinnyBehaviorRegression(nn.Module):
         else:
             self.bhvr_mean = None
             self.bhvr_std = None
-        max_timesteps = DECODER_HISTORY_MS // data_attrs.bin_size_ms
-        self.register_buffer(
-            'decode_token', 
-            repeat(torch.zeros(cfg.hidden_size), 'h -> b t h', t=max_timesteps, b=batch_size)
-        )
-        # self.decode_token = self.decode_token + 0.
-        self.register_buffer(
-            'decode_time', 
-            repeat(torch.arange(max_timesteps), 't -> b t', b=batch_size)
-        ) # 20ms bins, 2s # 1 t
-        if self.causal and self.cfg.behavior_lag_lookahead:
-            self.decode_time = self.decode_time + self.bhvr_lag_bins
+        if cfg.arch == Architecture.ndt:
+            max_timesteps = DECODER_HISTORY_MS // data_attrs.bin_size_ms
+            self.register_buffer(
+                'decode_token', 
+                repeat(torch.zeros(cfg.hidden_size), 'h -> b t h', t=max_timesteps, b=batch_size)
+            )
+            # self.decode_token = self.decode_token + 0.
+            self.register_buffer(
+                'decode_time', 
+                repeat(torch.arange(max_timesteps), 't -> b t', b=batch_size)
+            ) # 20ms bins, 2s # 1 t
+            if self.causal and self.cfg.behavior_lag_lookahead:
+                self.decode_time = self.decode_time + self.bhvr_lag_bins
 
     def forward(
             self,
             backbone_features: torch.Tensor,
-            src_time: torch.Tensor,
-            trial_context: torch.Tensor,
+            src_time: torch.Tensor = None,
+            trial_context: torch.Tensor = None,
         ) -> torch.Tensor:
         r"""
             in: assume B (assuming time synced, hence we pull a single max time...s)
             return: B x H
         """
-        batch = backbone_features.shape[0]
-        max_time = src_time.max()
-        decode_token = self.decode_token[:batch, :max_time+1]# .expand(backbone_features.shape[0], -1, -1)
-        decode_time = self.decode_time[:batch, :max_time+1]# .expand(backbone_features.shape[0], -1)
+        # breakpoint()
+        if not self.decode_cross_attn:
+            bhvr = self.out(backbone_features)
+            final_bhvr = bhvr[:, -1]
+        else:    
+            batch = backbone_features.shape[0]
+            max_time = src_time.max()
+            decode_token = self.decode_token[:batch, :max_time+1]# .expand(backbone_features.shape[0], -1, -1)
+            decode_time = self.decode_time[:batch, :max_time+1]# .expand(backbone_features.shape[0], -1)
 
-        # backbone_features = temporal_mean_pool(src_time, backbone_features)
-        # src_time = np.unique(src_time)
-        
-        backbone_features: torch.Tensor = self.decoder(
-            decode_token,
-            decode_time,
-            trial_context=trial_context,
-            memory=backbone_features,
-            memory_times=src_time,
-            causal=self.causal,
-        )
+            # backbone_features = temporal_mean_pool(src_time, backbone_features)
+            # src_time = np.unique(src_time)
+            
+            backbone_features: torch.Tensor = self.decoder(
+                decode_token,
+                decode_time,
+                trial_context=trial_context,
+                memory=backbone_features,
+                memory_times=src_time,
+                causal=self.causal,
+            )
 
-        bhvr = self.out(backbone_features)
-        if self.bhvr_lag_bins:
-            bhvr = bhvr[:, :-self.bhvr_lag_bins]
-        final_bhvr = bhvr[:,src_time.max()]
-        # final_bhvr = bhvr[:,-1]
+            bhvr = self.out(backbone_features)
+            if self.bhvr_lag_bins:
+                bhvr = bhvr[:, :-self.bhvr_lag_bins]
+            final_bhvr = bhvr[:,src_time.max()]
+            # final_bhvr = bhvr[:,-1]
         if self.bhvr_mean is not None:
             final_bhvr = final_bhvr * self.bhvr_std + self.bhvr_mean
         return final_bhvr
@@ -196,13 +204,26 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                 f"Neurons per token served by data ({self.data_attrs.neurons_per_token}) must match model token size {self.cfg.neurons_per_token}"
         if self.data_attrs.serve_tokens_flat:
             assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
-        self.backbone = SpaceTimeTransformerEncoderScript(
-            self.cfg.transformer,
-            max_spatial_tokens=data_attrs.max_spatial_tokens,
-            debug_override_dropout_out=cfg.transformer.debug_override_dropout_io,
-            context_integration=cfg.transformer.context_integration,
-            embed_space=cfg.transformer.embed_space,
-        )
+        if self.cfg.arch == Architecture.ndt:
+            self.backbone = SpaceTimeTransformerEncoderScript(
+                self.cfg.transformer,
+                max_spatial_tokens=data_attrs.max_spatial_tokens,
+                debug_override_dropout_out=cfg.transformer.debug_override_dropout_io,
+                context_integration=cfg.transformer.context_integration,
+                embed_space=cfg.transformer.embed_space,
+            )
+        elif self.cfg.arch == Architecture.rnn:
+            self.backbone = nn.Sequential(
+                nn.Dropout(self.cfg.dropout),
+                nn.LSTM(
+                    self.data_attrs.max_channel_count,
+                    self.cfg.hidden_size,
+                    num_layers=self.cfg.decoder_layers,
+                    dropout=self.cfg.dropout, # non-applicable for 1 layer network
+                    bidirectional=False,
+                    batch_first=True,
+                )
+            )
         self.bind_io(batch_size=batch_size)
 
         self.neurons_per_token = self.cfg.neurons_per_token
@@ -343,6 +364,8 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
                 assert self.cfg.max_neuron_count > self.data_attrs.pad_token, "max neuron count must be greater than pad token"
                 self.readin = nn.Embedding(self.cfg.max_neuron_count, spike_embed_dim, padding_idx=self.data_attrs.pad_token if self.data_attrs.pad_token else None) # I'm pretty confident we won't see more than 20 spikes in 20ms but we can always bump up
                 # Ignore pad token if set to 0 (we're doing 0 pad, not entirely legitimate but may be regularizing)
+        else:
+            self.readin = nn.Identity() # RNN path
 
         self.decoder = SkinnyBehaviorRegression(self.cfg, self.data_attrs, batch_size=batch_size)
 
@@ -441,68 +464,65 @@ class BrainBertInterfaceDecoder(pl.LightningModule):
         session_id: Optional[torch.Tensor] = None, # B
         # last_step_only: bool = True,
     ) -> torch.Tensor: # out is behavior, T x 2
+        # breakpoint()
         assert spikes.dtype in [torch.int64, torch.int32, torch.int16, torch.uint8]
         # breakpoint()
         # from time import perf_counter
-        spikes.clamp_(0, CLAMP_MAX)
-        # pad C dim if necessary
-        if spikes.size(2) % self.neurons_per_token:
-            spikes = F.pad(spikes, (0, 0, 0, self.neurons_per_token - (spikes.size(2) % self.neurons_per_token)))
-        spikes = spikes.unfold(2, self.neurons_per_token, self.neurons_per_token).flatten(-2)
-        b, t, c, h = spikes.size()
-        # unsqueezes are to add batch dim
-        time = torch.arange(t, device=spikes.device).unsqueeze(0).unsqueeze(-1).expand(b, t, c).flatten(1)
-        position = torch.arange(c, device=spikes.device).unsqueeze(0).unsqueeze(0).expand(b, t, c).flatten(1)
-        # * Quirk (to fix) of decoding process - context tokens receive flag for encoder but not for decoder...
-        # breakpoint()
-        trial_context_with_flag = []
-        trial_context_without_flag = []
-        if self.session_embed is not None:
-            if session_id is None:
-                session_id = torch.zeros(1, dtype=torch.int, device=spikes.device)
-            session_embed = self.session_embed(session_id).unsqueeze(1)
-            trial_context_with_flag.append(session_embed + self.session_flag)
-            trial_context_without_flag.append(session_embed)
-        if self.subject_embed is not None:
-            subject_embed = self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
-            trial_context_with_flag.append(subject_embed + self.subject_flag)
-            trial_context_without_flag.append(subject_embed)
-        if self.task_embed is not None:
-            task_embed = self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
-            trial_context_with_flag.append(task_embed + self.task_flag)
-            trial_context_without_flag.append(task_embed)
-        if len(trial_context_with_flag) > 0:
-            trial_context = torch.cat(trial_context_with_flag, dim=1)
-            trial_context_without_flag = torch.cat(trial_context_without_flag, dim=1)
+        if self.cfg.arch == Architecture.ndt:
+            spikes.clamp_(0, CLAMP_MAX)
+            # pad C dim if necessary
+            if spikes.size(2) % self.neurons_per_token:
+                spikes = F.pad(spikes, (0, 0, 0, self.neurons_per_token - (spikes.size(2) % self.neurons_per_token)))
+            spikes = spikes.unfold(2, self.neurons_per_token, self.neurons_per_token).flatten(-2)
+            b, t, c, h = spikes.size()
+            # unsqueezes are to add batch dim
+            time = torch.arange(t, device=spikes.device).unsqueeze(0).unsqueeze(-1).expand(b, t, c).flatten(1)
+            position = torch.arange(c, device=spikes.device).unsqueeze(0).unsqueeze(0).expand(b, t, c).flatten(1)
+            # * Quirk (to fix) of decoding process - context tokens receive flag for encoder but not for decoder...
+            # breakpoint()
+            trial_context_with_flag = []
+            trial_context_without_flag = []
+            if self.session_embed is not None:
+                if session_id is None:
+                    session_id = torch.zeros(1, dtype=torch.int, device=spikes.device)
+                session_embed = self.session_embed(session_id).unsqueeze(1)
+                trial_context_with_flag.append(session_embed + self.session_flag)
+                trial_context_without_flag.append(session_embed)
+            if self.subject_embed is not None:
+                subject_embed = self.subject_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+                trial_context_with_flag.append(subject_embed + self.subject_flag)
+                trial_context_without_flag.append(subject_embed)
+            if self.task_embed is not None:
+                task_embed = self.task_embed(torch.zeros(1, dtype=torch.int, device=spikes.device)).unsqueeze(0)
+                trial_context_with_flag.append(task_embed + self.task_flag)
+                trial_context_without_flag.append(task_embed)
+            if len(trial_context_with_flag) > 0:
+                trial_context = torch.cat(trial_context_with_flag, dim=1)
+                trial_context_without_flag = torch.cat(trial_context_without_flag, dim=1)
+            else:
+                trial_context = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
+                trial_context_without_flag = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
+            
+            # torch.cuda.synchronize()
+            # time_embed = perf_counter()
+            # breakpoint()
+            state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
+            features: torch.Tensor = self.backbone(
+                state_in,
+                times=time,
+                positions=position,
+                trial_context=trial_context,
+                causal=self.causal,
+            ) # B x Token x H (flat)
+            
+            return self.decoder(
+                features,
+                time,
+                trial_context_without_flag)
         else:
-            trial_context = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
-            trial_context_without_flag = torch.zeros([spikes.shape[0], 0, self.cfg.hidden_size], device=spikes.device)
-        state_in = self.readin(spikes.int()).flatten(-2).flatten(1,2) # flatten time and channel dim
-        
-        # torch.cuda.synchronize()
-        # time_embed = perf_counter()
-        # breakpoint()
-        features: torch.Tensor = self.backbone(
-            state_in,
-            times=time,
-            positions=position,
-            trial_context=trial_context,
-            causal=self.causal,
-        ) # B x Token x H (flat)
-        # torch.cuda.synchronize()
-        # time_end = perf_counter()
-        # print(f"time_backbone: {time_end - time_embed:.4f}")
-        return self.decoder(
-            features,
-            time,
-            trial_context_without_flag)
-        # Enable for parity exps
-        # return {'out': self.decoder(
-        #     features,
-        #     time,
-        #     trial_context_without_flag,
-        #     # last_step_only=last_step_only,
-        # )}
+            state_in = spikes.float().flatten(-2)
+            features, (_, _) = self.backbone(state_in)
+            return self.decoder(features)
 
 def transfer_model(
     old_model: BrainBertInterface, 
@@ -533,8 +553,12 @@ def transfer_model(
     new_cls = BrainBertInterfaceDecoder(cfg=new_cfg, data_attrs=new_data_attrs, batch_size=batch_size)
     new_cls.backbone.load_state_dict(old_model.backbone.state_dict())
     new_cls.transfer_io(old_model)
-    # TODO more safety in this loading... like the injector is unhappy
-    new_cls.decoder.load_state_dict(old_model.task_pipelines[ModelTask.kinematic_decoding.value].state_dict(), strict=False)
+    # breakpoint()
+    if old_model.cfg.arch == Architecture.ndt:
+        # TODO more safety in this loading... like the injector is unhappy
+        new_cls.decoder.load_state_dict(old_model.task_pipelines[ModelTask.kinematic_decoding.value].state_dict(), strict=False)
+    else:
+        new_cls.decoder.out.load_state_dict(old_model.task_pipelines[ModelTask.kinematic_decoding.value].out[0].state_dict()) # There's a useless sequential wrapper to reject
     try:
         for embed_key in extra_embed_map:
             logger.info(f"Transferring extra {embed_key}...")

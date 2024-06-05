@@ -30,7 +30,7 @@ import wandb
 
 from context_general_bci.config import RootConfig, Metric, ModelTask, hp_sweep_space, propagate_config
 from context_general_bci.dataset import SpikingDataset, SpikingDataModule
-from context_general_bci.model import BrainBertInterface, load_from_checkpoint
+from context_general_bci.model import BrainBertInterface, load_from_checkpoint, CustomMixedPrecisionPlugin
 from context_general_bci.callbacks import ProbeToFineTuneEarlyStopping
 from context_general_bci.utils import (
     generate_search,
@@ -359,7 +359,8 @@ def run_exp(cfg : RootConfig) -> None:
         gradient_clip_val=cfg.train.gradient_clip_val,
         accumulate_grad_batches=cfg.train.accumulate_batches,
         profiler=cfg.train.profiler if cfg.train.profiler else None,
-        overfit_batches=1 if cfg.train.overfit_batches else 0
+        overfit_batches=1 if cfg.train.overfit_batches else 0,
+        plugins=[CustomMixedPrecisionPlugin(precision="16-mixed", device="cuda") if cfg.model.half_precision else None],
     )
 
 
