@@ -1,7 +1,8 @@
 r"""
     NDT2 wrapper. Not for running.
 """
-from typing import List
+from typing import List, Union
+from copy import deepcopy
 from pathlib import Path
 import numpy as np
 import torch
@@ -33,7 +34,7 @@ class NDT2Decoder(BCIDecoder):
     def __init__(
             self,
             task_config: FalconConfig,
-            model_ckpt_path: str,
+            model_ckpt_path: Union[str, List[str]],
             model_cfg_stem: str,
             zscore_path: str,
             max_bins: int,
@@ -63,38 +64,59 @@ class NDT2Decoder(BCIDecoder):
         propagate_config(cfg)
         pl.seed_everything(seed=cfg.seed)
 
+        cfg.model.task.decode_normalizer = zscore_path
         self.subject = getattr(SubjectName, f'falcon_{task_config.task.name}')
+        
         if force_static_key:
-        # if force_static_key and False:
             sessions = [force_static_key]
             self.forced = True
         else:
             sessions = sorted([self._task_config.hash_dataset(handle) for handle in dataset_handles])
-            if task_config.task == FalconTask.m2:
-                def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
-                    # Remove explicit run
-                    if run.startswith('Run'):
-                        run_date = run.split('_')[1]
-                        return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}' # -{run_str}'
-                    else:
-                        run_date = '-'.join(run.split('-')[:-1])
-                        return run_date
-                sessions = [remap_run(run) for run in sessions]
-            elif self._task_config.task == FalconTask.h1:
-                sessions = [i.split('_set_')[0] for i in sessions]
+            sessions = [self.reduce_tag(i) for i in sessions]
             self.forced = False
-        context_idx = {
-            MetaKey.array.name: [format_array_name(self.subject)],
-            MetaKey.subject.name: [self.subject],
-            MetaKey.session.name: sessions,
-            MetaKey.task.name: [self.exp_task],
-        }
-        data_attrs = DataAttrs.from_config(cfg.dataset, context=ContextAttrs(**context_idx))
-        cfg.model.task.decode_normalizer = zscore_path
-        model = load_from_checkpoint(model_ckpt_path, cfg=cfg.model, data_attrs=data_attrs)
-        model = transfer_model(model, cfg.model, data_attrs, batch_size=batch_size)
-        self.model = model.to('cuda:0')
-        self.model.eval()
+        def make_context(sessions):
+            context_idx = {
+                MetaKey.array.name: [format_array_name(self.subject)],
+                MetaKey.subject.name: [self.subject],
+                MetaKey.session.name: sessions,
+                MetaKey.task.name: [self.exp_task],
+            }
+            return DataAttrs.from_config(cfg.dataset, context=ContextAttrs(**context_idx))
+        if isinstance(model_ckpt_path, list):
+            assert not self.forced, "Forcing static key not supported with multiple models."
+            assert self.batch_size == 1, "Batch size 1 required for multiple models."
+            # need to load a dictionary of single-session models - but how do I know which session needs to be loaded?
+            # extract the training info
+            self.models = {}
+            for i in range(len(model_ckpt_path)):
+                test = torch.load(model_ckpt_path[i])
+                data_attrs = test['hyper_parameters']['data_attrs']
+                sessions = test['hyper_parameters']['data_attrs'].context.session
+                hidden_size = test['hyper_parameters']['cfg']['hidden_size']
+                arch = test['hyper_parameters']['cfg']['arch']
+                npt = test['hyper_parameters']['cfg']['neurons_per_token']
+                local_cfg = deepcopy(cfg)
+                local_cfg.model.hidden_size = hidden_size
+                local_cfg.model.arch = arch
+                local_cfg.model.neurons_per_token = npt
+                local_cfg.model.task.tasks = test['hyper_parameters']['cfg']['task']['tasks']
+                local_cfg.model.decoder_layers = test['hyper_parameters']['cfg']['decoder_layers']
+                local_cfg.model.task.decode_separate = test['hyper_parameters']['cfg']['task']['decode_separate']
+                local_cfg.model.task.decode_strategy = test['hyper_parameters']['cfg']['task']['decode_strategy']
+                # breakpoint()
+                propagate_config(local_cfg)
+                model = load_from_checkpoint(model_ckpt_path[i], cfg=local_cfg.model, data_attrs=data_attrs)
+                model = transfer_model(model, local_cfg.model, data_attrs, batch_size=batch_size)
+                for s in sessions:
+                    self.models[self.reduce_tag(s)] = model # we'll load to GPU when we need to predict, don't forget to eval()
+            self.model = None
+        else:
+            data_attrs = make_context(sessions)
+            model = load_from_checkpoint(model_ckpt_path, cfg=cfg.model, data_attrs=data_attrs)
+            model = transfer_model(model, cfg.model, data_attrs, batch_size=batch_size)
+            self.model = model.to('cuda:0')
+            self.model.eval()
+            self.models = {}
 
         assert task_config.bin_size_ms == cfg.dataset.bin_size_ms, "Bin size mismatch, transform not implemented."
         
@@ -111,6 +133,21 @@ class NDT2Decoder(BCIDecoder):
             batch_size,
             self.observation_buffer.shape[2]
         ), dtype=torch.uint8, device='cuda:0')
+        
+    def reduce_tag(self, dataset_tag: str):
+        if self._task_config.task == FalconTask.m2:
+            def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
+                # Remove explicit run
+                if run.startswith('Run'):
+                    run_date = run.split('_')[1]
+                    return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}' # -{run_str}'
+                else:
+                    run_date = '-'.join(run.split('-')[:-1])
+                    return run_date
+            dataset_tag = remap_run(dataset_tag)
+        elif self._task_config.task == FalconTask.h1:
+            dataset_tag = dataset_tag.split('_set_')[0]
+        return dataset_tag
 
     def reset(self, dataset_tags: List[Path] = [""]):
         self.set_steps = 0
@@ -121,21 +158,16 @@ class NDT2Decoder(BCIDecoder):
             self.meta_key = torch.zeros(len(dataset_tags), device='cuda:0', dtype=torch.long)
         else:
             for dataset_tag in dataset_tags:
-                if self._task_config.task == FalconTask.m2:
-                    def remap_run(run): # Run1_20201019 -> 2020-10-19-Run1
-                        # Remove explicit run
-                        if run.startswith('Run'):
-                            run_date = run.split('_')[1]
-                            return f'{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}' # -{run_str}'
-                        else:
-                            run_date = '-'.join(run.split('-')[:-1])
-                            return run_date
-                    dataset_tag = remap_run(dataset_tag)
-                elif self._task_config.task == FalconTask.h1:
-                    dataset_tag = dataset_tag.split('_set_')[0]
-                if dataset_tag not in self.model.data_attrs.context.session:
+                dataset_tag = self.reduce_tag(dataset_tag)
+                if (self.models and dataset_tag not in self.models) or (not self.models and dataset_tag not in self.model.data_attrs.context.session):
                     raise ValueError(f"Dataset tag {dataset_tag} not found in calibration sets {self.model.data_attrs.context.session} - did you calibrate on this dataset?")
-                meta_keys.append(self.model.data_attrs.context.session.index(dataset_tag))
+                if self.models:
+                    self.model = self.models[dataset_tag]
+                    self.model = self.model.to('cuda:0')
+                    self.model.eval()
+                    meta_keys.append(0)
+                else:
+                    meta_keys.append(self.model.data_attrs.context.session.index(dataset_tag))
             self.meta_key = torch.tensor(meta_keys, device='cuda:0')
 
     def predict(self, neural_observations: np.ndarray):

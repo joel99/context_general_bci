@@ -558,7 +558,10 @@ def transfer_model(
         # TODO more safety in this loading... like the injector is unhappy
         new_cls.decoder.load_state_dict(old_model.task_pipelines[ModelTask.kinematic_decoding.value].state_dict(), strict=False)
     else:
-        new_cls.decoder.out.load_state_dict(old_model.task_pipelines[ModelTask.kinematic_decoding.value].out[0].state_dict()) # There's a useless sequential wrapper to reject
+        if isinstance(old_model.task_pipelines[ModelTask.kinematic_decoding.value].out, nn.Sequential):
+            new_cls.decoder.out.load_state_dict(old_model.task_pipelines[ModelTask.kinematic_decoding.value].out[0].state_dict()) # There's a useless sequential wrapper to reject
+        else:
+            new_cls.decoder.out.load_state_dict(old_model.task_pipelines[ModelTask.kinematic_decoding.value].out.state_dict())
     try:
         for embed_key in extra_embed_map:
             logger.info(f"Transferring extra {embed_key}...")
