@@ -16,14 +16,10 @@ import pandas as pd
 import pytorch_lightning as pl
 
 # Load BrainBertInterface and SpikingDataset to make some predictions
-from context_general_bci.analyze_utils import stack_batch, get_dataloader, load_wandb_run, prep_plt, get_best_ckpt_from_wandb_id, get_run_config
-from context_general_bci.utils import wandb_query_experiment, get_wandb_run
-
 
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator, DATASET_HELDINOUT_MAP
 
-from context_general_bci.falcon_decoder import NDT2Decoder
 # from scripts.falcon_local import run_evaluate
 
 pl.seed_everything(0)
@@ -33,31 +29,19 @@ import sys
 import argparse
 
 num_workers = 4 # for main eval block.
-
-r"""
-
-    Log of joint oracle runs:
-    H1: https://wandb.ai/joelye9/context_general_bci/runs/vsy0lf7t?nw=nwuserjoelye9
-    M1: https://wandb.ai/joelye9/context_general_bci/runs/qf08kuj2?nw=nwuserjoelye9
-    M2: https://wandb.ai/joelye9/context_general_bci/runs/gr0kyzum/overview?nw=nwuserjoelye9
-"""
-
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
     VARIANT = 'h1_single'
-    # VARIANT = 'm2_single'
     # VARIANT = 'm1_single'
+    VARIANT = 'm2_single'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--variant", "-v", type=str, required=True, choices=[
             'h1_single', 
-            'h1_joint', 
             'm1_single',
-            'm1_joint', 
             'm2_single',
-            'm2_joint',
         ]
     )
     args = parser.parse_args()
@@ -66,14 +50,11 @@ eval_set = VARIANT.split('_')[0]
 
 eval_paths = Path('./data/falcon_metrics')
 eval_paths.mkdir(exist_ok=True, parents=True)
-eval_metrics_path = eval_paths / f"{eval_set}_eval_ndt2.csv"
+eval_metrics_path = eval_paths / f"{eval_set}_eval_rnn.csv"
 ndt2_run_df = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
 
-ndt2_run_df
 #%%
-ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'h1_oracle_joint-sweep-simple_scratch']
-ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'm1_oracle_joint-sweep-simple_scratch']
-ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'm2_oracle_joint-sweep-simple_scratch']
+ndt2_run_df.head()
 def reduce_dataset_from_variant(variant):
     if 'm2' in variant:
         if 'ses' in variant:
@@ -132,8 +113,9 @@ def grouped_heldin_accuracy(df):
 
 print(ndt2_run_df[['dataset', 'Heldout_Accuracy']])
 
-print(grouped_heldout_accuracy(ndt2_run_df))
-print(grouped_heldin_accuracy(ndt2_run_df))
+print("Max-of-set metrics (every single-day model evaluated on their day)")
+print(f'Heldout: {grouped_heldout_accuracy(ndt2_run_df)}')
+print(f'Heldin: {grouped_heldin_accuracy(ndt2_run_df)}')
 
 def compute_other_held_in_mean_perf(df):
     if 'h1' in df.variant.iloc[0]:
@@ -156,7 +138,10 @@ def compute_other_held_in_mean_perf(df):
     # return best_hexld_in_day
 
 static_row = compute_other_held_in_mean_perf(ndt2_run_df)
-print(f"Static")
-print(static_row['heldin_eval_r2'])
-print(static_row['eval_r2'])
-print(static_row['Held Out R2 Std.'])
+print(f"Static (choose best day)")
+print(f"Static all: {static_row}")
+
+print(f"----")
+print(f'heldout r2: {static_row["eval_r2"]}')
+print(f'heldout r2 std: {static_row["Held Out R2 Std."]}')
+print(f'heldin r2: {static_row["heldin_eval_r2"]}')

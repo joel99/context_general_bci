@@ -11,7 +11,7 @@ from sklearn.metrics import r2_score
 import logging
 
 from context_general_bci.config import (
-    ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey,
+    ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey, Architecture
 )
 
 from context_general_bci.dataset import DataAttrs, LENGTH_KEY, CHANNEL_KEY, HELDOUT_CHANNEL_KEY, COVARIATE_LENGTH_KEY, COVARIATE_CHANNEL_KEY
@@ -143,8 +143,11 @@ class TaskPipeline(nn.Module):
             length_mask = ~length_mask
             if self.serve_tokens_flat:
                 loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1')
-            else:
-                loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
+            else: # spaghetti
+                if loss_mask.ndim == 4:
+                    loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1 1')
+                elif loss_mask.ndim == 3:
+                    loss_mask = loss_mask & rearrange(length_mask, 'b t -> b t 1')
         else:
             length_mask = torch.ones(b, t, device=ref.device, dtype=torch.bool)
         nan_mask = torch.isnan(ref).any(-1)
@@ -988,7 +991,13 @@ class BehaviorRegression(TaskPipeline):
                     Rearrange('b t a s h -> b t (a s h)'),
                     nn.Linear(backbone_out_size * round(data_attrs.max_channel_count / data_attrs.neurons_per_token) * data_attrs.max_arrays, data_attrs.behavior_dim)
                 )
+            elif cfg.arch == Architecture.rnn:
+                # Assumes one array
+                self.out = nn.Sequential(
+                    nn.Linear(backbone_out_size, data_attrs.behavior_dim)
+                )
             else:
+                # Backbone tokens come separate for different arrays in transformer path
                 self.out = nn.Sequential(
                     Rearrange('b t a c -> b t (a c)'),
                     nn.Linear(backbone_out_size * data_attrs.max_arrays, data_attrs.behavior_dim)

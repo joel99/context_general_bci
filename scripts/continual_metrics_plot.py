@@ -14,6 +14,7 @@ import numpy as np
 import torch
 import pandas as pd
 import pytorch_lightning as pl
+from context_general_bci.analyze_utils import prep_plt
 
 from falcon_challenge.evaluator import FalconEvaluator, DATASET_HELDINOUT_MAP
 
@@ -27,7 +28,7 @@ num_workers = 4 # for main eval block.
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
     VARIANT = 'h1'
-    # VARIANT = 'm2'
+    VARIANT = 'm2'
     # VARIANT = 'm1'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
@@ -49,91 +50,48 @@ def get_ndt2_run_df_for_variant(variant):
     eval_metrics_path_tr = eval_paths / f"{variant}_trialized_ndt2.csv"
     ndt2_run_df_cont = pd.read_csv(eval_metrics_path_cont) if eval_metrics_path_cont.exists() else pd.DataFrame()
     ndt2_run_df_tr = pd.read_csv(eval_metrics_path_tr) if eval_metrics_path_tr.exists() else pd.DataFrame()
-    ndt2_run_df_cont['type'] = 'continual'
-    ndt2_run_df_tr['type'] = 'trialized'
+    ndt2_run_df_cont['eval_mode'] = 'continual'
+    ndt2_run_df_tr['eval_mode'] = 'trialized'
     ndt2_run_df = pd.concat([ndt2_run_df_cont, ndt2_run_df_tr])
     ndt2_run_df['variant'] = variant
+    ndt2_run_df['train_mode'] = 'continual'
     return ndt2_run_df
 
 # ndt2_run_df = pd.concat([get_ndt2_run_df_for_variant(variant) for variant in ['h1', 'm1', 'm2']])
-ndt2_run_df = pd.concat([get_ndt2_run_df_for_variant(variant) for variant in ['h1', 'm2']])
+ndt2_run_df = pd.concat([get_ndt2_run_df_for_variant(variant) for variant in ['h1', 'm1', 'm2']])
 print(ndt2_run_df.variant.unique())
+ndt2_run_df['eval_history'] = ndt2_run_df['augment_chop_length_ms']
 #%%
-pd.read_csv(eval_paths / f'm2_trialized_ndt2_trialized.csv')
+def get_trialized_model_df_for_variant(variant):
+    tr_pth = eval_paths / f"{variant}_trialized_ndt2_trialized.csv"
+    cont_pth = eval_paths / f"{variant}_continual_ndt2_trialized.csv"
+    trialized_model_df = pd.read_csv(tr_pth) if tr_pth.exists() else pd.DataFrame()
+    continual_model_df = pd.read_csv(cont_pth) if cont_pth.exists() else pd.DataFrame()
+    trialized_model_df['eval_mode'] = 'trialized'
+    continual_model_df['eval_mode'] = 'continual'
+    ndt2_run_df = pd.concat([trialized_model_df, continual_model_df])
+    ndt2_run_df['variant'] = variant
+    ndt2_run_df['train_mode'] = 'trialized'
+    ndt2_run_df['eval_history'] = ndt2_run_df['history']
+    return ndt2_run_df
+ndt2_run_df_tr = pd.concat([get_trialized_model_df_for_variant(variant) for variant in ['h1', 'm1', 'm2']])
     
+ndt2_run_df = pd.concat([ndt2_run_df, ndt2_run_df_tr.reset_index()])
 #%%
-from context_general_bci.analyze_utils import prep_plt
-ax = prep_plt()
-ndt2_run_df.head()
-ndt2_run_df['perf_diff'] = ndt2_run_df['heldin_eval_r2'] - ndt2_run_df['eval_r2']
-ax = sns.lineplot(data=ndt2_run_df, x='augment_chop_length_ms', y='eval_r2', hue='type', ax=ax)
-# ax = sns.lineplot(data=ndt2_run_df, x='augment_chop_length_ms', y='eval_r2', hue='type', ax=ax)
-# ax = sns.barplot(data=ndt2_run_df, x='augment_chop_length_ms', y='heldin_eval_r2', hue='type', ax=ax)
-ax = sns.lineplot(data=ndt2_run_df, x='augment_chop_length_ms', y='heldin_eval_r2', hue='type', ax=ax)
-# sns.lineplot(data=ndt2_run_df, x='augment_chop_length_ms', y='eval_r2', hue='type')
-ax.set_ylim(0, 1)
+palette = sns.color_palette("Paired", n_colors=4)
+# f = plt.figure(figsize=(6,6))
+f, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
 
-ax.set_xlabel('History Length (ms)')
-ax.set_ylabel("Behavior $R^2$")
-
-#%%
-trialized_model_scores = {
-    # computed through separate ndt2_sample runs with the provided sample ckpts
-    'h1': {
-        'trialized': {
-            'eval_r2': 0.546,
-            'heldin_eval_r2': 0.728,
-            'Held Out R2 Std.': 0.063,
-            'Held In R2 Std.': 0.041,
-        },
-        'continual': {
-            'eval_r2': 0.521,
-            'heldin_eval_r2': 0.624,
-            'Held Out R2 Std.': 0.044,
-            'Held In R2 Std.': 0.040,
-        }
-    },
-    'm1': {
-        'trialized': {
-            'eval_r2': 0.0,
-            'heldin_eval_r2': 0.0,
-            'Held Out R2 Std.': 0.0,
-            'Held In R2 Std.': 0.0,
-        },
-        'continual': {
-            'eval_r2': 0.0,
-            'heldin_eval_r2': 0.0,
-            'Held Out R2 Std.': 0.0,
-            'Held In R2 Std.': 0.0,
-        }
-    },
-    'm2': {
-        'trialized': {
-            'eval_r2': 0.397,
-            'heldin_eval_r2': 0.563,
-            'Held Out R2 Std.': 0.075,
-            'Held In R2 Std.': 0.005,
-        },
-        'continual': {
-            'eval_r2': 0.056,
-            'heldin_eval_r2': 0.08,
-            'Held Out R2 Std.': 0.005,
-            'Held In R2 Std.': 0.007,
-        }
-    }
-}
-
-palette = sns.color_palette(n_colors=2)
-f = plt.figure(figsize=(6,6))
-ax = prep_plt(f.gca(), big=True)
-
-def plot_single(ax, split, df):
+def plot_single(ax, split, df, in_out_subset=''):
+    ax = prep_plt(ax, big=True)
+    
     df_long = df.melt(
-        id_vars=['augment_chop_length_ms', 'type'],
+        id_vars=['eval_history', 'eval_mode', 'train_mode'],
         value_vars=['eval_r2', 'heldin_eval_r2'],
         var_name='in_out',
         value_name='r2_value'
     )
+    df_long['train_or_eval_mode'] = df_long['train_mode'] + ' ' + df_long['eval_mode']
     # print(df_long)
     # df_std_long = df.melt(
     #     id_vars=['augment_chop_length_ms', 'type'],
@@ -143,62 +101,72 @@ def plot_single(ax, split, df):
     # ) # Abandon error - seaborn doesn't have a good way of attaching
 
     # Create the line plots (with linestyles)
+    if in_out_subset:
+        df_long = df_long[df_long['in_out'] == in_out_subset]
+        style = 'eval_mode'
+    else:
+        style = 'in_out'
     sns.lineplot(
         data=df_long,
-        x='augment_chop_length_ms',
+        x='eval_history',
         y='r2_value',
-        hue='in_out',
-        style='type',  # Use metric to control linestyle (solid vs. dashed)
+        hue='train_or_eval_mode',
+        hue_order=['continual trialized', 'continual continual', 'trialized trialized', 'trialized continual'],
+        style=style,  # Use metric to control linestyle (solid vs. dashed)
         ax=ax,
+        # legend=True, # Remove default legend
         legend=False, # Remove default legend
         palette=palette,
     )
-    sns.scatterplot(
-        data=df_long,
-        x='augment_chop_length_ms',
-        y='r2_value',
-        hue='in_out',
-        # style='metric',  # Use metric to control linestyle (solid vs. dashed)
-        ax=ax,
-        legend=False, # Remove default legend
-        palette=palette
-    )
+    # sns.scatterplot(
+    #     data=df_long,
+    #     x='eval_history',
+    #     y='r2_value',
+    #     hue='train_or_eval_mode',
+    #     ax=ax,
+    #     legend=False, # Remove default legend
+    #     palette=palette
+    # )
 
     def plot_base_mean_std(mean, std, label, color, style):
         ax.axhline(y=mean, color=color, linestyle=style, label=label)
-        ax.axhspan(
-            mean - std,
-            mean + std,
-            color=color, alpha=0.1
-        )
-    plot_base_mean_std(
-        trialized_model_scores[split]['continual']['eval_r2'],
-        trialized_model_scores[split]['continual']['Held Out R2 Std.'],
-        'Continual Eval R2',
-        palette[0],
-        '-.'
-    )
-    plot_base_mean_std(
-        trialized_model_scores[split]['continual']['heldin_eval_r2'],
-        trialized_model_scores[split]['continual']['Held In R2 Std.'],
-        'Continual Heldin Eval R2',
-        palette[1],
-        '-.'
-    )
-    plot_base_mean_std(
-        trialized_model_scores[split]['trialized']['eval_r2'],
-        trialized_model_scores[split]['trialized']['Held Out R2 Std.'],
-        'Trialized Eval R2',
-        palette[0],
-        ':',
-    )
-    plot_base_mean_std(
-        trialized_model_scores[split]['trialized']['heldin_eval_r2'],
-        trialized_model_scores[split]['trialized']['Held In R2 Std.'],
-        'Trialized Heldin Eval R2',
-        palette[1],
-        ':',
-    )
+        # ax.axhspan(
+        #     mean - std,
+        #     mean + std,
+        #     color=color, alpha=0.1
+        # )
+    
+    # Heldin-heldout eval: Line style
+    # Trialized model vs continual model: Primary Color
+    # Trialized vs continual eval: Secondary color (Darker for continual eval)
+    # plot_base_mean_std(
+    #     trialized_model_scores[split]['continual']['eval_r2'],
+    #     trialized_model_scores[split]['continual']['Held Out R2 Std.'],
+    #     'Continual Eval R2',
+    #     palette[2],
+    #     '-'
+    # )
+    # plot_base_mean_std(
+    #     trialized_model_scores[split]['continual']['heldin_eval_r2'],
+    #     trialized_model_scores[split]['continual']['Held In R2 Std.'],
+    #     'Continual Heldin Eval R2',
+    #     palette[2],
+    #     '--'
+    # )
+    # plot_base_mean_std(
+    #     trialized_model_scores[split]['trialized']['eval_r2'],
+    #     trialized_model_scores[split]['trialized']['Held Out R2 Std.'],
+    #     'Trialized Eval R2',
+    #     palette[3],
+    #     '-',
+    # )
+    # plot_base_mean_std(
+    #     trialized_model_scores[split]['trialized']['heldin_eval_r2'],
+    #     trialized_model_scores[split]['trialized']['Held In R2 Std.'],
+    #     'Trialized Heldin Eval R2',
+    #     palette[3],
+    #     '--',
+    # )
     
     # Customize linestyles
     linestyles = {"continual": "-", "trialized": "--"}
@@ -207,18 +175,18 @@ def plot_single(ax, split, df):
             artist.set_linestyle(linestyles[artist.get_label()])
 
     # Add text annotations
-    types = ndt2_run_df['type'].unique()
-    colors = {t: c for t, c in zip(types, sns.color_palette())}
-    max_x = ndt2_run_df['augment_chop_length_ms'].max()
+    # types = ndt2_run_df['type'].unique()
+    # colors = {t: c for t, c in zip(types, sns.color_palette())}
+    # max_x = ndt2_run_df['augment_chop_length_ms'].max()
 
-    x_coords_to_annotate = df_long[df_long['r2_value'] < 0]['augment_chop_length_ms']
-    y_coords_to_annotate = df_long[df_long['r2_value'] < 0]['r2_value']
-    print(x_coords_to_annotate, y_coords_to_annotate)
-    for x, y in zip(x_coords_to_annotate, y_coords_to_annotate):
-        ax.annotate("",
-                    xy=(x, y),
-                    xytext=(x, y - 0.05),  # Adjust the offset to control arrow length
-                    arrowprops=dict(arrowstyle="->", color='black', lw=1.5))
+    # x_coords_to_annotate = df_long[df_long['r2_value'] < 0]['augment_chop_length_ms']
+    # y_coords_to_annotate = df_long[df_long['r2_value'] < 0]['r2_value']
+    # print(x_coords_to_annotate, y_coords_to_annotate)
+    # for x, y in zip(x_coords_to_annotate, y_coords_to_annotate):
+    #     ax.annotate("",
+    #                 xy=(x, y),
+    #                 xytext=(x, y - 0.05),  # Adjust the offset to control arrow length
+    #                 arrowprops=dict(arrowstyle="->", color='black', lw=1.5))
 
     ax.set_ylim(0, 1)  # Adjust y-axis limits if needed
 
@@ -228,12 +196,27 @@ def plot_single(ax, split, df):
     #     ax.text(max_x, max_y_for_type, type, ha='left', va='center', color=colors[type])
     
     ax.set_ylim(0, 1)
-    ax.set_xlabel('History Length (ms)')
-    ax.set_ylabel(r"Behavior $R^2$")
+    ax.set_xlabel('History (ms)')
+    if in_out_subset:
+        if in_out_subset == 'eval_r2':
+            ax.set_ylabel(r"Held-Out $R^2$")
+        else:
+            ax.set_ylabel(r"Held-In $R^2$")
+    else:
+        ax.set_ylabel(r"Behavior $R^2$")
     ax.set_title(f'{split.upper()}')
     return ax
-plot_single(ax, 'h1', ndt2_run_df[ndt2_run_df['variant'] == 'h1'])
-# plot_single(ax, 'm2', ndt2_run_df[ndt2_run_df['variant'] == 'm2'])
-# plot_single(ax, VARIANT, ndt2_run_df[ndt2_run_df['variant'] == 'H1'])
-# plot_single(VARIANT, ndt2_run_df[ndt2_run_df['variant'] == 'H1'])
-# %%
+
+in_out_mode = 'eval_r2'
+in_out_mode = 'heldin_eval_r2'
+# in_out_mode = ''
+
+plot_single(axes[0], 'h1', ndt2_run_df[ndt2_run_df['variant'] == 'h1'], in_out_mode)
+plot_single(axes[1], 'm1', ndt2_run_df[ndt2_run_df['variant'] == 'm1'], in_out_mode)
+plot_single(axes[2], 'm2', ndt2_run_df[ndt2_run_df['variant'] == 'm2'], in_out_mode)
+
+if in_out_mode:
+    if in_out_mode == 'eval_r2':
+        f.savefig('./continual_eval_r2.png', dpi=300, bbox_inches='tight')
+    else:
+        f.savefig('./continual_heldin_eval_r2.png', dpi=300, bbox_inches='tight')

@@ -1,4 +1,5 @@
 *.pkl
+*.png
 *.svg
 *.onnx
 *.pt

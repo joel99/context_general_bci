@@ -23,7 +23,7 @@ from context_general_bci.utils import wandb_query_experiment, get_wandb_run
 from falcon_challenge.config import FalconConfig, FalconTask
 from falcon_challenge.evaluator import FalconEvaluator
 
-from context_general_bci.falcon_decoder import NDT2Decoder
+from context_general_bci.falcon_rnn_decoder import RNNDecoder
 # from scripts.falcon_local import run_evaluate
 
 pl.seed_everything(0)
@@ -35,18 +35,15 @@ import argparse
 num_workers = 4 # for main eval block.
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
-    EVAL_SET = 'm2_joint'
+    EVAL_SET = 'm2_single'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--variant", "-v", type=str, required=True, choices=[
             'h1_single', 
-            'h1_joint', 
             'm1_single',
-            'm1_joint', 
             'm2_single',
-            'm2_joint',
         ]
     )
     args = parser.parse_args()
@@ -54,29 +51,21 @@ else:
 eval_set = VARIANT.split('_')[0]
 
 TAG_MAP = {
-    "h1_single": "h1_oracle",
-    "h1_joint": "h1_oracle_joint",
-    "m1_single": "m1_oracle_chop",
-    "m1_joint": "m1_oracle_joint",
-    "m2_single": "m2_oracle_chop",
-    "m2_joint": "m2_oracle_joint",
+    "h1_single": "h1_rnn_oracle",
+    "m1_single": "m1_rnn_oracle_chop",
+    "m2_single": "m2_rnn_oracle_chop",
 }
 
 NDT2_EXPERIMENT_MAP = {
     "h1_single": "falcon/h1",
-    "h1_joint": "falcon/h1",
     "m1_single": "falcon/m1",
-    "m1_joint": "falcon/m1",
     "m2_single": "falcon/m2",
-    "m2_joint": "falcon/m2",
 }
 
 UNIQUE_BY = {
     "model.lr_init", 
     "model.hidden_size", 
-    "dataset.scale_ratio",
     "dataset.datasets",
-    "dataset.falcon_m2.respect_trial_boundaries",
 }
 
 eval_paths = Path('./data/falcon_metrics')
@@ -94,24 +83,19 @@ def get_runs_for_query(variant: str, project="context_general_bci", exp_map=NDT2
         filter_unique_keys=UNIQUE_BY,
         **{
             "config.tag": {"$regex": variant_tag},
-            "config.sweep_tag": "simple_scratch",
+            "config.sweep_tag": "rnn_basic",
             "state": {"$in": ['finished', 'crashed']},
         })
 
 def run_list_to_df(runs, eval_set_name: str):
     filter_runs = [r for r in runs if 'val_kinematic_r2' in r.summary and 'max' in r.summary['val_kinematic_r2']]
     # Attempt to recover runs if no explicit summary - we only need r2...
-    filter_runs
     print(f"Filtered {len(runs)} to {len(filter_runs)} with proper metrics")
-    if 'continual' in eval_set_name:
-        eval_crop = eval_set_name.replace('_continual', '')
-    else:
-        eval_crop = eval_set_name
+    eval_crop = eval_set_name
     eval_crop = f'falcon_{eval_crop}'
     df_dict = {
         'id': map(lambda r: r.id, filter_runs),
         'variant': map(lambda r: r.config['tag'], filter_runs),
-        "respect_trial_boundaries": map(lambda r: r.config['dataset'][eval_crop].get('respect_trial_boundaries', True), filter_runs),
         'eval_set': map(lambda r: eval_set_name, filter_runs),
         'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], filter_runs),
     }
@@ -138,10 +122,10 @@ runs = []
 
 ndt2_run_df = get_ndt2_run_df_for_query(VARIANT)
 print(ndt2_run_df)
+# breakpoint()
 # ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
-eval_metrics_path = eval_paths / f"{eval_set}_eval_ndt2.csv"
+eval_metrics_path = eval_paths / f"{eval_set}_eval_rnn.csv"
 eval_df_so_far = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
-# eval_df_so_far = pd.DataFrame()
 
 ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
 if len(eval_df_so_far):
@@ -173,31 +157,7 @@ for idx, run_row in ndt2_run_df.iterrows():
         max_bins = cfg.dataset.augment_crop_length_ms // config.bin_size_ms
     else:
         max_bins = cfg.dataset.max_length_ms // config.bin_size_ms
-    if 'single' in VARIANT and 'frag' in run_row.variant:
-        # Parse out the key
-        print(run_row.variant)
-        if split == 'h1':
-            force_static_key = run_row.variant.split('FALCONH1-')[1].split('_')[0]
-        elif split == 'm1':
-            if 'FALCONM1-L_' in run_row.variant:
-                force_static_key = run_row.variant.split('FALCONM1-L_')[1].split('_')[0]
-            else:
-                force_static_key = run_row.variant.split('ses-')[1].split('.*')[0]
-            # breakpoint()
-        elif split == 'm2':
-            if 'ses-' in run_row.variant:
-                force_static_key = run_row.variant.split('ses-', 1)[1].split('.*')[0]
-            else:
-                # m2_oracle_chop-frag-falcon_FALCONM2-sub-MonkeyN.*_20201030_held_out_in_day_oracle-sweep-simple_scratch
-                date_str = run_row.variant.split('*_')[-1].split('_')[0]
-                force_static_key = f'{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}' # -Run{run_num}'
-                # ['2020-10-19-Run1', '2020-10-20-Run1', '2020-10-27-Run1', '2020-10-28-Run1', '2020-10-30-Run1', '2020-11-18-Run1', '2020-11-19-Run1', '2020-11-24-Run1', '2020-10-19-Run2', '2020-10-20-Run2', '2020-10-27-Run2', '2020-10-30-Run2', '2020-11-24-Run2']
-        else:
-            raise ValueError(f"Unknown split {split}")
-        print(f'reduced to {force_static_key}')
-    else:
-        force_static_key = ''
-    decoder = NDT2Decoder(
+    decoder = RNNDecoder(
         task_config=config,
         model_ckpt_path=ckpt,
         model_cfg_stem=f'{cfg.experiment_set}/{cfg.tag.split("-")[0]}',
@@ -205,7 +165,6 @@ for idx, run_row in ndt2_run_df.iterrows():
         max_bins=max_bins,
         dataset_handles=[x.stem for x in evaluator.get_eval_files(phase='test')],
         batch_size=8,
-        force_static_key=force_static_key
     )
     payload = evaluator.evaluate(decoder, phase='test')
     result = payload['result'][0][f'test_split_{split}']
