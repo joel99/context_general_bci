@@ -89,6 +89,7 @@ class NDT2Decoder(BCIDecoder):
             # extract the training info
             self.models = {}
             for i in range(len(model_ckpt_path)):
+                print(f'Loading: {model_ckpt_path[i]}')
                 test = torch.load(model_ckpt_path[i])
                 data_attrs = test['hyper_parameters']['data_attrs']
                 sessions = test['hyper_parameters']['data_attrs'].context.session
