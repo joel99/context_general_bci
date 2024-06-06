@@ -48,9 +48,9 @@ Implementing a new task or dataset involves a few steps, since the codebase gene
 ## Decoding applications (FALCON)
 While NDT2 is initially described as a self-supervised pretraining method, you may be interested in its decoding application. Please see the [FALCON-challenge codebase](https://github.com/snel-repo/falcon-challenge) for an example flow for preparaing NDT2 as a decoder. Configs used to produce FALCON baselines are available under `config/exp/falcon`. For example, to reproduce the M2 checkpoints, run `python run.py +exp/falcon/m2_chop_2s`.
 The config used for the Joint baselines are:
-- H1: `[falcon/h1_100](https://wandb.ai/joelye9/context_general_bci/runs/8l13b722?nw=nwuserjoelye9)`
-- M1: `[falcon/m1_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/b6bzlvc1?nw=nwuserjoelye9)`
-- M2: `[falcon/m2_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/rbajwckl/overview?nw=nwuserjoelye9)`
+- H1: [falcon/h1_100](https://wandb.ai/joelye9/context_general_bci/runs/8l13b722?nw=nwuserjoelye9)
+- M1: [falcon/m1_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/b6bzlvc1?nw=nwuserjoelye9)
+- M2: [falcon/m2_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/rbajwckl/overview?nw=nwuserjoelye9)
 Checkpoints for these runs are available [here](https://drive.google.com/drive/u/0/folders/1ijvmPcbyjHlLEoWWSSZrNm1bBojGgrZG).
 
 ## Checkpoints
