@@ -50,7 +50,8 @@ dataset:
 train:
   max_batch_size: 64
   batch_size: 64
-  patience: 250
+  # patience: 250 # NDT3 v4
+  patience: 100 # NDT3 v5
   early_stop_metric: val_kinematic_r2
 effective_bsz: 64
 # sweep_cfg: simple_scratch

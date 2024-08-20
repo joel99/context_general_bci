@@ -53,10 +53,11 @@ train:
   max_batch_size: 512
   # batch_size: 64
   batch_size: 512
-  patience: 250
+  patience: 100 # Match NDT3 V5
+  # patience: 250 # NDT3 V4
   early_stop_metric: val_kinematic_r2
 effective_bsz: 512
 sweep_cfg: full_scratch
 # sweep_cfg: simple_scratch
 sweep_mode: 'grid'
-notes: 'Cursor comparison with NDT3'
+notes: 'Comparison with NDT3'

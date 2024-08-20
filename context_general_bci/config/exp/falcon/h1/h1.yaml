@@ -42,7 +42,8 @@ dataset:
 train:
   max_batch_size: 32
   batch_size: 32
-  patience: 250
+  patience: 100 # match ndt3 v5
+  # patience: 250 # ndt3 v4
   early_stop_metric: val_kinematic_r2
 effective_bsz: 32
 

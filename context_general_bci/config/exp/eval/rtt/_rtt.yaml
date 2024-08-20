@@ -31,7 +31,8 @@ dataset:
   max_channels: 192
   max_arrays: 1
   odoherty_rtt:
-    chop_size_ms: 2000
+    chop_size_ms: 1000 # NDT3 v5
+    # chop_size_ms: 2000 # NDT3 v4
     arrays: ["Indy-M1", "Loco-M1"]
     include_sorted: False
 

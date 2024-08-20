@@ -44,7 +44,8 @@ train:
   max_batch_size: 256
   batch_size: 128
   autoscale_batch_size: true
-  patience: 250
+  patience: 100 # match ndt3 v5
+  # patience: 250 # ndt3 v4
   early_stop_metric: val_kinematic_r2
 effective_bsz: 128
 
