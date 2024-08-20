@@ -237,6 +237,17 @@ def load_files_m2(files: List):
     trial_dense = np.concatenate(out_trial, axis=0)
     return binned_units, cov_data, eval_mask, trial_dense
 
+class HandwritingTokenizer:
+    VOCAB = ["'", ',', '>', '?', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '~']
+    
+    @staticmethod
+    def tokenize(text: str) -> np.ndarray:
+        return np.array([HandwritingTokenizer.VOCAB.index(c) for c in text], dtype=np.int32) + 1 # 0 is CTC blank
+    
+    @staticmethod
+    def detokenize(tokens: np.ndarray) -> str:
+        return ''.join([HandwritingTokenizer.VOCAB[t - 1] for t in tokens]) # 0 is blank
+
 def load_files_h2(files: List):
     out_neural = []
     out_cov = []
@@ -252,17 +263,18 @@ def load_files_h2(files: List):
                 nwbfile.trials.to_dataframe()
                 .reset_index()
             )
-            trial_change = np.concatenate([[False], np.diff(time) > 0.02])
+            targets = []
+            for _, row in trial_info.iterrows():
+                # targets.append(np.array([ord(c) for c in row.cue], dtype=np.int32))
+                targets.append(HandwritingTokenizer.tokenize(row.cue))
+            trial_change = np.concatenate([np.diff(time) > 0.021, [True]])
             trial_dense = np.cumsum(trial_change)
             out_neural.append(binned_spikes)
-            out_cov.append(trial_info.cue.values)
+            out_cov.append(targets)
             out_mask.append(eval_mask)
             out_trial.append(trial_dense)
-    binned_units = np.concatenate(out_neural, axis=0)
-    cov_data = np.concatenate(out_cov, axis=0)
-    eval_mask = np.concatenate(out_mask, axis=0)
-    trial_dense = np.concatenate(out_trial, axis=0)
-    return binned_units, cov_data, eval_mask, trial_dense
+    # Do not concatenate - trialized data
+    return out_neural, out_cov, out_mask, out_trial
 
 @ExperimentalTaskRegistry.register
 class FalconLoader(ExperimentalTaskLoader):
@@ -282,13 +294,17 @@ class FalconLoader(ExperimentalTaskLoader):
         task: ExperimentalTask,
         **kwargs,
     ):
-        assert cfg.bin_size_ms == 20, "FALCON data needs 20ms"
+        if task != ExperimentalTask.falcon_h2:
+            assert cfg.bin_size_ms == 20, "FALCON data needs 20ms"
         # Load data
         if task == ExperimentalTask.falcon_h1:
             binned, kin, kin_mask, trials = load_files_h1([datapath])
         elif task == ExperimentalTask.falcon_h2:
             binned, kin, kin_mask, trials = load_files_h2([datapath])
-            breakpoint() # Don't think the shapes will line up
+            binned = binned[0][:-1] # crop last bin
+            kin = kin[0]
+            kin_mask = kin_mask[0][:-1]
+            trials = trials[0][:-1]
         elif task == ExperimentalTask.falcon_m1:
             binned, kin, kin_mask, trials = load_files_m1([datapath])
         elif task == ExperimentalTask.falcon_m2:
@@ -298,16 +314,23 @@ class FalconLoader(ExperimentalTaskLoader):
 
         arrays_to_use = context_arrays
         exp_task_cfg: FalconConfig = getattr(cfg, task.value)
+        if task == ExperimentalTask.falcon_h2:
+            assert exp_task_cfg.respect_trial_boundaries, "Falcon H2 data must respect trial boundaries"
         if exp_task_cfg.respect_trial_boundaries:
             for trial_id in np.unique(trials):
                 trial_spikes = binned[trials == trial_id]
                 if len(trial_spikes) < 5:
                     logger.warning(f"Skipping trial {trial_id} with only {len(trial_spikes)} bins")
                     continue
-                trial_vel = kin[trials == trial_id]
+                if task == ExperimentalTask.falcon_h2:
+                    trial_vel = kin[trial_id]
+                    trial_vel = torch.tensor(trial_vel[:, None], dtype=int) # add a spatial dimension
+                else:
+                    trial_vel = kin[trials == trial_id]
+                    trial_vel = torch.tensor(trial_vel.copy(), dtype=torch.float32)
                 single_payload = {
                     DataKey.spikes: create_spike_payload(trial_spikes, arrays_to_use, cfg, spike_bin_size_ms=cfg.bin_size_ms),
-                    DataKey.bhvr_vel: torch.tensor(trial_vel.copy(), dtype=torch.float32), # need float, not double
+                    DataKey.bhvr_vel: trial_vel, # need float, not double
                     DataKey.bhvr_mask: torch.tensor(kin_mask[trials == trial_id].copy()).unsqueeze(-1),
                 }
                 single_path = cache_root / f'{trial_id}.pth'

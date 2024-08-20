@@ -70,7 +70,8 @@ queries = [
 runs = []
 
 ndt2_run_df = pd.DataFrame({
-    'history': [200, 500, 800, 1000, 2000, 4000]
+    'history': [1000, 2000, 4000]
+    # 'history': [200, 500, 800, 1000, 2000, 4000]
 })
 
 # m1_100-sweep-simple_scratch-gl8tayw3

@@ -1,5 +1,10 @@
 # @package _global_
 
+# Extremely limited basic test for CER signs of life.
+# JY is not implementing H2 thoroughly in NDT2 due to NaN instability with shuffle infill
+# And general interest in broader pretraining framework, and lack of flashattn meaning only tiny models can be tested
+# Note this smoketest is causal, as NDT3 is causal; several offline frameworks report sentence-acausal CER, because that is how speech BCIs are used.
+
 defaults:
   - /model: flat_enc_dec
   - /model/task:
@@ -10,28 +15,36 @@ model:
   lr_decay_steps: 1500
   lr_interval: epoch
   causal: true
-  neurons_per_token: 32
-  session_embed_strategy: EmbedStrat.token
+  neurons_per_token: 64
+  session_embed_strategy: EmbedStrat.none
   transformer:
-    max_trial_length: 200 # 4 seconds
-    n_layers: 6
+    max_trial_length: 6000 # 60 seconds... absurd
+    # max_trial_length: 3000 # 60 seconds... absurd
+    n_layers: 2
+  decoder_layers: 1
   task:
     mask_ratio: 0.25 # for efficiency
-    task_weights: [1.0, 1.0]
-    decode_time_pool: ''
+    task_weights: [1.0, 0.005]
+    decode_time_pool: 'mean'
     decode_normalizer: ''
-    tasks: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding]
-    metrics: Metric.decode_acc
-    task_weights: [1.0, 20.0] # TODO toy
+    # tasks: [ModelTask.shuffle_infill] # , ModelTask.seq_decoding] # No joint task
+    tasks: [ModelTask.shuffle_infill] # , ModelTask.seq_decoding] # No joint task
+    # tasks: [ModelTask.shuffle_infill, ModelTask.seq_decoding] # No joint task
+    metrics: []
+    # metrics: [Metric.cer]
   decoder_context_integration: 'cross_attn'
-  dropout: 0.1
+  dropout: 0.2
 dataset:
+  pad_value: 2 # ! necessary poor workaround. 1. we need nonzero timestep to avoid nan-ing out in backbone for shuffle. 2. we don't have any timestep 0s in natural seq, only timestep 1 (for unknown reason), so timestep 2 needed for causal. can't go higher since we only have 3 spatial tokens too...
+  # bin_size_ms: 40
   bin_size_ms: 20
-  max_length_ms: 4000
-  max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
+  # max length in FALCONH2 is 4695 timesteps -> 14K tokens, 94 seconds
+  max_length_ms: 108000 # 6000 timesteps, 3 tokens per -> 16200 tokens
+  # max_length_ms: 60000 # 60000 / 20 = 3000
+  max_tokens: 16384
   explicit_alias_to_session: true
 
-  neurons_per_token: 32
+  neurons_per_token: 64
   max_channels: 192
   max_arrays: 1
 
@@ -41,15 +54,16 @@ dataset:
   - DataKey.bhvr_mask
   datasets:
   - falcon_FALCONH2.*
-  behavior_dim: 2
+  behavior_dim: 1
+  behavior_classes: 32 # 31 + 1
 
 train:
   max_batch_size: 256
-  batch_size: 128
+  batch_size: 1
   autoscale_batch_size: true
+  accumulate_batches: 1
   patience: 250
-  early_stop_metric: val_kinematic_r2
-effective_bsz: 128
+  early_stop_metric: val_loss
 
-sweep_cfg: simple_scratch
-sweep_mode: 'grid'
+# sweep_cfg: simple_scratch
+# sweep_mode: 'grid'

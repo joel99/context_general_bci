@@ -1,4 +1,39 @@
 #%%
+from context_general_bci.contexts import context_registry
+from context_general_bci.dataset import SpikingDataset
+from context_general_bci.config import DatasetConfig, DataKey, MetaKey
+
+test_cfg = DatasetConfig()
+test_cfg.datasets = ['falcon_FALCONH2.*']
+test_cfg.data_keys = [DataKey.spikes, DataKey.bhvr_vel]
+test_cfg.serve_tokenized = True
+test_cfg.serve_tokenized_flat = True
+test_cfg
+test = SpikingDataset(test_cfg)
+test.build_context_index()
+spike_range = []
+length_range = []
+sentence_range = []
+for i in test:
+    spikes = i[DataKey.spikes]
+    length_range.append(spikes.size(0))
+    spike_range.append(spikes.max())
+    sentence_range.append(i[DataKey.bhvr_vel].size(0))
+import numpy as np
+import matplotlib.pyplot as plt
+
+length_range = np.array(length_range)
+spike_range = np.array(spike_range)
+sentence_range = np.array(sentence_range)
+
+plt.hist(length_range, bins=100)
+print(length_range.max())
+#%%
+plt.hist(spike_range)
+
+#%%
+plt.hist(sentence_range)
+#%%
 import shutil
 from pathlib import Path
 import os

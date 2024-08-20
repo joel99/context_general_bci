@@ -1,5 +1,6 @@
 # context_general_bci
-Codebase for Neural Data Transformer 2. This should provide everything you need to run the reported experiments on public datasets, i.e. the main RTT results. This codebase is not reduced to the minimal skeleton needed to operate on public datasets -- please excuse the extraneous files related to Pitt datasets.
+Codebase for Neural Data Transformer 2. This should provide everything you need to run experiments reported in the [NDT2 manuscript](https://www.biorxiv.org/content/10.1101/2023.09.18.558113v1) (i.e. the RTT results) and the [FALCON project](https://snel-repo.github.io/falcon). This codebase is not reduced to the minimal skeleton needed to reproduce; other experimental code is included. Most of the following instructions refer to steps for reproducing the main manuscript.
+
 
 ## Getting started
 
@@ -48,9 +49,9 @@ Implementing a new task or dataset involves a few steps, since the codebase gene
 ## Decoding applications (FALCON)
 While NDT2 is initially described as a self-supervised pretraining method, you may be interested in its decoding application. Please see the [FALCON-challenge codebase](https://github.com/snel-repo/falcon-challenge) for an example flow for preparaing NDT2 as a decoder. Configs used to produce FALCON baselines are available under `config/exp/falcon`. For example, to reproduce the M2 checkpoints, run `python run.py +exp/falcon/m2_chop_2s`.
 The config used for the Joint baselines are:
-- H1: `falcon/h1_100`
-- M1: `falcon/m1_100_continual`
-- M2: `falcon/m2_100_continual`
+- H1: [falcon/h1_100](https://wandb.ai/joelye9/context_general_bci/runs/8l13b722?nw=nwuserjoelye9)
+- M1: [falcon/m1_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/b6bzlvc1?nw=nwuserjoelye9)
+- M2: [falcon/m2_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/rbajwckl/overview?nw=nwuserjoelye9)
 Checkpoints for these runs are available [here](https://drive.google.com/drive/u/0/folders/1ijvmPcbyjHlLEoWWSSZrNm1bBojGgrZG).
 
 ## Checkpoints

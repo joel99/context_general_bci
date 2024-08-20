@@ -640,28 +640,6 @@ class BrainBertInterface(pl.LightningModule):
         _add_context(session, getattr(self, 'session_flag', None), self.cfg.session_embed_strategy)
         _add_context(subject, getattr(self, 'subject_flag', None), self.cfg.subject_embed_strategy)
         _add_context(task, getattr(self, 'task_flag', None), self.cfg.task_embed_strategy)
-        # array embed deprecated
-        # if self.cfg.array_embed_strategy is not EmbedStrat.none: # Note we check earlier that this doesn't accidentally get set for space-time, not supported yet (we need to pass/infer array metadata)
-        #     assert not self.cfg.transform_space, 'not implemented'
-        #     if self.cfg.array_embed_strategy == EmbedStrat.token:
-        #         array = array + self.array_flag
-        #         static_context.extend(array.unbind(1)) # path not yet tested
-        #     elif self.cfg.array_embed_strategy == EmbedStrat.token_add:
-        #         state_in = state_in + rearrange(array, 'b a h -> b 1 a h') # redundant op since array uses 0s for padding
-        #     elif self.cfg.array_embed_strategy == EmbedStrat.concat:
-        #         array = repeat(array, 'b a h -> b t a h', t=state_in.shape[1])
-        #         project_context.append(array)
-        # # TODO support temporal embed + temporal project
-        # # Do not concat static context - list default is easier to deal with
-        # # static_context = rearrange(static_context, 't0 b h -> b t0 h') if static_context else None
-        # if project_context: # someone wanted it
-        #     raise NotImplementedError # not tested
-        #     # B T' H, and we want to merge into B T A H (specifically add T' to each token)
-        #     augmented_tokens, ps = pack([state_in, *project_context], 'b * a h')
-        #     augmented_tokens = self.context_project(augmented_tokens)
-        #     state_in = rearrange(augmented_tokens, ps, 'b (t a) h', t=state_in.size(1))
-        # if self.cfg.layer_norm_input:
-        #     state_in = self.layer_norm_input(state_in)
         return state_in, static_context, temporal_context
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -704,11 +682,9 @@ class BrainBertInterface(pl.LightningModule):
                     times=batch.get(DataKey.time, None),
                     positions=batch.get(DataKey.position, None),
                 ) # B x T x S x H or B x Token x H (flat)
-            # if outputs.isnan().any():
-                # import pdb;pdb.set_trace()
         return outputs
 
-    def _step(self, batch: Dict[str, torch.Tensor], eval_mode=False) -> Dict[str, torch.Tensor]:
+    def _step(self, batch: Dict[str, torch.Tensor], phase='train', eval_mode=False) -> Dict[str, torch.Tensor]:
         r"""
             batch provided contains all configured data_keys and meta_keys
             - The distinction with `forward` is not currently clear, but `_step` is specifically oriented around training.
@@ -769,7 +745,8 @@ class BrainBertInterface(pl.LightningModule):
             update = self.task_pipelines[task.value](
                 batch,
                 pipeline_features,
-                eval_mode=eval_mode
+                eval_mode=eval_mode,
+                phase=phase
             )
             for k in update:
                 if 'update' in str(k):
@@ -1003,6 +980,12 @@ class BrainBertInterface(pl.LightningModule):
                 # for i, r2 in enumerate(metrics[m]):
                     # self.log(f'{prefix}_{m.value}_{labels[i]}', r2, **kwargs)
                 self.log(f'{prefix}_{m.value}', metrics[m].mean(), **kwargs)
+            elif m == Metric.cer:
+                metric = self.task_pipelines[ModelTask.seq_decoding.value].get_metric(prefix)
+                if prefix in ['val', 'eval']:
+                    continue # print at epoch end...
+                self.log(f'{prefix}_{m.value}', metric, **kwargs)
+                metric.reset()
             else:
                 self.log(f'{prefix}_{m.value}', metrics[m], **kwargs)
 
@@ -1013,7 +996,7 @@ class BrainBertInterface(pl.LightningModule):
         if [ModelTask.shuffle_infill in self.cfg.task.tasks] and (self.cfg.log_token_proc_throughput or self.cfg.log_token_seen_throughput):
             self.token_proc_approx += batch[DataKey.spikes].size(0) * batch[DataKey.spikes].size(1)
             self.token_seen_approx += (batch[LENGTH_KEY].sum() * (1 - self.cfg.task.mask_ratio)).item()
-        metrics = self._step(batch)
+        metrics = self._step(batch, phase='train')
         if [ModelTask.shuffle_infill in self.cfg.task.tasks] and (self.cfg.log_token_proc_throughput or self.cfg.log_token_seen_throughput):
             if self.trainer.is_global_zero:
                 if self.cfg.log_token_proc_throughput:
@@ -1027,7 +1010,7 @@ class BrainBertInterface(pl.LightningModule):
         return metrics['loss']
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        metrics = self._step(batch)
+        metrics = self._step(batch, phase='val')
         # all_metrics = []
         # if getattr(self.cfg, 'val_iters', 1) > 1:
         #     clean = deepcopy(batch) # not intended to be efficient, quick and dirty
@@ -1044,15 +1027,30 @@ class BrainBertInterface(pl.LightningModule):
         #         metrics[k] = np.nanmean(np.vstack([m[k] for m in all_metrics]), 0)
         if Metric.kinematic_r2 in metrics and DataKey.bhvr_mask in batch and not batch[DataKey.bhvr_mask].any():
             metrics[Metric.kinematic_r2] = np.zeros_like(metrics[Metric.kinematic_r2]) # Just a bad batch with no kinematic data, don't fail the run
+        if Metric.cer in metrics:
+            self.log('val_cer', metrics[Metric.cer], sync_dist=True, on_step=False, on_epoch=True)
         self.common_log(metrics, prefix='val' if dataloader_idx == 0 else 'eval', sync_dist=True, add_dataloader_idx=False)
         return metrics['loss']
+
+    def on_validation_epoch_end(self):
+        if not (Metric.cer in self.cfg.task.metrics):
+            return
+        # val_metric = self.task_pipelines[ModelTask.seq_decoding.value].get_metric('val')
+        # val_compute = val_metric.compute() # auto-log will fail because it's not realized before reset...
+        # self.log('val_cer', val_compute)
+        # val_metric.reset()
+        eval_metric = self.task_pipelines[ModelTask.seq_decoding.value].get_metric('eval')
+        if eval_metric.num_elements: # Active
+            eval_compute = eval_metric.compute()
+            self.log('eval_kinematic_r2', eval_compute)
+            eval_metric.reset()
 
     @torch.inference_mode()
     def test_step(self, batch, batch_idx):
         r"""
             Note test step isn't capable of returning non-metrics. (use `predict` to get outputs)
         """
-        metrics = self._step(batch, eval_mode=False)
+        metrics = self._step(batch, phase = 'eval', eval_mode=False)
         # metrics = self._step(batch, eval_mode=True)
         self.common_log(metrics, prefix='test')
         return metrics
