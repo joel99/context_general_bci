@@ -44,9 +44,9 @@ r"""
 
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
-    VARIANT = 'h1_single'
-    # VARIANT = 'm2_single'
+    # VARIANT = 'h1_single'
     # VARIANT = 'm1_single'
+    VARIANT = 'm2_single'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()
@@ -69,11 +69,26 @@ eval_paths.mkdir(exist_ok=True, parents=True)
 eval_metrics_path = eval_paths / f"{eval_set}_eval_ndt2.csv"
 ndt2_run_df = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
 
-ndt2_run_df
-#%%
+print(ndt2_run_df[['id', 'variant']])
 ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'h1_oracle_joint-sweep-simple_scratch']
 ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'm1_oracle_joint-sweep-simple_scratch']
 ndt2_run_df = ndt2_run_df[ndt2_run_df.variant != 'm2_oracle_joint-sweep-simple_scratch']
+
+#%%
+# Shuttle to local data for eval
+import shutil
+src_dir = Path('/home/joelye/projects/context_general_bci/data/runs/context_general_bci/')
+target_dir = Path('/home/joelye/projects/stability-benchmark/local_data')
+for i in ndt2_run_df.id.unique():
+    # of the format val_kinematic_r2.*
+    src_path = list((src_dir / i / 'checkpoints').glob('val_kinematic_r2*.ckpt'))[0]
+    target_path = target_dir / f'{VARIANT}_oracle_ndt2_{i}.ckpt'
+    if not target_path.exists():
+        shutil.copy(src_path, target_path)
+    
+
+
+#%%
 def reduce_dataset_from_variant(variant):
     if 'm2' in variant:
         if 'ses' in variant:
@@ -157,6 +172,7 @@ def compute_other_held_in_mean_perf(df):
 
 static_row = compute_other_held_in_mean_perf(ndt2_run_df)
 print(f"Static")
+print(static_row.id)
 print(static_row['heldin_eval_r2'])
 print(static_row['eval_r2'])
 print(static_row['Held Out R2 Std.'])

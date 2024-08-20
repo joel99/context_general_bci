@@ -57,6 +57,7 @@ train:
   early_stop_metric: val_loss
 effective_bsz: 2048
 
-sweep_cfg: simple_scratch
+sweep_cfg: full_scratch
+# sweep_cfg: simple_scratch
 sweep_mode: 'grid'
 notes: 'RTT comparison with NDT3'

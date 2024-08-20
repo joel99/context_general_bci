@@ -44,7 +44,8 @@ dataset:
   eval_ratio: 1.0
   behavior_dim: 3
   pitt_co:
-    respect_trial_boundaries: True
+    respect_trial_boundaries: False
+    chop_size_ms: 1000
 
 train:
   max_batch_size: 64
@@ -52,6 +53,7 @@ train:
   patience: 250
   early_stop_metric: val_kinematic_r2
 effective_bsz: 64
-sweep_cfg: simple_scratch
+# sweep_cfg: simple_scratch
+sweep_cfg: full_scratch
 sweep_mode: 'grid'
 notes: 'Cursor comparison with NDT3'

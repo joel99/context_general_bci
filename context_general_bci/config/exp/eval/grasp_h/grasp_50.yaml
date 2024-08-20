@@ -5,5 +5,7 @@ defaults:
 dataset:
   scale_ratio: 0.5
 train:
-  max_batch_size: 32
-  batch_size: 32
+  # max_batch_size: 32
+  # batch_size: 32
+  max_batch_size: 256
+  batch_size: 256

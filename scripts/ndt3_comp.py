@@ -86,7 +86,7 @@ UNIQUE_BY = {
     "model.lr_init", 
     "model.hidden_size", 
     "dataset.scale_ratio",
-    "dataset.falcon_m2.respect_trial_boundaries",
+    # "dataset.falcon_m2.respect_trial_boundaries",
 }
 
 EVAL_DATASET_FUNC_MAP = {
@@ -138,11 +138,12 @@ def run_list_to_df(runs, eval_set_name: str):
         eval_crop = eval_set_name.replace('_continual', '')
     else:
         eval_crop = eval_set_name
+    config_key = 'pitt_co' if eval_crop in ['cursor', 'grasp_h'] else eval_crop
     df_dict = {
         'id': map(lambda r: r.id, filter_runs),
         'variant': map(lambda r: r.config['tag'], filter_runs),
         'scale_ratio': map(lambda r: r.config['dataset']['scale_ratio'], filter_runs),
-        "respect_trial_boundaries": map(lambda r: r.config['dataset'][eval_crop].get('respect_trial_boundaries', True), runs),
+        "respect_trial_boundaries": map(lambda r: r.config['dataset'][config_key].get('respect_trial_boundaries', True), runs),
         'eval_set': map(lambda r: eval_set_name, filter_runs),
         'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], filter_runs),
     }

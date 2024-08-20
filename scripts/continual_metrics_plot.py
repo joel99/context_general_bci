@@ -208,7 +208,7 @@ def plot_single(ax, split, df, in_out_subset=''):
     return ax
 
 in_out_mode = 'eval_r2'
-in_out_mode = 'heldin_eval_r2'
+# in_out_mode = 'heldin_eval_r2'
 # in_out_mode = ''
 
 plot_single(axes[0], 'h1', ndt2_run_df[ndt2_run_df['variant'] == 'h1'], in_out_mode)

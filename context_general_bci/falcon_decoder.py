@@ -1,7 +1,7 @@
 r"""
     NDT2 wrapper. Not for running.
 """
-from typing import List
+from typing import List, Dict
 from pathlib import Path
 import numpy as np
 import torch
@@ -42,6 +42,7 @@ class NDT2Decoder(BCIDecoder):
             force_static_key: str = '' # If true, ignore data attrs and just load the only key fit in the single session model (for oracle single day baselines)
         ):
         r"""
+            model_ckpt_path: either individual path, or dict of paths for each session key (single session models)
             Loading NDT2 requires both weights and model config. Weight loading through a checkpoint is standard.
             Model config is typically stored on wandb, but this is not portable enough. Instead, directly reference the model config file.
         """

@@ -5,7 +5,9 @@ defaults:
 dataset:
   scale_ratio: 0.25
 train:
-  max_batch_size: 16
-  batch_size: 16
+  # max_batch_size: 16
+  # batch_size: 16
+  max_batch_size: 128
+  batch_size: 128
 
 notes: "Skipped - 100 is trivial"

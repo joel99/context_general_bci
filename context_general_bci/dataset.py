@@ -358,7 +358,7 @@ class SpikingDataset(Dataset):
                 meta[k] = context_meta.subject.name
             else:
                 meta[k] = getattr(context_meta, k.name)
-        meta[MetaKey.unique] = meta[MetaKey.session] + '-' + meta.index.astype(str) # unique per _trial_ INDEX in dataset
+        meta[MetaKey.unique] = context_meta.session_embed_id + '-' + meta.index.astype(str) # unique per _trial_ INDEX in dataset. Don't reduce.
         self.validate_meta(meta)
 
         # invalid_paths = []

@@ -32,7 +32,7 @@ num_workers = 4 # for main eval block.
 if 'ipykernel' in sys.modules:
     print("Running in a Jupyter notebook.")
     VARIANT = 'h1_single'
-    # VARIANT = 'm1_single'
+    VARIANT = 'm1_single'
     VARIANT = 'm2_single'
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
@@ -53,6 +53,18 @@ eval_paths.mkdir(exist_ok=True, parents=True)
 eval_metrics_path = eval_paths / f"{eval_set}_eval_rnn.csv"
 ndt2_run_df = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
 
+#%%
+# Shuttle to local data for eval
+import shutil
+src_dir = Path('/home/joelye/projects/context_general_bci/data/runs/context_general_bci/')
+target_dir = Path('/home/joelye/projects/stability-benchmark/local_data')
+for i in ndt2_run_df.id.unique():
+    # of the format val_kinematic_r2.*
+    src_path = list((src_dir / i / 'checkpoints').glob('val_kinematic_r2*.ckpt'))[0]
+    target_path = target_dir / f'{VARIANT}_oracle_rnn_{i}.ckpt'
+    if not target_path.exists():
+        shutil.copy(src_path, target_path)
+    
 #%%
 ndt2_run_df.head()
 def reduce_dataset_from_variant(variant):
@@ -139,7 +151,7 @@ def compute_other_held_in_mean_perf(df):
 
 static_row = compute_other_held_in_mean_perf(ndt2_run_df)
 print(f"Static (choose best day)")
-print(f"Static all: {static_row}")
+print(f"Static all: {static_row.id}")
 
 print(f"----")
 print(f'heldout r2: {static_row["eval_r2"]}')

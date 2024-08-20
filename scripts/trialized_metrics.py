@@ -73,9 +73,11 @@ ndt2_run_df = pd.DataFrame({
     'history': [200, 500, 800, 1000, 2000, 4000]
 })
 
+# m1_100-sweep-simple_scratch-gl8tayw3
+
 ckpts = {
     'h1': '../stability-benchmark/local_data/ndt2_h1_sample.pth',
-    'm1': '../stability-benchmark/local_data/ndt2_m1_sample.pth',
+    'm1': './data/runs/context_general_bci/gl8tayw3/checkpoints/val_kinematic_r2-epoch=911-val_kinematic_r2=0.7258-val_loss=0.8390.ckpt',
     'm2': '../projects/stability-benchmark/local_data/ndt2_m2_sample.pth'
 }
 norms = {

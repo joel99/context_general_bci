@@ -46,5 +46,6 @@ train:
   early_stop_metric: val_kinematic_r2
 effective_bsz: 32
 
-sweep_cfg: 'simple_scratch'
+# sweep_cfg: 'simple_scratch'
+sweep_cfg: 'full_scratch'
 sweep_mode: 'grid'
