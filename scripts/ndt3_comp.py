@@ -268,17 +268,24 @@ for idx, run_row in ndt2_run_df.iterrows():
         ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag='val_kinematic_r2')
         zscore_pth = cfg.model.task.decode_normalizer
         split = run_row.eval_set.split('_')[1]
+        os.environ['GT_PATH'] = f'./local_gt_{split}.pkl'
+        os.environ['PREDICTION_PATH_LOCAL'] = f'./local_pred_{run_row.id}_{split}.pkl'
         evaluator = FalconEvaluator(
             eval_remote=False,
             split=split,
-            continual='continual' in run_row.variant)
+        )
+            # continual='continual' in run_row.variant)
 
         task = getattr(FalconTask, split)
         config = FalconConfig(task=task)
-        if '_continual' in run_row.variant:
-            max_bins = cfg.dataset.augment_crop_length_ms // config.bin_size_ms
+        # if '_continual' in run_row.variant:
+        #     max_bins = cfg.dataset.augment_crop_length_ms // config.bin_size_ms
+        # else:
+        #     max_bins = cfg.dataset.max_length_ms // config.bin_size_ms
+        if split == 'h1':
+            max_bins = 200 # 4s (V5 NDT3 comp)
         else:
-            max_bins = cfg.dataset.max_length_ms // config.bin_size_ms
+            max_bins = 50 # 1s (V5 NDT3 comp)
         decoder = NDT2Decoder(
             task_config=config,
             model_ckpt_path=ckpt,
