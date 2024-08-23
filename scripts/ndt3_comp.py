@@ -1,4 +1,5 @@
 #%%
+from typing import List
 import os
 # set cuda to device 1
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -18,6 +19,7 @@ import pytorch_lightning as pl
 
 # Load BrainBertInterface and SpikingDataset to make some predictions
 from context_general_bci.config import RootConfig, ModelTask, Metric, Output, DataKey
+from context_general_bci.config.hp_sweep_space import sweep_space
 from context_general_bci.dataset import SpikingDataset
 from context_general_bci.model import transfer_model
 from context_general_bci.analyze_utils import stack_batch, get_dataloader, load_wandb_run, prep_plt, get_best_ckpt_from_wandb_id, get_run_config
@@ -51,9 +53,9 @@ else:
         "--eval-set", "-e", type=str, required=True, choices=[
             'falcon_h1', 
             'falcon_m1', 
-            'falcon_m1_continual',
+            # 'falcon_m1_continual', # v4 defunct
             'falcon_m2', 
-            'falcon_m2_continual',
+            # 'falcon_m2_continual', # v4 defunct
             'cursor', 
             'rtt', 
             'grasp_h']
@@ -86,6 +88,7 @@ UNIQUE_BY = {
     "model.lr_init", 
     "model.hidden_size", 
     "dataset.scale_ratio",
+    "seed",
     # "dataset.falcon_m2.respect_trial_boundaries",
 }
 
@@ -116,7 +119,8 @@ def get_runs_for_query(variant: str, scale_ratio: float, eval_set: str, project=
     r"""
         variant: init_from_id
     """
-    sweep_tag = "simple_scratch" if "scratch" in variant else "simple_ft" # v4 settings
+    # sweep_tag = "simple_scratch" if "scratch" in variant else "simple_ft" # v4 settings
+    sweep_tag = "full_scratch"
     variant_tag = TAG_MAP[eval_set].format(scale_ratio=int(scale_ratio * 100))
     print(f'Querying: {variant_tag}')
     return wandb_query_experiment(
@@ -146,14 +150,32 @@ def run_list_to_df(runs, eval_set_name: str):
         "respect_trial_boundaries": map(lambda r: r.config['dataset'][config_key].get('respect_trial_boundaries', True), runs),
         'eval_set': map(lambda r: eval_set_name, filter_runs),
         'val_kinematic_r2': map(lambda r: r.summary['val_kinematic_r2']['max'], filter_runs),
+        'sweep': ['full_scratch'] * len(filter_runs),
     }
+    def nested_get_from_config(config, param: List[str]):
+        if len(param) > 1:
+            return nested_get_from_config(config[param[0]], param[1:])
+        return config[param[0]]
+    unique_sweeps = set(df_dict['sweep'])
+    for sweep_name in unique_sweeps:
+        for p in sweep_space[sweep_name].keys():
+            # For some reason if we don't cast, early params get overwritten..
+            df_dict[p] = list(map(lambda r: nested_get_from_config(r.config, p.split('.')), filter_runs))
     if eval_set_name in ['rtt', 'cursor', 'grasp_h']: # Not separate pipeline
         df_dict['eval_report'] = map(lambda r: r.summary['eval_kinematic_r2']['max'], runs)
     return pd.DataFrame(df_dict)
 
 def get_best_run_per_sweep(run_df, metric='val_kinematic_r2'):
-    # reduce the df to only the runs with the highest R2
-    run_df = run_df.groupby(['variant']).apply(lambda x: x.nlargest(1, metric)).reset_index(drop=True)
+    if 'seed' in run_df:
+        hp_columns = [col for col in run_df.columns if col not in ['id', 'variant', 'eval_set', 'scale_ratio', 'seed', 'val_kinematic_r2', 'eval_report']]
+        id_columns = ['variant']
+        group_columns = [*hp_columns, *id_columns]
+        seed_averaged_df = run_df.groupby(group_columns)[metric].mean().reset_index()
+        aug_df = pd.merge(run_df, seed_averaged_df, on=group_columns, suffixes=('', '_seed_avg'))
+        filter_metric = f'{metric}_seed_avg'
+        run_df = aug_df.groupby('variant').apply(lambda x: x[x[filter_metric] == x[filter_metric].max()]).reset_index(drop=True)
+    else: # Then re-group by variant and filter for the best HP.
+        run_df = run_df.groupby(['variant']).apply(lambda x: x.nlargest(1, metric)).reset_index(drop=True)
     return run_df
 
 def get_run_df_for_query(variant: str, scale_ratio: float, eval_set: str, metric='val_kinematic_r2', **kwargs):
@@ -235,6 +257,7 @@ for idx, run_row in ndt2_run_df.iterrows():
     eval_set = EVAL_DATASET_FUNC_MAP[run_row.eval_set]
     run = get_wandb_run(run_row.id, wandb_project="context_general_bci")
     if eval_set is not None:
+        print('\n', run, '\n')
         src_model, cfg, data_attrs = load_wandb_run(run, tag='val_kinematic_r2')
         dataset = SpikingDataset(cfg.dataset, use_augment=False)
         dataset.subset_split(splits=['eval'])
