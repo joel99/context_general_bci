@@ -7,7 +7,7 @@ import os
 import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO) # needed to get `logger` to print
-from collections import defaultdict
+from tqdm import tqdm
 from matplotlib import pyplot as plt
 from pathlib import Path
 import seaborn as sns
@@ -18,7 +18,7 @@ import pandas as pd
 import pytorch_lightning as pl
 
 # Load BrainBertInterface and SpikingDataset to make some predictions
-from context_general_bci.config import RootConfig, ModelTask, Metric, Output, DataKey
+from context_general_bci.config import RootConfig, ModelTask, Metric, Output, DataKey, MetaKey
 from context_general_bci.config.hp_sweep_space import sweep_space
 from context_general_bci.dataset import SpikingDataset
 from context_general_bci.model import transfer_model
@@ -194,18 +194,21 @@ queries = [
 runs = []
 ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
 eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
-eval_df_so_far = pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
+def load_eval_df_so_far(eval_metrics_path):
+    return pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
+eval_df_so_far = load_eval_df_so_far(eval_metrics_path)
 
-ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
-if len(eval_df_so_far) and False:
-    if 'index' in eval_df_so_far:
-        eval_df_so_far.drop(columns=['index'], inplace=True)
-    # eval_df_so_far zero to nan
-    eval_df_so_far['eval_r2'] = eval_df_so_far['eval_r2'].replace(0, np.nan)
-    # eval_df_so_far drop nan
-    eval_df_so_far = eval_df_so_far.dropna(subset=['eval_r2'])
-    ndt2_run_df = ndt2_run_df[~ndt2_run_df.id.isin(eval_df_so_far.id)].reset_index(drop=True)
-
+def trim_df(df, df_so_far):
+    # Delete the data from eval queue that already exists in so_far
+    if len(df_so_far):
+        if 'index' in df_so_far:
+            df_so_far.drop(columns=['index'], inplace=True)
+        # df_so_far zero to nan
+        df_so_far['eval_r2'] = df_so_far['eval_r2'].replace(0, np.nan)
+        # df_so_far drop nan
+        df_so_far = df_so_far.dropna(subset=['eval_r2'])
+        df = df[~df.id.isin(df_so_far.id)].reset_index(drop=True)
+    return df
 
 eval_metrics = {}
 def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
@@ -221,17 +224,68 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
         batch_size = 64 
     elif EVAL_SET == 'grasp_h':
         batch_size = 8
-    else:
+    else: # RTT
         batch_size = 256
-    dataloader = get_dataloader(dataset, num_workers=4, batch_size=batch_size)
+        
     model.cfg.task.outputs = [Output.behavior, Output.behavior_pred]
-    trainer_preds = trainer.predict(model, dataloader)
-    outputs = stack_batch(trainer_preds) # Trial x Time x Dim, first dim may be list
-    pred, true, masks = outputs[Output.behavior_pred], outputs[Output.behavior], outputs[Output.behavior_mask]
-    if Output.padding in outputs:
-        padding = outputs[Output.padding]
-    else:
+    if EVAL_SET in ['cursor', 'grasp_h']:
+        stream_buffer_s = 1 # streaming eval, mirror NDT3
+        # TODO streaming eval
+        # NDT3's streaming eval implementation relies on KV cache, which is not applicable here.
+        # Here we will assume limited size evaluation dataset and just load everything at once, then slide through.
+        # NDT2 batch must be spoofed - raw data doesn't flatten (i.e. we could've concated on dim 0), but batches do.
+        # We thus either need to spoof batching or spoof unflattening/sliding logic, latter is chosen here.
+        dataloader = get_dataloader(dataset, num_workers=0, batch_size=1)
+        accum_batch = {
+            DataKey.spikes: [],
+            DataKey.time: [],
+            DataKey.position: [],
+            DataKey.bhvr_vel: [],
+            DataKey.bhvr_mask: [],
+            'channel_counts': []
+        }
+        meta_batch = {}
+        
+        running_start_time = 0
+        for i, batch in enumerate(dataloader):
+            for key in batch:
+                if key in accum_batch:
+                    if key == DataKey.time:
+                        accum_batch[key].append(batch[key] + running_start_time)
+                        running_start_time += batch[key].max() + 1
+                    else:
+                        accum_batch[key].append(batch[key])
+                elif key not in meta_batch:
+                    meta_batch[key] = batch[key]
+        for key in accum_batch:
+            accum_batch[key] = torch.cat(accum_batch[key], dim=1)
+
+        timesteps = accum_batch[DataKey.time].max()
+        pred, true, masks = [], [], []
+        for end_time_inclusive in tqdm(range(timesteps)):
+            start_timestep = max(0, int(end_time_inclusive - stream_buffer_s * 1000 / cfg.dataset.bin_size_ms))
+            sliding_batch = {k: accum_batch[k][(accum_batch[DataKey.time] <= end_time_inclusive) & (accum_batch[DataKey.time] >= start_timestep)] 
+                             for k in [DataKey.time, DataKey.spikes, DataKey.position, 'channel_counts']}
+            for k in [DataKey.bhvr_vel, DataKey.bhvr_mask]:
+                if k in accum_batch:
+                    sliding_batch[k] = accum_batch[k][:, start_timestep:end_time_inclusive+1]
+            sliding_batch[DataKey.time] = sliding_batch[DataKey.time] - start_timestep
+            sliding_batch = {**sliding_batch, **meta_batch}
+            outputs = model.predict(sliding_batch)
+            pred.append(outputs[Output.behavior_pred][:, -1])
+            true.append(outputs[Output.behavior][:, -1])
+            masks.append(outputs[Output.behavior_mask][:, -1])
         padding = None
+    else:
+        stream_buffer_s = 0
+        dataloader = get_dataloader(dataset, num_workers=4, batch_size=batch_size)
+        trainer_preds = trainer.predict(model, dataloader)
+        outputs = stack_batch(trainer_preds) # Trial x Time x Dim, first dim may be list
+        pred, true, masks = outputs[Output.behavior_pred], outputs[Output.behavior], outputs[Output.behavior_mask]
+        if Output.padding in outputs:
+            padding = outputs[Output.padding]
+        else:
+            padding = None
     if isinstance(pred, list):
         pred = torch.cat(pred, dim=0)
         true = torch.cat(true, dim=0)
@@ -251,7 +305,15 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     print(f"R2 over {len(pred)} samples: {r2:.3f}")
     return r2
 
+def commit_df(df, path):
+    df_so_far = load_eval_df_so_far(path)
+    df = pd.concat([df, df_so_far]).reset_index(drop=True)
+    df.to_csv(path, index=False)
+    df = df.drop_duplicates(subset=['variant', 'seed'], keep='first').reset_index(drop=True)
+    df.to_csv(path, index=False)
+
 trainer = pl.Trainer(accelerator='gpu', devices=1, default_root_dir='./data/tmp')
+ndt2_run_df = trim_df(ndt2_run_df, eval_df_so_far)
 ndt2_run_df['eval_r2'] = 0.
 for idx, run_row in ndt2_run_df.iterrows():
     eval_set = EVAL_DATASET_FUNC_MAP[run_row.eval_set]
@@ -263,6 +325,7 @@ for idx, run_row in ndt2_run_df.iterrows():
         dataset.subset_split(splits=['eval'])
         eval_r2 = get_single_eval(cfg, src_model, trainer, dataset=dataset)
         ndt2_run_df.at[idx, 'eval_r2'] = eval_r2  # Correct way to modify a DataFrame row
+        commit_df(ndt2_run_df, eval_metrics_path)
     elif 'falcon' in run_row.eval_set:
         cfg = get_run_config(run, tag='val_kinematic_r2')
         ckpt = get_best_ckpt_from_wandb_id(cfg.wandb_project, run.id, tag='val_kinematic_r2')
@@ -312,8 +375,4 @@ ax = prep_plt()
 sns.lineplot(data=ndt2_run_df, x='scale_ratio', y='eval_r2', hue='eval_set', ax=ax)
 
 # save down
-ndt2_run_df = pd.concat([ndt2_run_df, eval_df_so_far]).reset_index(drop=True)
-# drop duplicates by variant stem, prefer new
-ndt2_run_df = ndt2_run_df.drop_duplicates(subset=['variant'], keep='first').reset_index(drop=True)
-
-ndt2_run_df.to_csv(eval_metrics_path, index=False)
+commit_df(ndt2_run_df, eval_metrics_path)
