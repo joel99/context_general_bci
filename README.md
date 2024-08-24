@@ -52,6 +52,7 @@ The config used for the Joint baselines are:
 - H1: [falcon/h1_100](https://wandb.ai/joelye9/context_general_bci/runs/8l13b722?nw=nwuserjoelye9)
 - M1: [falcon/m1_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/b6bzlvc1?nw=nwuserjoelye9)
 - M2: [falcon/m2_100_continual](https://wandb.ai/joelye9/context_general_bci/runs/rbajwckl/overview?nw=nwuserjoelye9)
+In the event the specific config files are changed, the exact git state and configurations when these configs were declared are available in the linked Weights and Bias pages.
 Checkpoints for these runs are available [here](https://drive.google.com/drive/u/0/folders/1ijvmPcbyjHlLEoWWSSZrNm1bBojGgrZG).
 
 ## Checkpoints
