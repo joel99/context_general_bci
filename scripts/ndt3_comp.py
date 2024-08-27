@@ -23,7 +23,7 @@ from context_general_bci.config.hp_sweep_space import sweep_space
 from context_general_bci.dataset import SpikingDataset
 from context_general_bci.model import transfer_model
 from context_general_bci.analyze_utils import stack_batch, get_dataloader, load_wandb_run, prep_plt, get_best_ckpt_from_wandb_id, get_run_config
-from context_general_bci.utils import wandb_query_experiment, get_wandb_run
+from context_general_bci.utils import wandb_query_experiment, get_wandb_run, to_device
 
 
 from falcon_challenge.config import FalconConfig, FalconTask
@@ -232,6 +232,7 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     data_attrs = dataset.get_data_attrs()
     cfg.model.task.tasks = [ModelTask.kinematic_decoding]
     model = transfer_model(src_model, cfg.model, data_attrs)
+    model = model.to('cuda')
     if EVAL_SET == 'cursor':
         batch_size = 64 
     elif EVAL_SET == 'grasp_h':
@@ -283,10 +284,12 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
                     sliding_batch[k] = accum_batch[k][:, start_timestep:end_time_inclusive+1]
             sliding_batch[DataKey.time] = sliding_batch[DataKey.time] - start_timestep
             sliding_batch = {**sliding_batch, **meta_batch}
+            sliding_batch = to_device(sliding_batch, device='cuda')
             outputs = model.predict(sliding_batch)
-            pred.append(outputs[Output.behavior_pred][:, -1])
-            true.append(outputs[Output.behavior][:, -1])
-            masks.append(outputs[Output.behavior_mask][:, -1])
+            # Should have a leading batch of 1, since dataloader has batch size 1, remove and take final timestep
+            pred.append(outputs[Output.behavior_pred][0, -1:].cpu()) # B T H -> T=1 H
+            true.append(outputs[Output.behavior][0, -1:].cpu()) # B T H -> T=1 H
+            masks.append(outputs[Output.behavior_mask][0, -1:].cpu()) # B T -> T=1 
         padding = None
     else:
         stream_buffer_s = 0
@@ -301,7 +304,9 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     if isinstance(pred, list):
         pred = torch.cat(pred, dim=0)
         true = torch.cat(true, dim=0)
-        masks = torch.cat(masks, dim=0).squeeze(-1)
+        masks = torch.cat(masks, dim=0)
+        if masks.ndim != true.ndim - 1:
+            masks = masks.squeeze(-1) # remove hidden dim of 1
         if padding is not None:
             padding = torch.cat(padding, dim=0)
             pred = pred[~padding]

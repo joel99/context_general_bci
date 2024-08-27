@@ -209,13 +209,21 @@ def get_wandb_lineage(cfg: RootConfig):
 
     return runs[0] # auto-sorts to newest
 
-def wandb_run_exists(cfg: RootConfig, experiment_set: str="", tag: str="", other_overrides: Dict[str, Any] = {}, allowed_states=["finished", "running", "crashed", "failed"]):
+def wandb_run_exists(cfg: RootConfig, experiment_set: str="", tag: str="", other_overrides: Dict[str, Any] = {}, allowed_states=["finished", "running", "crashed", "failed"], recent=False):
     r"""
         Intended to do be used within the scope of an auto-launcher.
         Only as specific as the overrides specify, will be probably too liberal with declaring a run exists if you don't specify enough.
     """
     if not cfg.experiment_set:
         return False
+    if 'cancel_if_run_exists' in other_overrides:
+        del other_overrides['cancel_if_run_exists'] # don't want to cancel if we're checking if it exists
+    if recent:
+        from datetime import datetime, timedelta
+        other_overrides["created_at"] = {
+            "$gt": (datetime.now() - timedelta(days=1)).isoformat()
+        }
+
     api = wandb.Api()
     print(other_overrides)
     if 'init_from_id' in other_overrides:

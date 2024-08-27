@@ -782,7 +782,7 @@ class BrainBertInterface(pl.LightningModule):
             DataKey.heldout_spikes: '* t c h',
             DataKey.stim: '* t c h', # TODO review
             DataKey.bhvr_vel: '* t h',
-            DataKey.bhvr_mask: '* t h',
+            DataKey.bhvr_mask: '* t', # I don't think there's a hidden dimension for bhvr mask
             MetaKey.session: '*',
             MetaKey.subject: '*',
             MetaKey.task: '*',
@@ -794,7 +794,6 @@ class BrainBertInterface(pl.LightningModule):
             DataKey.time: '* t',
             DataKey.position: '* t',
         }
-
         pack_info = {}
         for k in batch:
             batch[k], pack_info[k] = pack([batch[k]], batch_shapes[k])
