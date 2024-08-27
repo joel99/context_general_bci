@@ -307,8 +307,9 @@ class SpikingDataset(Dataset):
 
     def load_single_session(self, context_meta: ContextInfo, override_preprocess_path: bool=False) -> pd.DataFrame:
         session_path = context_meta.datapath
-        if not (hash_dir := self.preprocess_path(self.cfg, session_path, override_preprocess_path)).exists() or \
-            self.checksum_diff(hash_dir / 'preprocess_version.json', context_meta.task):
+        hash_dir = self.preprocess_path(self.cfg, session_path, override_preprocess_path)
+        if not self.cfg.ignore_preprocess and (not hash_dir.exists() or \
+            self.checksum_diff(hash_dir / 'preprocess_version.json', context_meta.task)):
             # TODO consider filtering meta df to be more lightweight (we don't bother right now because some nonessential attrs can be useful for analysis)
             os.makedirs(hash_dir, exist_ok=True)
             meta = context_meta.load(self.cfg, hash_dir)

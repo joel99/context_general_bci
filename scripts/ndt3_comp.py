@@ -46,6 +46,7 @@ if 'ipykernel' in sys.modules:
     EVAL_SET = "cursor"
     # EVAL_SET = "rtt"
     EVAL_SET = "grasp_h"
+    SCALES = [0.25, 0.5, 1.0]
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()
@@ -60,8 +61,12 @@ else:
             'rtt', 
             'grasp_h']
     )
+    parser.add_argument(
+        "--scales", "-s", type=float, nargs='+', default=[0.25, 0.5, 1.0]
+    )
     args = parser.parse_args()
     EVAL_SET = args.eval_set
+    SCALES = args.scales
 
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
@@ -111,7 +116,8 @@ SCALE_MAP = {
     'falcon_m2_continual': [0.25, 0.5, 1.0],
     'cursor': [0.25, 0.5, 1.0],
     'rtt': [0.25, 0.5, 1.0],
-    'grasp_h': [0.25, 0.5, 1.0],
+    'grasp_h': [0.25],
+    # 'grasp_h': [0.25, 0.5, 1.0],
 }
 
 eval_paths = Path('./data/eval_metrics')
@@ -142,7 +148,12 @@ def run_list_to_df(runs, eval_set_name: str):
         eval_crop = eval_set_name.replace('_continual', '')
     else:
         eval_crop = eval_set_name
-    config_key = 'pitt_co' if eval_crop in ['cursor', 'grasp_h'] else eval_crop
+    if eval_crop in ['cursor', 'grasp_h']:
+        config_key = 'pitt_co'
+    elif eval_crop == 'rtt':
+        config_key = 'odoherty_rtt'
+    else:
+        config_key = eval_crop
     df_dict = {
         'id': map(lambda r: r.id, filter_runs),
         'variant': map(lambda r: r.config['tag'], filter_runs),
@@ -192,7 +203,8 @@ queries = [
 ]
 
 runs = []
-ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
+ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALES]).reset_index()
+# ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
 eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
 def load_eval_df_so_far(eval_metrics_path):
     return pd.read_csv(eval_metrics_path) if eval_metrics_path.exists() else pd.DataFrame()
@@ -292,9 +304,9 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
         masks = torch.cat(masks, dim=0).squeeze(-1)
         if padding is not None:
             padding = torch.cat(padding, dim=0)
-        pred = pred[~padding]
-        true = true[~padding]
-        masks = masks[~padding]
+            pred = pred[~padding]
+            true = true[~padding]
+            masks = masks[~padding]
     else:
         pred = pred.flatten(end_dim=-2)
         true = true.flatten(end_dim=-2)

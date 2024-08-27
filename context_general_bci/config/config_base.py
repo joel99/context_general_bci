@@ -73,6 +73,12 @@ class DataKey(Enum):
     extra = 'extra' # utility for decoding
     extra_time = 'extra_time'
     extra_position = 'extra_position'
+    
+    # NDT3 backcompat
+    constraint = 'constraint' 
+    covariate_labels = 'covariate_labels'
+    task_reward = 'task_reward'
+    task_return = 'task_return'
 
 class MetaKey(Enum):
     r"""
@@ -402,6 +408,7 @@ class DatasetConfig:
             - lightweight regex for _aliases_ (not paths). Note this is regex, not glob.
     """
     datasets: List[str] = field(default_factory=lambda: [])
+    ignore_preprocess: bool = False # Ignore preprocessing state diff and force usage of existing preproc as best as can (for using NDT3 data)
     exclude_datasets: List[str] = field(default_factory=lambda: []) # more specific aliases to exclude, processed after above, and no-ops for anything in `eval_datasets`
     data_blacklist: str = '' # path to text file with one dataset alias per line to exclude (for a first pass, above is more specific)
 

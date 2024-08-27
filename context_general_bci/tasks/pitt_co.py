@@ -1,5 +1,5 @@
 #%%
-from typing import List, Union
+from typing import List, Union, Optional
 from pathlib import Path
 import math
 import numpy as np
@@ -11,7 +11,7 @@ from scipy.io import loadmat
 from scipy.ndimage import gaussian_filter1d
 # from scipy.signal import convolve
 import torch.nn.functional as F
-from einops import rearrange, reduce
+from einops import rearrange, reduce, repeat
 
 import logging
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ except:
 from context_general_bci.config import DataKey, DatasetConfig, PittConfig
 from context_general_bci.subjects import SubjectInfo, create_spike_payload
 from context_general_bci.tasks import ExperimentalTask, ExperimentalTaskLoader, ExperimentalTaskRegistry
-
+from context_general_bci.tasks.preproc_utils import compress_vector, heuristic_sanitize_payload
 
 CLAMP_MAX = 15
 NDT3_CAUSAL_SMOOTH_MS = 300
@@ -272,6 +272,9 @@ class PittCOLoader(ExperimentalTaskLoader):
                 ),
                 **other_data
             }
+            # NDT3 parity, not used original NDT2 experimentss
+            if not heuristic_sanitize_payload(single_payload):
+                return
             single_path = cache_root / f'{dataset_alias}_{i}.pth'
             meta_payload['path'].append(single_path)
             torch.save(single_payload, single_path)
@@ -280,7 +283,6 @@ class PittCOLoader(ExperimentalTaskLoader):
                 payload = torch.load(datapath)
             else:
                 payload = load_trial(datapath, key='thin_data')
-
             # Sanitize
             spikes = payload['spikes']
             # elements = spikes.nelement()
@@ -328,6 +330,45 @@ class PittCOLoader(ExperimentalTaskLoader):
                         NDT3_CAUSAL_SMOOTH_MS,
                         sample_bin_ms=cfg.bin_size_ms)
                     ) # Gary doesn't compute velocity, just absolute. We follow suit.
+             
+            # Add constraint logic for the sake of computing bhvr mask consistently with NDT3
+            other_args = {}
+            chop = 0 if exp_task_cfg.respect_trial_boundaries else exp_task_cfg.chop_size_ms
+            sample_bin_ms = 20
+            # clamp each constraint to 0 and 1 - otherwise nonsensical
+            def cast_constraint(key: str) -> Optional[torch.Tensor]:
+                vec: torch.Tensor | None = payload.get(key, None)
+                if vec is None:
+                    return None
+                return vec.float().clamp(0, 1).half()
+            brain_control = cast_constraint('brain_control')
+            active_assist = cast_constraint('active_assist')
+            passive_assist = cast_constraint('passive_assist')
+            if brain_control is None or session_vel is None:
+                chopped_constraints = None
+            else:
+                chopped_constraints = torch.stack([
+                    compress_vector(1 - brain_control, chop_size_ms=chop, bin_size_ms=cfg.bin_size_ms, compression='max', sample_bin_ms=sample_bin_ms, keep_dim=False), # return complement, such that native control is the "0" condition, no constraint
+                    compress_vector(active_assist, chop_size_ms=chop, bin_size_ms=cfg.bin_size_ms, compression='max', sample_bin_ms=sample_bin_ms, keep_dim=False),
+                    compress_vector(passive_assist, chop_size_ms=chop, bin_size_ms=cfg.bin_size_ms, compression='max', sample_bin_ms=sample_bin_ms, keep_dim=False),
+                ], -2) # Should be (Time x) Constraint x Domain. Note compress can outputs (chop x) time x domain, so stack -2 instead of forward. 2
+                chopped_constraints = repeat(chopped_constraints, '... domain -> ... (domain 3)')[..., :session_vel.size(-1)] # Put behavioral control dimension last
+                if DataKey.bhvr_mask in cfg.data_keys:
+                    r"""
+                        Behavior mask dictates when behavior targets are valid.
+                        In open loop, this should be exactly when constraints are active (if we're not conditioning)
+                        In closed loop, refit, this should be exactly when constraints are inactive, and brain control is on.
+                        This key shouldn't be active if we're conditioning... TODO guards.
+                    """
+                    # constraint shape at this point is ... x 3 (constraint dim) x Behavior dim
+                    if (chopped_constraints[..., 0, :] == 0).any(-1).any():
+                        # ! Heuristic: At least 1 dimension has some brain control, suggests task phases are main ones where behavioral updates are relevant as opposed to AA
+                        other_args[DataKey.bhvr_mask] = (chopped_constraints[..., 0, :] == 0).any(-1) 
+                    # if exp_task_cfg.closed_loop_intention_estimation != "":
+                        other_args[DataKey.bhvr_mask] = (chopped_constraints[..., 0, :] == 0).any(-1) # At least 1 dimension has some brain control # TODO need to address for partially assisted dimensions...
+                    else:
+                        other_args[DataKey.bhvr_mask] = (chopped_constraints[...,1, :] > 0).any(-1) # T # is active assist on ==> intention is on, labels are as valid as they will get
+            
             if exp_task_cfg.respect_trial_boundaries and not task in [ExperimentalTask.unstructured]:
                 for i in payload['trial_num'].unique():
                     if DataKey.bhvr_mask in cfg.data_keys and 'active_assist' in payload: # for NDT3
@@ -349,10 +390,10 @@ class PittCOLoader(ExperimentalTaskLoader):
                     if trial_spikes.size(0) == 0:
                         continue
                     if trial_spikes.size(0) < round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms) or not ALLOW_INTRA_TRIAL_CHOP:
-                        other_args = {DataKey.bhvr_vel: trial_vel} if session_vel is not None else {}
+                        other_args_trial = {DataKey.bhvr_vel: trial_vel} if session_vel is not None else {}
                         if trial_mask is not None:
-                            other_args[DataKey.bhvr_mask] = trial_mask
-                        save_trial_spikes(trial_spikes, i, other_args)
+                            other_args_trial[DataKey.bhvr_mask] = trial_mask
+                        save_trial_spikes(trial_spikes, i, other_args_trial)
                     else:
                         chopped_spikes = chop_vector(trial_spikes)
                         if session_vel is not None:
@@ -360,10 +401,10 @@ class PittCOLoader(ExperimentalTaskLoader):
                         if trial_mask is not None:
                             chopped_mask = chop_vector(trial_mask)
                         for j, subtrial_spikes in enumerate(chopped_spikes):
-                            other_args = {DataKey.bhvr_vel: chopped_vel[j]} if session_vel is not None else {}
+                            other_args_trial = {DataKey.bhvr_vel: chopped_vel[j]} if session_vel is not None else {}
                             if trial_mask is not None:
-                                other_args[DataKey.bhvr_mask] = chopped_mask[j]
-                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', other_args)
+                                other_args_trial[DataKey.bhvr_mask] = chopped_mask[j]
+                            save_trial_spikes(subtrial_spikes, f'{i}_trial{j}', other_args_trial)
 
                         end_of_trial = trial_spikes.size(0) % round(exp_task_cfg.chop_size_ms / cfg.bin_size_ms)
                         if end_of_trial > 0:
@@ -372,16 +413,19 @@ class PittCOLoader(ExperimentalTaskLoader):
                                 trial_vel_end = trial_vel[-end_of_trial:]
                             if trial_mask is not None:
                                 trial_mask_end = trial_mask[-end_of_trial:]
-                            other_args = {DataKey.bhvr_vel: trial_vel_end} if session_vel is not None else {}
+                            other_args_trial = {DataKey.bhvr_vel: trial_vel_end} if session_vel is not None else {}
                             if trial_mask is not None:
-                                other_args[DataKey.bhvr_mask] = trial_mask_end
-                            save_trial_spikes(trial_spikes_end, f'{i}_end', other_args)
+                                other_args_trial[DataKey.bhvr_mask] = trial_mask_end
+                            save_trial_spikes(trial_spikes_end, f'{i}_end', other_args_trial)
             else:
                 # chop both
                 spikes = chop_vector(spikes)
                 if session_vel is not None:
                     session_vel = chop_vector(session_vel)
                 for i, trial_spikes in enumerate(spikes):
+                    other_args_trial = {DataKey.bhvr_vel: session_vel[i]} if session_vel is not None else {}
+                    for k in other_args:
+                        other_args_trial[k] = other_args[k][i]
                     save_trial_spikes(trial_spikes, i, {DataKey.bhvr_vel: session_vel[i]} if session_vel is not None else {})
         else: # folder style, preproc-ed on mind
             for i, fname in enumerate(datapath.glob("*.mat")):

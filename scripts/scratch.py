@@ -34,23 +34,24 @@ plt.hist(spike_range)
 #%%
 plt.hist(sentence_range)
 #%%
+root_folder = './data/'
 import shutil
 from pathlib import Path
 import os
 source = 'pitt_co'
 source = 'pitt_grasp'
 for folder in ['eval', 'calib']:
-    if not os.path.exists(f'./data/{folder}/{source}_alter'):
-        os.mkdir(f'./data/{folder}/{source}_alter')
-    for p in Path(f'./data/{folder}/{source}').glob("*.pth"):
+    if not os.path.exists(f'{root_folder}{folder}/{source}_alter'):
+        os.mkdir(f'{root_folder}{folder}/{source}_alter')
+    for p in Path(f'{root_folder}{folder}/{source}').glob("*.pth"):
         print(p)
         # move to pitt_co_alter
         loc = 'Home' if 'Home' in p.name.split('_')[0] else 'Lab'
         subj = p.name.split('_')[0].replace('Lab', '').replace('Home', '')
-        rename_subj = REDACT_MAP[subj]
+        rename_subj = REDACT_MAP[subj] # True code to redacted code
         new_name = f"{rename_subj}{loc}_{'_'.join(p.name.split('_')[1:])}"
         print(new_name)
-        shutil.copy(p, f'./data/{folder}/{source}_alter/{new_name}')
+        shutil.copy(p, f'{root_folder}{folder}/{source}_alter/{new_name}')
 exit(0)
 #%%
 import logging
