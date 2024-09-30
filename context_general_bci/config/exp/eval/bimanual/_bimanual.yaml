@@ -1,0 +1,77 @@
+# @package _global_
+
+defaults:
+  - /model: flat_enc_dec
+  - /model/task:
+    - joint_bhvr_decode_flat
+  - /dataset: flat
+model:
+  lr_ramp_steps: 50
+  lr_decay_steps: 1500
+  lr_interval: epoch
+  causal: true
+  neurons_per_token: 32
+  session_embed_strategy: EmbedStrat.none # For simplicity - marginal difference in performance
+  transformer:
+    max_trial_length: 100 # 2 seconds
+    n_layers: 6
+  task:
+    mask_ratio: 0.25 # for efficiency
+    task_weights: [1.0, 1.0]
+    decode_time_pool: ''
+    decode_normalizer: './data/zscore_t5_4d.pt'
+  decoder_context_integration: 'cross_attn'
+  dropout: 0.1
+dataset:
+  bin_size_ms: 20
+  max_length_ms: 2000
+  max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
+  # explicit_alias_to_session: true
+  neurons_per_token: 32
+  max_channels: 192
+  max_arrays: 1
+  behavior_dim: 4
+  deo:
+    chop_size_ms: 1000
+  datasets:
+  - t5_06_02_2021
+  - t5_06_04_2021
+  - t5_06_23_2021
+  - t5_06_28_2021
+  - t5_06_30_2021
+  - t5_07_12_2021
+  - t5_07_14_2021
+  - t5_10_11_2021
+  - t5_10_13_2021
+  eval_datasets:
+  - t5_06_02_2021
+  - t5_06_04_2021
+  - t5_06_23_2021
+  - t5_06_28_2021
+  - t5_06_30_2021
+  - t5_07_12_2021
+  - t5_07_14_2021
+  - t5_10_11_2021
+  - t5_10_13_2021
+
+  eval_split_continuous: true
+  ndt3_parity_per_session_eval_split_continuous: true
+  eval_ratio: 0.8 # About 12K or 3 hours of data in total. Reducing to 45m training.
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
+
+
+train:
+  max_batch_size: 2048
+  batch_size: 2048
+  patience: 100 # 250 epochs too intense here
+  # early_stop_metric: val_kinematic_r2
+  # for some reason, stopping with val_r2 is causing the run to end specifically for rtt, specifically really rapidly. we use val_loss in this case.
+  early_stop_metric: val_loss
+effective_bsz: 2048
+
+sweep_cfg: full_scratch
+# sweep_cfg: simple_scratch
+sweep_mode: 'grid'
+notes: 'RTT comparison with NDT3'

@@ -132,3 +132,24 @@ class FALCONM2(SubjectInfo):
     _arrays = {
         'M1': SortedArrayInfo(_max_channels=192),
     }
+
+@SubjectArrayRegistry.register
+class T5(SubjectInfo):
+    name = SubjectName.t5
+    _arrays = {
+        'main': SortedArrayInfo(_max_channels=256),
+    }
+
+@SubjectArrayRegistry.register
+class BatistaF(SubjectInfo):
+    name = SubjectName.batista_f
+    _arrays = {
+        'main': SortedArrayInfo(_max_channels=192),
+    }
+
+@SubjectArrayRegistry.register
+class BatistaE(SubjectInfo):
+    name = SubjectName.batista_e
+    _arrays = {
+        'main': SortedArrayInfo(_max_channels=192), # This is Earl
+    }

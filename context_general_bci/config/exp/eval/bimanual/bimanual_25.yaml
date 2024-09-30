@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - _bimanual
+dataset:
+  scale_ratio: 0.25
+train:
+  autoscale_batch_size: false
+  batch_size: 128
+  max_batch_size: 128

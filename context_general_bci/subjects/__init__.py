@@ -12,9 +12,14 @@ r"""
 
 class SubjectName(OrderedEnum):
     # We refer to names instead of classes to make converting to singleton pattern easier
+    CRS02b = "CRS02b"
+    CRS07 = "CRS07"
+    CRS08 = "CRS08"
     P2 = "P2"
     P3 = "P3"
     P4 = "P4"
+    # Aliases repeated above for NDT3 comp
+
     jenkins = "Jenkins"
     indy = "Indy"
     loco = "Loco"
@@ -32,6 +37,11 @@ class SubjectName(OrderedEnum):
     falcon_m1 = "FALCONM1"
     falcon_h2 = "FALCONH2"
     falcon_m2 = "FALCONM2"
+
+    t5 = "T5"
+    batista_f = "Batista_F"
+    batista_e = "Batista_E"
+
 
 from .array_info import SubjectInfo, ArrayInfo, ArrayID, GeometricArrayInfo, AliasArrayInfo, SortedArrayInfo
 from .array_registry import SubjectArrayRegistry, create_spike_payload

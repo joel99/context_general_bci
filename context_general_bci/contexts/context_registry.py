@@ -107,6 +107,7 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         BCIContextInfo,
         BatistaContextInfo,
         FalconContextInfo,
+        DeoContextInfo,
     )
     context_registry.register([
         ReachingContextInfo.build('./data/nlb/000128/sub-Jenkins', ExperimentalTask.nlb_maze, alias='mc_maze'),
@@ -138,17 +139,17 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
 
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-in-calib', task=ExperimentalTask.falcon_m1),
         *FalconContextInfo.build_from_dir('./data/falcon/000941/sub-MonkeyL-held-out-calib', task=ExperimentalTask.falcon_m1),
-        
+
         # *FalconContextInfo.build_from_dir('./data/falcon/m1/NWB_FALCON_v7_unsorted/held_out_oracle', task=ExperimentalTask.falcon_m1),
-        
+
         *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-in-calib', task=ExperimentalTask.falcon_h2),
         *FalconContextInfo.build_from_dir('./data/falcon/000950/sub-T5-held-out-calib', task=ExperimentalTask.falcon_h2),
-        
+
         *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-in-calib', task=ExperimentalTask.falcon_m2),
         *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-out-calib', task=ExperimentalTask.falcon_m2),
-        
+
         # *FalconContextInfo.build_from_dir('./data/falcon/m2_oracle/', task=ExperimentalTask.falcon_m2),
-        
+
         # *FalconContextInfo.build_from_dir('./data/m2/minival/', task=ExperimentalTask.falcon_m2, alias_prefix='minival_'),
         # *FalconContextInfo.build_from_dir('./data/falcon/000953/sub-MonkeyN-held-in-minival', task=ExperimentalTask.falcon_m2, alias_prefix='minival_'),
 
@@ -156,11 +157,19 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
         # *FalconContextInfo.build_from_dir('./data/falcon/m1/eval', task=ExperimentalTask.falcon_m1),
 
         *RTTContextInfo.build_preproc('./data/calib/odoherty_rtt/', alias_prefix='calib_odoherty_calib_rtt'),
-        *BCIContextInfo.build_preproc('./data/calib/pitt_co_alter', alias_prefix='calib_pitt_calib_broad_'), 
-        *BCIContextInfo.build_preproc('./data/calib/pitt_grasp_alter', alias_prefix='calib_pitt_grasp_'), 
+        *BCIContextInfo.build_preproc('./data/calib/pitt_co', alias_prefix='calib_pitt_calib_broad_'),
+        # *BCIContextInfo.build_preproc('./data/calib/pitt_co_alter', alias_prefix='calib_pitt_calib_broad_'),
+        *BCIContextInfo.build_preproc('./data/calib/pitt_grasp', alias_prefix='calib_pitt_grasp_'),
+        # *BCIContextInfo.build_preproc('./data/calib/pitt_grasp_alter', alias_prefix='calib_pitt_grasp_'),
+        *BatistaContextInfo.build_from_dir('./data/calib/cst', task=ExperimentalTask.cst, alias_prefix='calib_cst_calib', preproc=True),
+
 
         *RTTContextInfo.build_preproc('./data/eval/odoherty_rtt/', alias_prefix='eval_odoherty_eval_rtt'),
-        *BCIContextInfo.build_preproc('./data/eval/pitt_co_alter/', alias_prefix='eval_pitt_eval_broad_'),
-        *BCIContextInfo.build_preproc('./data/eval/pitt_grasp_alter', alias_prefix='eval_pitt_grasp_'), 
-        
+        *BCIContextInfo.build_preproc('./data/eval/pitt_co/', alias_prefix='eval_pitt_eval_broad_'),
+        # *BCIContextInfo.build_preproc('./data/eval/pitt_co_alter/', alias_prefix='eval_pitt_eval_broad_'),
+        *BCIContextInfo.build_preproc('./data/eval/pitt_grasp', alias_prefix='eval_pitt_grasp_'),
+        # *BCIContextInfo.build_preproc('./data/eval/pitt_grasp_alter', alias_prefix='eval_pitt_grasp_'),
+        *BatistaContextInfo.build_from_dir('./data/eval/cst', task=ExperimentalTask.cst, alias_prefix='eval_cst_eval', preproc=True),
+
+        *DeoContextInfo.build_from_dir(f'./data/deo', task=ExperimentalTask.deo),
     ])

@@ -1325,6 +1325,7 @@ class BehaviorRegression(TaskPipeline):
                     loss = loss[loss_mask].mean()
 
         r2_mask = length_mask
+        # breakpoint()
 
         if self.cfg.kl_lambda:
             loss = loss + self.cfg.kl_lambda * batch_out['alignment_kl']
@@ -1523,14 +1524,14 @@ class BehaviorSequenceDecoding(TaskPipeline):
         self.classes = data_attrs.behavior_classes
         self.out = nn.Linear(backbone_out_size, self.classes)
         self.loss = torch.nn.CTCLoss(blank=0, reduction="mean", zero_infinity=True) # handwriting
-        
+
         self.edit_train = EditDistance()
         self.edit_val = EditDistance()
         self.edit_test = EditDistance()
-        
+
     def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
         return batch
-    
+
     def get_metric(self, prefix: str):
         if prefix == 'train':
             return self.edit_train
@@ -1538,12 +1539,12 @@ class BehaviorSequenceDecoding(TaskPipeline):
             return self.edit_val
         elif prefix == 'eval':
             return self.edit_test
-    
+
     def forward(
-        self, 
-        batch: Dict[str, torch.Tensor], 
-        backbone_features: torch.Tensor, 
-        compute_metrics=True, 
+        self,
+        batch: Dict[str, torch.Tensor],
+        backbone_features: torch.Tensor,
+        compute_metrics=True,
         eval_mode=False,
         phase='train',
     ) -> torch.Tensor:
@@ -1564,9 +1565,9 @@ class BehaviorSequenceDecoding(TaskPipeline):
         bhvr_tgt = rearrange(bhvr_tgt, 'b s 1 -> b s')
         pool_factor = batch[LENGTH_KEY].max() / bhvr.size(1)
         bhvr_timesteps = (batch[LENGTH_KEY] / pool_factor).int()
-        loss = self.loss(rearrange(bhvr, 'b t c -> t b c'), 
-                        bhvr_tgt, 
-                        bhvr_timesteps, 
+        loss = self.loss(rearrange(bhvr, 'b t c -> t b c'),
+                        bhvr_tgt,
+                        bhvr_timesteps,
                         batch[COVARIATE_LENGTH_KEY])
         batch_out['loss'] = loss
         if Metric.cer in self.cfg.metrics:
@@ -1610,7 +1611,7 @@ class BehaviorSequenceDecoding(TaskPipeline):
                 self.edit_test.update(decodedSeqs, trueSeqs)
                 # self.edit_test.update(decodedSeqs, trueSeqs)
         return batch_out
-        
+
 # from typing import Union, Sequence
 # from torchmetrics.functional.text.edit import _edit_distance_update
 # from torchmetrics.functional.text.helper import _LevenshteinEditDistance as _LE_distance

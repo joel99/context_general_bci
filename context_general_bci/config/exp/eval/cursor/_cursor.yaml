@@ -1,4 +1,7 @@
 # @package _global_
+# ! Note: The experiments here directly rely on data preprocessed in the NDT3 codebase. 
+# ! Preprocessing the raw datafiles in this codebase will yield slight differences due to different normalization mechanisms.
+# Path to repro: Just copy preproc data from NDT3 codebase and run this experiment - preproc will still be recognized.
 
 defaults:
   - /model: flat_enc_dec
@@ -19,10 +22,12 @@ model:
     mask_ratio: 0.25 # for efficiency
     task_weights: [1.0, 1.0]
     decode_time_pool: ''
-    decode_normalizer: './data/zscore_calib_pitt_calib_broad_3d.pt'
+    decode_normalizer: '' # V5 - directly use NDT3 preprocessed data for inbuilt minmax norm
+    # decode_normalizer: './data/zscore_calib_pitt_calib_broad_3d.pt'
   decoder_context_integration: 'cross_attn'
   dropout: 0.1
 dataset:
+  ignore_preprocess: True # ! Use NDT3 preproc
   bin_size_ms: 20
   max_length_ms: 4000
   max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
@@ -46,6 +51,13 @@ dataset:
   pitt_co:
     respect_trial_boundaries: False
     chop_size_ms: 1000
+    arrays:
+    - "CRS02b-lateral_m1"
+    - "CRS02b-medial_m1"
+    - "CRS07-lateral_m1"
+    - "CRS07-medial_m1"
+    - "CRS08-lateral_m1"
+    - "CRS08-medial_m1"
 
 train:
   max_batch_size: 64

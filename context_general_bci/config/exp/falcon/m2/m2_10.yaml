@@ -1,0 +1,15 @@
+# @package _global_
+
+defaults:
+  - m2
+dataset:
+  scale_ratio: 0.10
+  falcon_m2:
+    respect_trial_boundaries: False
+    chop_size_ms: 2000
+  augmentations: ['explicit_crop_time']
+  augment_crop_length_ms: 1000
+  # Note that specifically 1s chop to 1s directly without augmentation is several pts worse, exacerbated for from scratch models.
+train:
+  max_batch_size: 64
+  batch_size: 32

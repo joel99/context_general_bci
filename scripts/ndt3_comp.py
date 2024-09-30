@@ -52,17 +52,17 @@ else:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--eval-set", "-e", type=str, required=True, choices=[
-            'falcon_h1', 
-            'falcon_m1', 
+            'falcon_h1',
+            'falcon_m1',
             # 'falcon_m1_continual', # v4 defunct
-            'falcon_m2', 
+            'falcon_m2',
             # 'falcon_m2_continual', # v4 defunct
-            'cursor', 
-            'rtt', 
+            'cursor',
+            'rtt',
             'grasp_h']
     )
     parser.add_argument(
-        "--scales", "-s", type=float, nargs='+', default=[0.25, 0.5, 1.0]
+        "--scales", "-s", type=float, nargs='+', default=[0.03, 0.1, 0.25, 0.5, 1.0]
     )
     args = parser.parse_args()
     EVAL_SET = args.eval_set
@@ -90,8 +90,8 @@ NDT2_EXPERIMENT_MAP = {
 }
 
 UNIQUE_BY = {
-    "model.lr_init", 
-    "model.hidden_size", 
+    "model.lr_init",
+    "model.hidden_size",
     "dataset.scale_ratio",
     "seed",
     # "dataset.falcon_m2.respect_trial_boundaries",
@@ -130,7 +130,7 @@ def get_runs_for_query(variant: str, scale_ratio: float, eval_set: str, project=
     variant_tag = TAG_MAP[eval_set].format(scale_ratio=int(scale_ratio * 100))
     print(f'Querying: {variant_tag}')
     return wandb_query_experiment(
-        exp_map[eval_set], 
+        exp_map[eval_set],
         wandb_project=project,
         filter_unique_keys=UNIQUE_BY,
         **{
@@ -234,12 +234,12 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     model = transfer_model(src_model, cfg.model, data_attrs)
     model = model.to('cuda')
     if EVAL_SET == 'cursor':
-        batch_size = 64 
+        batch_size = 64
     elif EVAL_SET == 'grasp_h':
         batch_size = 8
     else: # RTT
         batch_size = 256
-        
+
     model.cfg.task.outputs = [Output.behavior, Output.behavior_pred]
     if EVAL_SET in ['cursor', 'grasp_h']:
         stream_buffer_s = 1 # streaming eval, mirror NDT3
@@ -258,7 +258,7 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
             'channel_counts': []
         }
         meta_batch = {}
-        
+
         running_start_time = 0
         for i, batch in enumerate(dataloader):
             for key in batch:
@@ -277,7 +277,7 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
         pred, true, masks = [], [], []
         for end_time_inclusive in tqdm(range(timesteps)):
             start_timestep = max(0, int(end_time_inclusive - stream_buffer_s * 1000 / cfg.dataset.bin_size_ms))
-            sliding_batch = {k: accum_batch[k][(accum_batch[DataKey.time] <= end_time_inclusive) & (accum_batch[DataKey.time] >= start_timestep)] 
+            sliding_batch = {k: accum_batch[k][(accum_batch[DataKey.time] <= end_time_inclusive) & (accum_batch[DataKey.time] >= start_timestep)]
                              for k in [DataKey.time, DataKey.spikes, DataKey.position, 'channel_counts']}
             for k in [DataKey.bhvr_vel, DataKey.bhvr_mask]:
                 if k in accum_batch:
@@ -289,7 +289,7 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
             # Should have a leading batch of 1, since dataloader has batch size 1, remove and take final timestep
             pred.append(outputs[Output.behavior_pred][0, -1:].cpu()) # B T H -> T=1 H
             true.append(outputs[Output.behavior][0, -1:].cpu()) # B T H -> T=1 H
-            masks.append(outputs[Output.behavior_mask][0, -1:].cpu()) # B T -> T=1 
+            masks.append(outputs[Output.behavior_mask][0, -1:].cpu()) # B T -> T=1
         padding = None
     else:
         stream_buffer_s = 0

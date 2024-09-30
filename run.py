@@ -221,6 +221,7 @@ def run_exp(cfg : RootConfig) -> None:
     pl.seed_everything(seed=cfg.seed)
 
     dataset = SpikingDataset(cfg.dataset)
+    # breakpoint()
     dataset.build_context_index()
     if cfg.dataset.eval_datasets:
         eval_dataset = copy.deepcopy(dataset)
@@ -341,6 +342,7 @@ def run_exp(cfg : RootConfig) -> None:
 
     is_distributed = (torch.cuda.device_count() > 1) or getattr(cfg, 'nodes', 1) > 1
     default_strat = 'auto' if pl.__version__.startswith('2.') else None
+    plugins = [CustomMixedPrecisionPlugin(precision="16-mixed", device="cuda")] if cfg.model.half_precision else []
     trainer = pl.Trainer(
         logger=wandb_logger,
         max_epochs=epochs,
@@ -360,7 +362,7 @@ def run_exp(cfg : RootConfig) -> None:
         accumulate_grad_batches=cfg.train.accumulate_batches,
         profiler=cfg.train.profiler if cfg.train.profiler else None,
         overfit_batches=1 if cfg.train.overfit_batches else 0,
-        plugins=[CustomMixedPrecisionPlugin(precision="16-mixed", device="cuda") if cfg.model.half_precision else None],
+        plugins=plugins,
     )
 
 

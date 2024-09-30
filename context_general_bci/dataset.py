@@ -1,4 +1,5 @@
 from typing import List, Any, Optional, Dict, Union
+from pprint import pprint
 import copy
 import json
 import os
@@ -178,7 +179,7 @@ class SpikingDataset(Dataset):
             assert self.cfg.serve_tokenized, 'codepaths assume serve_tokenized is true if serve_tokenized_flat is true'
         if self.cfg.datasets:
             contexts = self.list_alias_to_contexts(self.cfg.datasets)
-            
+
             if getattr(self.cfg, 'data_blacklist', ''):
                 # load txt
                 with open(self.cfg.data_blacklist, 'r') as f:
@@ -295,12 +296,28 @@ class SpikingDataset(Dataset):
         else:
             self.meta_df['split'] = self.meta_df['split'].fillna('train')
         eval_metas = self.list_alias_to_contexts(self.cfg.eval_datasets)
+        exclude_metas = self.list_alias_to_contexts(self.cfg.exclude_datasets)
+        eval_metas = [m for m in eval_metas if m not in exclude_metas]
         eval_ids = [m.id for m in eval_metas]
         eval_pool = self.meta_df[(self.meta_df[MetaKey.session].isin(eval_ids)) & (self.meta_df['split'] == 'train')]
         if sorted(eval_ids) != sorted(eval_pool[MetaKey.session].unique()):
-            raise Exception(f"Requested datasets {sorted(eval_ids)} not all found. Found {sorted(eval_pool[MetaKey.session].unique())}")
+            setdiff = set(eval_ids) - set(eval_pool[MetaKey.session].unique())
+            pprint(f"Requested:\n{sorted(eval_ids)}")
+            pprint(f"Found:\n{sorted(eval_pool[MetaKey.session].unique())}")
+            pprint(f"Setdiff: {setdiff}")
+            raise FileNotFoundError()
         if self.cfg.eval_split_continuous:
-            eval_subset = eval_pool.iloc[-int(self.cfg.eval_ratio * len(eval_pool)):] # take tail end, and we'll take head for train split
+            if self.cfg.ndt3_parity_per_session_eval_split_continuous:
+                # Note eval ratio random sampling overwritten here.
+                logger.info("Computing per session eval split in time/preproc order. Ignoring eval ratio.")
+                sessions = eval_pool[MetaKey.session].unique()
+                eval_subsets = []
+                for s in sessions:
+                    sub_session_df = eval_pool[eval_pool[MetaKey.session] == s]
+                    eval_subsets.append(sub_session_df.iloc[-int(self.cfg.eval_ratio * len(sub_session_df)):])
+                eval_subset = pd.concat(eval_subsets) # take tails
+            else:
+                eval_subset = eval_pool.iloc[-int(self.cfg.eval_ratio * len(eval_pool)):] # take tail end, and we'll take head for train split
         else:
             eval_subset = eval_pool.sample(frac=self.cfg.eval_ratio, random_state=self.cfg.eval_seed)
         self.meta_df['split'] = self.meta_df['split'].mask(self.meta_df.index.isin(eval_subset.index), 'eval')

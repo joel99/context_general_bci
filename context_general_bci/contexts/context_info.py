@@ -642,7 +642,7 @@ class RTTContextInfo(ContextInfo, _RTTContextInfoBase):
                 datapath=path,
             )
         return map(make_info, datapath_folder.glob("*.mat"))
-    
+
     @classmethod
     def build_preproc(cls, datapath_folder_str: str, alias_prefix: str = "", arrays=["M1"]):
         r"""
@@ -652,7 +652,7 @@ class RTTContextInfo(ContextInfo, _RTTContextInfoBase):
         if not datapath_folder.exists():
             logger.warning(f"Datapath folder {datapath_folder} does not exist. Skipping.")
             return []
-        
+
         def make_info(path: Path):
             subject, date, *tail = path.stem.split("_")
             tail = '_'.join(tail)
@@ -677,22 +677,59 @@ class BatistaContextInfo(ContextInfo):
         return self.alias
 
     @classmethod
-    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"]):
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["M1"], alias_prefix="batista", preproc=False):
         root = Path(root)
         if not root.exists():
             logger.warning(f"Datapath folder {root} does not exist. Skipping.")
             return []
         def make_info(path: Path):
-            subject, *_ = root.stem.split("_")
+            if task == ExperimentalTask.cst:
+                # Ford_20180627_COCST_TD.mat
+                # subject, *_ = root.stem.split("_") # old marino datasets apparently used this?
+                subject, *_ = path.stem.split("_")
+                if subject == 'Ford':
+                    subject = 'batista_f'
+                elif subject == 'Earl':
+                    subject = 'batista_e'
+                arrays = ['main']
+            else:
+                # data/marino_batista/earl_multi_posture_dco_reaching/DelayedCenterOut_E20210710.mat
+                subject = path.parent.name.split('_')[0] # e.g. earl
+                arrays = ['M1']
             subject = SubjectArrayRegistry.query_by_subject(subject)
             return BatistaContextInfo(
                 subject=subject,
                 task=task,
                 _arrays=arrays,
-                alias=f"marino_{subject.name.value}-{path.stem}",
+                alias=f"{alias_prefix}-{subject.name.value}-{path.stem}",
                 datapath=path,
             )
-        infos = map(make_info, root.glob("*.mat"))
+        infos = map(make_info, root.glob("*.pth" if preproc else "*.mat"))
+        return filter(lambda x: x is not None, infos)
+
+@dataclass
+class DeoContextInfo(ContextInfo):
+    def _id(self):
+        return self.alias
+
+    @classmethod
+    def build_from_dir(cls, root: str, task: ExperimentalTask, arrays=["main"]):
+        path = Path(root)
+        if not path.exists():
+            logger.warning(f"Datapath folder {path} does not exist. Skipping.")
+            return []
+        def make_info(path: Path):
+            # should be data
+            subject, timestamp = path.name.split('_', 1)
+            subject = SubjectArrayRegistry.query_by_subject(subject)
+            return DeoContextInfo(
+                subject=subject,
+                task=task,
+                _arrays=arrays,
+                alias=f"{task.value}_{subject.name.value}_{path.stem}",
+                datapath=path,
+            )
+        infos = map(make_info, path.glob("*.mat"))
         return filter(lambda x: x is not None, infos)
 
 
@@ -715,7 +752,7 @@ class FalconContextInfo(ContextInfo):
                 session_date = f'ses-{stem.split("_")[1]}'
             return f"falcon_{subject.value}-{session_date}"
         elif task == ExperimentalTask.falcon_h2:
-            # sub-T5-held-in-calib_ses-20220518.nwb 
+            # sub-T5-held-in-calib_ses-20220518.nwb
             session_date = stem.split('-')[-1]
             return f"falcon_{subject.value}-{session_date}"
         elif task == ExperimentalTask.falcon_m2:
@@ -740,7 +777,7 @@ class FalconContextInfo(ContextInfo):
                 session_date = f'ses-{path.stem.split("_")[1]}'
             return f"falcon_{subject.name.value}-{session_date}"
         elif task == ExperimentalTask.falcon_h2:
-            # sub-T5-held-in-calib_ses-20220518.nwb 
+            # sub-T5-held-in-calib_ses-20220518.nwb
             session_date = stem.split('-')[-1]
             return f"falcon_{subject.value}-{session_date}"
         elif task == ExperimentalTask.falcon_m2:
@@ -784,7 +821,7 @@ class FalconContextInfo(ContextInfo):
                     datapath=path,
                 )
             elif task == ExperimentalTask.falcon_m1:
-                # sub-MonkeyL-held-in-calib_ses-20120924_behavior+ecephys.nwb 
+                # sub-MonkeyL-held-in-calib_ses-20120924_behavior+ecephys.nwb
                 # test time: L_20121022_held_out_eval
                 subject = "m1"
                 # subject = path.split('_')[1]

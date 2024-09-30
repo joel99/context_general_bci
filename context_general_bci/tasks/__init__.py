@@ -34,6 +34,8 @@ class ExperimentalTask(OrderedEnum):
     falcon_h2 = "falcon_h2"
     falcon_m1 = "falcon_m1"
     falcon_m2 = "falcon_m2"
+    deo = "deo"
+    cst = "cst"
 
 from .task_registry import ExperimentalTaskRegistry, ExperimentalTaskLoader
 
@@ -49,5 +51,7 @@ if not os.getenv('NDT_SUPPRESS_DEFAULT_REGISTRY', False):
     from .pitt_co import PittCOLoader
     from .delay_reach import DelayReachLoader
     from .marino_batista import MarinoBatistaLoader
+    from .cst import CSTLoader
+    from .deo import DeoLoader
 
 from .falcon import FalconLoader

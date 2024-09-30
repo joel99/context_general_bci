@@ -90,8 +90,8 @@ class BrainBertInterface(pl.LightningModule):
                 f"Neurons per token served by data ({self.data_attrs.neurons_per_token}) must match model token size {self.cfg.neurons_per_token}"
         if self.data_attrs.serve_tokens_flat:
             assert self.cfg.transformer.flat_encoder, "Flat encoder must be true if serving flat tokens"
-        
-        if self.cfg.arch == Architecture.ndt:                
+
+        if self.cfg.arch == Architecture.ndt:
             if self.cfg.transformer.n_layers == 0: # debug for parity
                 self.backbone = nn.Identity()
                 self.backbone.out_size = self.cfg.hidden_size
@@ -706,6 +706,8 @@ class BrainBertInterface(pl.LightningModule):
                 stim: B T C H
                 channel_counts: B A (counts per array)
         """
+        # if not torch.isfinite(self.readin.weight).all():
+        #     breakpoint()
         batch_out: Dict[str, torch.Tensor] = {}
         if Output.spikes in self.cfg.task.outputs:
             batch_out[Output.spikes] = batch[DataKey.spikes][..., 0]
@@ -748,6 +750,10 @@ class BrainBertInterface(pl.LightningModule):
                 eval_mode=eval_mode,
                 phase=phase
             )
+            # check nan
+            # if torch.isnan(update['loss']):
+            #     print(f'NaN loss for task {task.value}')
+            #     breakpoint()
             for k in update:
                 if 'update' in str(k):
                     if k == 'update_features':
@@ -1004,7 +1010,7 @@ class BrainBertInterface(pl.LightningModule):
                 if self.cfg.log_token_seen_throughput:
                     token_count_approx = self.all_gather(self.token_seen_approx).sum()
                     self.log('token_seen', token_count_approx, rank_zero_only=True)
-        
+
         self.common_log(metrics, prefix='train')
         return metrics['loss']
 
@@ -1043,6 +1049,31 @@ class BrainBertInterface(pl.LightningModule):
             eval_compute = eval_metric.compute()
             self.log('eval_kinematic_r2', eval_compute)
             eval_metric.reset()
+
+    # def check_all_parameters(self):
+    #     for name, param in self.named_parameters():
+    #         if not torch.isfinite(param).all():
+    #             print(f"Non-finite values in parameter {name}")
+
+    #     # Check for unnamed parameters
+    #     for param in self.parameters():
+    #         if not hasattr(param, '_parameter_name'):
+    #             if not torch.isfinite(param).all():
+    #                 print(f"Non-finite values in unnamed parameter: {param.shape}")
+
+    # def on_train_batch_end(self, *args, **kwargs):
+    #     # debugging
+    #     if self.global_step >= 120:
+    #         if not torch.isfinite(self.backbone.time_encoder.weight).all():
+    #             breakpoint()
+    #         self.check_all_parameters()
+
+    # def on_after_backward(self):
+    #     # check whether any parameters are now nan
+    #     if self.global_step >= 120:
+    #         if not torch.isfinite(self.backbone.time_encoder.weight).all():
+    #             breakpoint()
+    #         self.check_all_parameters()
 
     @torch.inference_mode()
     def test_step(self, batch, batch_idx):

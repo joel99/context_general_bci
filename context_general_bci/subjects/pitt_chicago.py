@@ -98,10 +98,11 @@ class SubjectInfoPittChicago(SubjectInfo):
         else:
             return cls.blacklist_channels, cls.blacklist_pedestals
 
-@SubjectArrayRegistry.register(other_aliases=['P2Lab', 'P2Home'])
+@SubjectArrayRegistry.register(other_aliases=['P2Lab', 'P2Home', 'CRS02bLab', 'CRS02bHome'])
 class P2(SubjectInfoPittChicago):
     # Layout shared across motor channels
-    name = SubjectName.P2
+    name = SubjectName.CRS02b
+    # name = SubjectName.P2
     _motor_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down)
         [np.nan, np.nan, 42, 58, 3, 13, 27, 97, np.nan, np.nan],
         [np.nan, 34, 44, 57, 4, 19, 29, 98, 107, np.nan],
@@ -153,10 +154,11 @@ class P2(SubjectInfoPittChicago):
     ]
     # NB: We don't clone sensory like motor bc there's a small diff
 
-@SubjectArrayRegistry.register(other_aliases=['P3Lab', 'P3Home'])
+@SubjectArrayRegistry.register(other_aliases=['P3Lab', 'P3Home', 'CRS07Lab', 'CRS07Home'])
 class P3(SubjectInfoPittChicago):
     # Layout shared across motor channels
-    name = SubjectName.P3
+    name = SubjectName.CRS07
+    # name = SubjectName.P3
     _motor_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down)
         [np.nan, 38, 50, 59,  6, 23,  22, 101, 111, np.nan,],
             [33, 40, 46, 64,  9, 25,  24, 102, 113, 128],
@@ -192,11 +194,12 @@ class P3(SubjectInfoPittChicago):
         PittChicagoArrayInfo(array=_sensory_layout, pedestal_index=1)
     ]
 
-@SubjectArrayRegistry.register(other_aliases=['P4Lab', 'P4Home'])
+@SubjectArrayRegistry.register(other_aliases=['P4Lab', 'P4Home', 'CRS08Lab', 'CRS08Home'])
 class P4(SubjectInfoPittChicago):
     # Identical to P3
     # Layout shared across motor channels
-    name = SubjectName.P4
+    name = SubjectName.CRS08
+    # name = SubjectName.P4
     _motor_layout = np.array([ # wire bundle to right, viewing from pad side (electrodes down)
         [np.nan, 38, 50, 59,  6, 23,  22, 101, 111, np.nan,],
             [33, 40, 46, 64,  9, 25,  24, 102, 113, 128],

@@ -1,0 +1,72 @@
+# @package _global_
+
+defaults:
+  - /model: flat_enc_dec
+  - /model/task:
+    - joint_bhvr_decode_flat
+  - /dataset: flat
+model:
+  lr_ramp_steps: 50
+  lr_decay_steps: 1500
+  lr_interval: epoch
+  causal: true
+  neurons_per_token: 32
+  session_embed_strategy: EmbedStrat.none # For simplicity - marginal difference in performance
+  transformer:
+    max_trial_length: 100 # 2 seconds
+    n_layers: 6
+  task:
+    mask_ratio: 0.25 # for efficiency
+    task_weights: [1.0, 1.0] # Apparent NaN from processing kin decoding...
+    # task_weights: [1.0, 1.0]
+    decode_time_pool: ''
+    decode_normalizer: './data/zscore_calib_cst_calib_1d.pt'
+    tasks:
+    - ModelTask.shuffle_infill
+    - ModelTask.kinematic_decoding
+    metrics:
+    - Metric.kinematic_r2
+    # tasks: List[ModelTask] = field(default_factory=lambda: [ModelTask.shuffle_infill, ModelTask.kinematic_decoding])
+    # metrics: List[Metric] = field(default_factory=lambda: [Metric.kinematic_r2])
+  decoder_context_integration: 'cross_attn'
+  dropout: 0.1
+dataset:
+  bin_size_ms: 20
+  max_length_ms: 2000
+  max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
+  # explicit_alias_to_session: true
+  neurons_per_token: 32
+  max_channels: 192
+  max_arrays: 1
+  cst:
+    chop_size_ms: 1000
+  data_keys:
+  - DataKey.spikes
+  - DataKey.bhvr_vel
+  - DataKey.bhvr_mask
+  datasets:
+  - calib_cst_calib.*
+  - eval_cst_eval.*
+  eval_datasets:
+  - eval_cst_eval.*
+  exclude_datasets: # Flagged as null data in preproc
+  - Batista_F-Ford_20180501
+  - Batista_F-Ford_20180511
+  - Batista_F-Ford_20180509
+  - Batista_F-Ford_20180510
+  - Batista_F-Ford_20180502
+  eval_ratio: 1.0
+  behavior_dim: 1
+train:
+  max_batch_size: 2048
+  batch_size: 2048
+  patience: 100 # 250 epochs too intense here
+  # early_stop_metric: val_kinematic_r2
+  # for some reason, stopping with val_r2 is causing the run to end specifically for rtt, specifically really rapidly. we use val_loss in this case.
+  early_stop_metric: val_loss
+effective_bsz: 2048
+
+sweep_cfg: full_scratch
+# sweep_cfg: simple_scratch
+sweep_mode: 'grid'
+notes: 'Comparison with NDT3'
