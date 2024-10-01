@@ -54,12 +54,18 @@ else:
         "--eval-set", "-e", type=str, required=True, choices=[
             'falcon_h1',
             'falcon_m1',
+            'falcon_h1_patient',
             # 'falcon_m1_continual', # v4 defunct
             'falcon_m2',
+            'falcon_m2_patient',
             # 'falcon_m2_continual', # v4 defunct
             'cursor',
             'rtt',
-            'grasp_h']
+            'grasp_h',
+            'bimanual',
+            'cst',
+            'cursor_new',
+            'grasp_new',]
     )
     parser.add_argument(
         "--scales", "-s", type=float, nargs='+', default=[0.03, 0.1, 0.25, 0.5, 1.0]
@@ -70,23 +76,35 @@ else:
 
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
+    "falcon_h1_patient": "h1_{scale_ratio}",
     "falcon_m1": "m1_{scale_ratio}",
     "falcon_m1_continual": "m1_{scale_ratio}_continual",
     "falcon_m2": "m2_{scale_ratio}",
+    "falcon_m2_patient": "m2_{scale_ratio}",
     "falcon_m2_continual": "m2_{scale_ratio}_continual",
     "cursor": "cursor_{scale_ratio}",
     "rtt": "rtt_{scale_ratio}",
     "grasp_h": "grasp_{scale_ratio}",
+    "bimanual": "bimanual_{scale_ratio}",
+    "cst": "cst_{scale_ratio}",
+    "cursor_new": "cursor_{scale_ratio}",
+    "grasp_new": "grasp_{scale_ratio}",
 }
 NDT2_EXPERIMENT_MAP = {
     "falcon_h1": "falcon/h1",
+    "falcon_h1_patient": "falcon/h1_patient",
     "falcon_m1": "falcon/m1",
     "falcon_m1_continual": "falcon/m1",
     "falcon_m2": "falcon/m2",
+    "falcon_m2_patient": "falcon/m2_patient",
     "falcon_m2_continual": "falcon/m2",
     "cursor": "eval/cursor",
     "rtt": "eval/rtt",
     "grasp_h": "eval/grasp_h",
+    "bimanual": "eval/bimanual",
+    "cst": "eval/cst",
+    "cursor_new": "eval/cursor_new",
+    "grasp_new": "eval/grasp_new",
 }
 
 UNIQUE_BY = {
@@ -99,25 +117,19 @@ UNIQUE_BY = {
 
 EVAL_DATASET_FUNC_MAP = {
     'falcon_h1': None, # TODO
+    'falcon_h1_patient': None, # TODO
     'falcon_m1': None, # TODO
     'falcon_m1_continual': None, # TODO
     'falcon_m2': None,
+    'falcon_m2_patient': None, # TODO
     'falcon_m2_continual': None,
     'cursor': 'eval_pitt_eval_broad.*',
     'rtt': 'eval_odoherty_eval_rtt.*',
     "grasp_h": "eval_pitt_grasp_h.*",
-}
-
-SCALE_MAP = {
-    'falcon_h1': [0.25, 0.5, 1.0],
-    'falcon_m1': [0.25, 0.5, 1.0],
-    'falcon_m1_continual': [0.25, 0.5, 1.0],
-    'falcon_m2': [0.25, 0.5, 1.0],
-    'falcon_m2_continual': [0.25, 0.5, 1.0],
-    'cursor': [0.25, 0.5, 1.0],
-    'rtt': [0.25, 0.5, 1.0],
-    'grasp_h': [0.25],
-    # 'grasp_h': [0.25, 0.5, 1.0],
+    "bimanual": "deo.*",
+    "cst": "cst.*",
+    "cursor_new": "cursor_new.*",
+    "grasp_new": "grasp_new.*",
 }
 
 eval_paths = Path('./data/eval_metrics')
@@ -146,12 +158,16 @@ def run_list_to_df(runs, eval_set_name: str):
     print(f"Filtered {len(runs)} to {len(filter_runs)} with proper metrics")
     if 'continual' in eval_set_name:
         eval_crop = eval_set_name.replace('_continual', '')
+    elif 'patient' in eval_set_name:
+        eval_crop = eval_set_name.replace('_patient', '')
     else:
         eval_crop = eval_set_name
-    if eval_crop in ['cursor', 'grasp_h']:
+    if eval_crop in ['cursor', 'grasp_h', 'cursor_new', 'grasp_new']:
         config_key = 'pitt_co'
     elif eval_crop == 'rtt':
         config_key = 'odoherty_rtt'
+    elif eval_crop == 'bimanual':
+        config_key = 'deo'
     else:
         config_key = eval_crop
     df_dict = {
@@ -198,11 +214,6 @@ def get_ndt2_run_df_for_query(scale_ratio: float, eval_set: str):
     # only "scratch" runs compared for ndt2
     return get_run_df_for_query("scratch", scale_ratio, eval_set, project="context_general_bci", exp_map=NDT2_EXPERIMENT_MAP)
 
-queries = [
-    "scratch",
-]
-
-runs = []
 ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALES]).reset_index()
 # ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
 eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
@@ -237,12 +248,17 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
         batch_size = 64
     elif EVAL_SET == 'grasp_h':
         batch_size = 8
+    elif EVAL_SET == 'bimanual':
+        batch_size = 64
     else: # RTT
         batch_size = 256
 
     model.cfg.task.outputs = [Output.behavior, Output.behavior_pred]
-    if EVAL_SET in ['cursor', 'grasp_h']:
-        stream_buffer_s = 1 # streaming eval, mirror NDT3
+    if EVAL_SET not in ['eye', 'cst', 'rtt', 'bimanual']:
+        if 'grasp' in EVAL_SET:
+            stream_buffer_s = 2.
+        else:
+            stream_buffer_s = 1 # streaming eval, mirror NDT3
         # TODO streaming eval
         # NDT3's streaming eval implementation relies on KV cache, which is not applicable here.
         # Here we will assume limited size evaluation dataset and just load everything at once, then slide through.
@@ -296,7 +312,8 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
         dataloader = get_dataloader(dataset, num_workers=4, batch_size=batch_size)
         trainer_preds = trainer.predict(model, dataloader)
         outputs = stack_batch(trainer_preds) # Trial x Time x Dim, first dim may be list
-        pred, true, masks = outputs[Output.behavior_pred], outputs[Output.behavior], outputs[Output.behavior_mask]
+        pred, true = outputs[Output.behavior_pred], outputs[Output.behavior]
+        masks = outputs[Output.behavior_mask] if Output.behavior_mask in outputs else None
         if Output.padding in outputs:
             padding = outputs[Output.padding]
         else:
@@ -304,20 +321,23 @@ def get_single_eval(cfg: RootConfig, src_model, trainer, dataset=None):
     if isinstance(pred, list):
         pred = torch.cat(pred, dim=0)
         true = torch.cat(true, dim=0)
-        masks = torch.cat(masks, dim=0)
-        if masks.ndim != true.ndim - 1:
-            masks = masks.squeeze(-1) # remove hidden dim of 1
+        if masks is not None:
+            masks = torch.cat(masks, dim=0)
+            if masks.ndim != true.ndim - 1:
+                masks = masks.squeeze(-1) # remove hidden dim of 1
         if padding is not None:
             padding = torch.cat(padding, dim=0)
             pred = pred[~padding]
             true = true[~padding]
-            masks = masks[~padding]
+            masks = masks[~padding] if masks is not None else None
     else:
         pred = pred.flatten(end_dim=-2)
         true = true.flatten(end_dim=-2)
-        masks = masks.flatten(end_dim=-2).squeeze(-1)
-    pred = pred[masks]
-    true = true[masks]
+        if masks is not None:
+            masks = masks.flatten(end_dim=-2).squeeze(-1)
+    if masks is not None:
+        pred = pred[masks]
+        true = true[masks]
     r2 = r2_score(true, pred, multioutput='variance_weighted')
     print(f"R2 over {len(pred)} samples: {r2:.3f}")
     return r2

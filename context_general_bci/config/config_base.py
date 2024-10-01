@@ -616,6 +616,8 @@ class RootConfig:
     slurm_id: int = 0 # for experiment tracking...
     effective_bsz: int = 0 # for experiment tracking... (Not functional, a logger)
     nodes: int = 1
+
+    debug: bool = False # Should've added this a long time ago
 from typing import Union
 BatchKey = Union[str, DataKey, MetaKey, Output]
 

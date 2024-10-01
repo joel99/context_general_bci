@@ -221,7 +221,8 @@ def run_exp(cfg : RootConfig) -> None:
     pl.seed_everything(seed=cfg.seed)
 
     dataset = SpikingDataset(cfg.dataset)
-    # breakpoint()
+    if cfg.debug:
+        breakpoint()
     dataset.build_context_index()
     if cfg.dataset.eval_datasets:
         eval_dataset = copy.deepcopy(dataset)

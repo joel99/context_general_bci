@@ -1,7 +1,6 @@
 # @package _global_
 # ! Note: The experiments here directly rely on data preprocessed in the NDT3 codebase.
 # ! Preprocessing the raw datafiles in this codebase will yield slight differences due to different normalization mechanisms.
-# Path to repro: Just copy preproc data from NDT3 codebase and run this experiment - preproc will still be recognized.
 
 defaults:
   - /model: flat_enc_dec
@@ -16,20 +15,20 @@ model:
   neurons_per_token: 32
   session_embed_strategy: EmbedStrat.none
   transformer:
-    max_trial_length: 200 # 2 seconds
+    max_trial_length: 500 # 10 seconds
     n_layers: 6
   task:
     mask_ratio: 0.25 # for efficiency
     task_weights: [1.0, 1.0]
     decode_time_pool: ''
     decode_normalizer: '' # V5 - directly use NDT3 preprocessed data for inbuilt minmax norm
-    # decode_normalizer: './data/zscore_calib_pitt_calib_broad_3d.pt'
+    # decode_normalizer: './data/zscore_calib_pitt_grasp_1d.pt' # TODO
   decoder_context_integration: 'cross_attn'
   dropout: 0.1
 dataset:
-  ignore_preprocess: True # ! Use NDT3 preproc for exact parity
+  ignore_preprocess: True # ! Use NDT3 preproc
   bin_size_ms: 20
-  max_length_ms: 4000
+  max_length_ms: 10000 # Can't fit much more than this on the old GPUs this is running on, and nonefficient attn
   max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens
   # explicit_alias_to_session: true
 
@@ -42,31 +41,34 @@ dataset:
   - DataKey.bhvr_vel
   - DataKey.bhvr_mask
   datasets:
-  - calib_pitt_calib_broad.*
-  - eval_pitt_eval_broad.*
+  - calib_pitt_grasp_pitt_co_CRS07.*
+  - eval_pitt_grasp_pitt_co_CRS07.*
   eval_datasets:
-  - eval_pitt_eval_broad.*
+  - eval_pitt_grasp_pitt_co_CRS07.*
   eval_ratio: 1.0
-  behavior_dim: 3
+  behavior_dim: 1
   pitt_co:
+    # respect_trial_boundaries: True
     respect_trial_boundaries: False
-    chop_size_ms: 1000
+    chop_size_ms: 2000 # Updated for parity with grasp_new
     arrays:
-    - "CRS02b-lateral_m1"
-    - "CRS02b-medial_m1"
-    - "CRS07-lateral_m1"
-    - "CRS07-medial_m1"
-    - "CRS08-lateral_m1"
-    - "CRS08-medial_m1"
+      - "CRS02b-lateral_m1"
+      - "CRS02b-medial_m1"
+      - "CRS07-lateral_m1"
+      - "CRS07-medial_m1"
+      - "CRS08-lateral_m1"
+      - "CRS08-medial_m1"
 
 train:
-  max_batch_size: 64
-  batch_size: 64
-  # patience: 250 # NDT3 v4
-  patience: 100 # NDT3 v5
+  # max_batch_size: 64
+  max_batch_size: 512
+  # batch_size: 64
+  batch_size: 512
+  patience: 100 # Match NDT3 V5
+  # patience: 250 # NDT3 V4
   early_stop_metric: val_kinematic_r2
-effective_bsz: 64
-# sweep_cfg: simple_scratch
+effective_bsz: 512
 sweep_cfg: full_scratch
+# sweep_cfg: simple_scratch
 sweep_mode: 'grid'
-notes: 'Cursor comparison with NDT3'
+notes: 'Comparison with NDT3'

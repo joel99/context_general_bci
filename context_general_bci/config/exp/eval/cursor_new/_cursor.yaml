@@ -1,5 +1,5 @@
 # @package _global_
-# ! Note: The experiments here directly rely on data preprocessed in the NDT3 codebase.
+# ! Note: The experiments here directly rely on data preprocessed in the NDT3 codebase. 
 # ! Preprocessing the raw datafiles in this codebase will yield slight differences due to different normalization mechanisms.
 # Path to repro: Just copy preproc data from NDT3 codebase and run this experiment - preproc will still be recognized.
 
@@ -27,7 +27,7 @@ model:
   decoder_context_integration: 'cross_attn'
   dropout: 0.1
 dataset:
-  ignore_preprocess: True # ! Use NDT3 preproc for exact parity
+  ignore_preprocess: True # ! Use NDT3 preproc
   bin_size_ms: 20
   max_length_ms: 4000
   max_tokens: 8192 # expecting 6 tokens/bin x 500 bins = 3000 tokens

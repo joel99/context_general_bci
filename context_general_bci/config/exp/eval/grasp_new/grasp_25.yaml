@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - _grasp
+dataset:
+  scale_ratio: 0.25
+train:
+  # max_batch_size: 16
+  # batch_size: 16
+  max_batch_size: 64 # 128 fails too often
+  batch_size: 64
+  # batch_size: 128
+
+notes: "Skipped - 100 is trivial"

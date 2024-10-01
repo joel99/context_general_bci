@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - _cursor
+dataset:
+  scale_ratio: 1.0
+train:
+  max_batch_size: 64
+  batch_size: 64

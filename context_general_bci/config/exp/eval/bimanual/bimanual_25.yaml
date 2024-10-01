@@ -6,5 +6,6 @@ dataset:
   scale_ratio: 0.25
 train:
   autoscale_batch_size: false
-  batch_size: 128
+  batch_size: 64
   max_batch_size: 128
+  accumulate_batches: 2

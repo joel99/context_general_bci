@@ -6,6 +6,6 @@ dataset:
   scale_ratio: 1.0
 train:
   autoscale_batch_size: false
-  batch_size: 256 # About 10G, comfortable for all mind nodes
-  accumulate_batches: 2
+  batch_size: 64 # About 10G, comfortable for all mind nodes
+  accumulate_batches: 8
   max_batch_size: 512
