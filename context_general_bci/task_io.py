@@ -9,7 +9,6 @@ from einops import rearrange, repeat, reduce, pack # baby steps...
 from einops.layers.torch import Rearrange
 from sklearn.metrics import r2_score
 import logging
-from torchmetrics.text import EditDistance
 
 from context_general_bci.config import (
     ModelConfig, ModelTask, Metric, Output, EmbedStrat, DataKey, MetaKey, Architecture
@@ -1501,114 +1500,6 @@ class BehaviorClassification(TaskPipeline):
                 batch_out[Metric.kinematic_r2] = np.zeros_like(batch_out[Metric.kinematic_r2])# .mean() # mute, some erratic result from near zero target
         return batch_out
 
-class BehaviorSequenceDecoding(TaskPipeline):
-    r"""
-        Discrete classification for Seq2Seq (i.e. outputs don't match input length).
-        Uses pooled readout, not cross attention, for simplicity.
-    """
-
-    def __init__(
-        self, backbone_out_size: int, channel_count: int, cfg: ModelConfig, data_attrs: DataAttrs,
-    ):
-        super().__init__(
-            backbone_out_size=backbone_out_size,
-            channel_count=channel_count,
-            cfg=cfg,
-            data_attrs=data_attrs
-        )
-        self.time_pad = cfg.transformer.max_trial_length
-        assert data_attrs.behavior_dim == 1, "only single behavior dimension supported"
-        self.classes = data_attrs.behavior_classes
-        self.out = nn.Linear(backbone_out_size, self.classes)
-        self.loss = torch.nn.CTCLoss(blank=0, reduction="mean", zero_infinity=True) # handwriting
-        
-        self.edit_train = EditDistance()
-        self.edit_val = EditDistance()
-        self.edit_test = EditDistance()
-        
-    def update_batch(self, batch: Dict[str, torch.Tensor], eval_mode=False):
-        return batch
-    
-    def get_metric(self, prefix: str):
-        if prefix == 'train':
-            return self.edit_train
-        elif prefix == 'val':
-            return self.edit_val
-        elif prefix == 'eval':
-            return self.edit_test
-    
-    def forward(
-        self, 
-        batch: Dict[str, torch.Tensor], 
-        backbone_features: torch.Tensor, 
-        compute_metrics=True, 
-        eval_mode=False,
-        phase='train',
-    ) -> torch.Tensor:
-        batch_out = {}
-        temporal_padding_mask = create_temporal_padding_mask(backbone_features, batch)
-        backbone_features, temporal_padding_mask = temporal_pool(batch, backbone_features, temporal_padding_mask, pool=self.cfg.decode_time_pool)
-        bhvr = self.out(backbone_features).log_softmax(-1) # B T C
-
-        if Output.behavior_pred in self.cfg.outputs:
-            choice = bhvr.argmax(-1)
-            batch_out[Output.behavior_pred] = choice
-        if Output.behavior in self.cfg.outputs:
-            batch_out[Output.behavior] = batch[self.cfg.behavior_target]
-        if not compute_metrics:
-            return batch_out
-        # No special mask allowed, only lengths
-        bhvr_tgt = batch[self.cfg.behavior_target]
-        bhvr_tgt = rearrange(bhvr_tgt, 'b s 1 -> b s')
-        pool_factor = batch[LENGTH_KEY].max() / bhvr.size(1)
-        bhvr_timesteps = (batch[LENGTH_KEY] / pool_factor).int()
-        loss = self.loss(rearrange(bhvr, 'b t c -> t b c'), 
-                        bhvr_tgt, 
-                        bhvr_timesteps, 
-                        batch[COVARIATE_LENGTH_KEY])
-        batch_out['loss'] = loss
-        if Metric.cer in self.cfg.metrics:
-            # Convert to concrete predictions
-            pred = bhvr
-            adjustedLens = bhvr_timesteps
-            # https://github.com/cffan/neural_seq_decoder/blob/master/src/neural_decoder/neural_decoder_trainer.py#L175
-            decodedSeqs = []
-            trueSeqs = []
-            for iterIdx in range(bhvr.shape[0]): # batchIdx
-                decodedSeq = torch.argmax(
-                    pred[iterIdx, 0 : adjustedLens[iterIdx], :],
-                    dim=-1,
-                )  # [num_seq,]
-                decodedSeq = torch.unique_consecutive(decodedSeq, dim=-1)
-                decodedSeq = decodedSeq[decodedSeq != 0].cpu()
-                # decodedSeq = decodedSeq.cpu().detach().numpy()
-                # decodedSeq = np.array([i for i in decodedSeq if i != 0])
-                trueSeq = bhvr_tgt[iterIdx][0 : batch[COVARIATE_LENGTH_KEY][iterIdx]].cpu()
-
-                decodedSeq = ''.join([chr(i) for i in decodedSeq])
-                trueSeq = ''.join([chr(i) for i in trueSeq])
-                decodedSeqs.append(decodedSeq)
-                trueSeqs.append(trueSeq)
-                # trueSeq = np.array(
-                    # y[iterIdx][0 : y_len[iterIdx]].cpu().detach()
-                # )
-
-                # matcher = SequenceMatcher(
-                #     a=trueSeq.tolist(), b=decodedSeq.tolist()
-                # )
-                # total_edit_distance += matcher.distance()
-                # total_seq_length += len(trueSeq)
-            if phase == 'train':
-                pass
-                # self.edit_train.update(decodedSeqs, trueSeqs) # Not logging.
-            elif phase == 'val':
-                pass
-                # self.edit_val.update(decodedSeqs, trueSeqs)
-            elif phase == 'test':
-                self.edit_test.update(decodedSeqs, trueSeqs)
-                # self.edit_test.update(decodedSeqs, trueSeqs)
-        return batch_out
-        
 # from typing import Union, Sequence
 # from torchmetrics.functional.text.edit import _edit_distance_update
 # from torchmetrics.functional.text.helper import _LevenshteinEditDistance as _LE_distance
