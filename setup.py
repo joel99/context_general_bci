@@ -13,6 +13,7 @@ setup(
 
     install_requires=[
         'torch==1.13.1+cu117', # 2.0 onnx export doesn't work, install with --extra-index-url https://download.pytorch.org/whl/cu117
+        'torchmetrics==1.4.3', # For editdistance
         'seaborn',
         'pandas',
         'numpy',
