@@ -1575,5 +1575,4 @@ task_modules = {
     ModelTask.heldout_decoding: HeldoutPrediction,
     ModelTask.kinematic_decoding: BehaviorRegression,
     ModelTask.kinematic_classification: BehaviorClassification,
-    ModelTask.seq_decoding: BehaviorSequenceDecoding,
 }
