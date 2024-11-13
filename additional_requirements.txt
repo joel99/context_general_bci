@@ -1,2 +1,1 @@
 git+git://github.com/NeuralAnalysis/PyalData.git
-git+git://github.com/neurallatents/nlb_tools.git

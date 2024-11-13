@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - h1_pt
+dataset:
+  scale_ratio: .25
+train:
+  max_batch_size: 16
+  batch_size: 16
