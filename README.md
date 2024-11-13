@@ -63,7 +63,7 @@ Two example checkpoints are provided:
 - one from [task scaling](https://wandb.ai/joelye9/context_general_bci/runs/ydv48n02?workspace=user-joelye9): [Checkpoint](https://drive.google.com/file/d/18UgglFKPu6ev5Db4xDtj7aOfzAX4aZy1/view?usp=share_link)
 - one from [Indy multisession RTT](https://wandb.ai/joelye9/context_general_bci/runs/uych1wae?workspace=user-joelye9): [Checkpoint](https://drive.google.com/file/d/1hhC4n1UyiYjCcv1nlO6ESljNhr8qVlUF/view?usp=share_link).
 
-Checkpoints for the FALCON baselines will be provided soon.
+Checkpoints for the FALCON baselines are in this folder: [FALCON-checkpoints](https://drive.google.com/drive/folders/1ijvmPcbyjHlLEoWWSSZrNm1bBojGgrZG?usp=sharing).
 
 
 ## Other Notes
