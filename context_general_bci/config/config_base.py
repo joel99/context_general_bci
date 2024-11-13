@@ -27,7 +27,6 @@ class ModelTask(Enum):
 
     # Trial-summarizing
     detection_decoding = 'detection_decoding'
-    seq_decoding = 'seq_decoding'
 
 class Metric(Enum):
     # Monitoring metrics to log. Losses are automatically included in lgos.
