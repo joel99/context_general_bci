@@ -8,3 +8,5 @@ Working forward from construction:
 - Data is square, so there's no reason to suspect.
 - Disabling either spike_infill or kinematic decoding causes the NaN to go away. This obscures the path and suggests it's independent of input batch.
 - Changing seed changes NaN location.
+
+Because we were unable to pin down the source of NaN in standard training, we disable the neural reconstruction loss.

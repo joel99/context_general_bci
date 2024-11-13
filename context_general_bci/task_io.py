@@ -1104,7 +1104,6 @@ class BehaviorRegression(TaskPipeline):
 
     def forward(self, batch: Dict[str, torch.Tensor], backbone_features: torch.Tensor, compute_metrics=True, eval_mode=False, phase='train') -> torch.Tensor:
         batch_out = {}
-        # breakpoint()
         if getattr(self.cfg, 'kl_lambda', 0.0):
             # Note: We want to _align_ at pool/population level
             # Since it doesn't make sense to try to align individual spatial tokens, many to many map?
@@ -1141,7 +1140,6 @@ class BehaviorRegression(TaskPipeline):
                     # ll = alignment_dist.to(emp_dist.device).log_prob(emp_dist)
                     # ll = self.alignment_dist.to(emp_dist.device).log_prob(emp_dist)
                     # batch_out['alignment_kl_loss'] = -ll.mean() * self.cfg.kl_lambda
-
                 decode_tokens, decode_time, decode_space = self.injector.inject(batch)
                 # Clip decode space to 0, space isn't used for this decoder
                 decode_space = torch.zeros_like(decode_space)
@@ -1199,7 +1197,6 @@ class BehaviorRegression(TaskPipeline):
                 for key in ['session', 'subject', 'task']:
                     if key in batch and batch[key] is not None:
                         trial_context.append(batch[key].detach()) # Provide context, but hey, let's not make it easier for the decoder to steer the unsupervised-calibrated context
-
                 backbone_features: torch.Tensor = self.decoder(
                     decoder_input,
                     temporal_padding_mask=temporal_padding_mask,

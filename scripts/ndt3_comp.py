@@ -65,7 +65,8 @@ else:
             'bimanual',
             'cst',
             'cursor_new',
-            'grasp_new',]
+            'grasp_new',
+            "grasp_v3"]
     )
     parser.add_argument(
         "--scales", "-s", type=float, nargs='+', default=[0.03, 0.1, 0.25, 0.5, 1.0]
@@ -89,6 +90,7 @@ TAG_MAP = {
     "cst": "cst_{scale_ratio}",
     "cursor_new": "cursor_{scale_ratio}",
     "grasp_new": "grasp_{scale_ratio}",
+    "grasp_v3": "grasp_{scale_ratio}",
 }
 NDT2_EXPERIMENT_MAP = {
     "falcon_h1": "falcon/h1",
@@ -105,6 +107,7 @@ NDT2_EXPERIMENT_MAP = {
     "cst": "eval/cst",
     "cursor_new": "eval/cursor_new",
     "grasp_new": "eval/grasp_new",
+    "grasp_v3": "eval/grasp_v3",
 }
 
 UNIQUE_BY = {
@@ -129,7 +132,8 @@ EVAL_DATASET_FUNC_MAP = {
     "bimanual": "deo.*",
     "cst": "cst.*",
     "cursor_new": "cursor_new.*",
-    "grasp_new": "grasp_new.*",
+    "grasp_new": "eval_pitt_grasp_h.*", # These don't actually matter
+    "grasp_v3": "eval_pitt_grasp_h.*",
 }
 
 eval_paths = Path('./data/eval_metrics')
@@ -162,7 +166,7 @@ def run_list_to_df(runs, eval_set_name: str):
         eval_crop = eval_set_name.replace('_patient', '')
     else:
         eval_crop = eval_set_name
-    if eval_crop in ['cursor', 'grasp_h', 'cursor_new', 'grasp_new']:
+    if eval_crop in ['cursor', 'grasp_h', 'cursor_new', 'grasp_new', 'grasp_v3']:
         config_key = 'pitt_co'
     elif eval_crop == 'rtt':
         config_key = 'odoherty_rtt'

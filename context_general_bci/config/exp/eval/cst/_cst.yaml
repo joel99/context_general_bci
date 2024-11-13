@@ -17,12 +17,13 @@ model:
     n_layers: 6
   task:
     mask_ratio: 0.25 # for efficiency
-    task_weights: [1.0, 1.0] # Apparent NaN from processing kin decoding...
-    # task_weights: [1.0, 1.0]
+    # We drop the neural reconstruction task, which can drop out all 3 tokens in early timesteps and render the decoding impossible.
+    # (The long solution would be to sequentially train.)
+    task_weights: [1.0, 1.0]
     decode_time_pool: ''
     decode_normalizer: './data/zscore_calib_cst_calib_1d.pt'
     tasks:
-    - ModelTask.shuffle_infill
+    # - ModelTask.shuffle_infill
     - ModelTask.kinematic_decoding
     metrics:
     - Metric.kinematic_r2
