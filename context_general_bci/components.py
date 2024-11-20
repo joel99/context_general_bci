@@ -778,7 +778,7 @@ class SpaceTimeTransformerDecoderScript(nn.Module):
 
             Produces time major (T*S + TempCtx + TrialCtx, T*S + TempCtx + TrialCtx)
             Use t=1 to produce a space only mask, s=1 to produce a time only mask
-            
+
             * Note: This mask creation leads to a memory leak in H2 that JY does not understand. JY defers to NDT3 codebase for H2 implementation.
         """
         if not causal:

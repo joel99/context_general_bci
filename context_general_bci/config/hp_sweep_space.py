@@ -5,6 +5,11 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
+    'simple_tune': {
+        'model.lr_init': {
+            'feasible_points': [5e-5, 1e-4, 3e-4],
+        }
+    },
     'full_scratch': {
         'model.hidden_size': {
             'feasible_points': [512, 1024], # Since NDT2 exps didn't show signif effect of hidden size, but now we're seeing it

@@ -242,7 +242,6 @@ def run_exp(cfg : RootConfig) -> None:
     logger.info(f"Training on {len(train)} examples")
     data_attrs = dataset.get_data_attrs()
     # logger.info(pformat(f"Data attributes: {data_attrs}"))
-
     if cfg.init_from_id:
         init_ckpt = get_best_ckpt_from_wandb_id(
             cfg.wandb_project, cfg.init_from_id,

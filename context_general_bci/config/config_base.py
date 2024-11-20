@@ -593,6 +593,8 @@ class RootConfig:
     load_from_id: str = "" # for resuming training. takes precedent over init_from_id
     init_tag: str = "val_loss"
 
+    init_override_spatial_tokens: int = 0 # override the number of spatial tokens in init instead of drawing from data attrs. For using pt checkpoint.
+
     # orchestration
     inherit_exp: str = "" # hunt wandb for the relevant experiment, presumed same tag name.
     inherit_tag: str = "" # override same tag inheritance

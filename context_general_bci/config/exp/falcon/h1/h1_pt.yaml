@@ -14,7 +14,9 @@ model:
   session_embed_strategy: EmbedStrat.token
   transformer:
     max_trial_length: 200 # 2 seconds
-    n_layers: 6
+    n_layers: 10 # For pitt_v3/human_10l
+    # n_layers: 6
+    max_spatial_tokens: 9 # Support loading of pt model
   task:
     mask_ratio: 0.25 # for efficiency
     task_weights: [1.0, 1.0]
@@ -22,6 +24,7 @@ model:
     decode_normalizer: './data/zscore_h1_7d.pt'
   decoder_context_integration: 'cross_attn'
   dropout: 0.1
+
 dataset:
   bin_size_ms: 20
   max_length_ms: 4000
@@ -29,7 +32,7 @@ dataset:
   explicit_alias_to_session: true
 
   neurons_per_token: 32
-  max_channels: 192
+  max_channels: 288 # high, just to match PT
   max_arrays: 1
 
   data_keys:
@@ -48,7 +51,8 @@ train:
 effective_bsz: 32
 
 # sweep_cfg: 'simple_scratch'
-sweep_cfg: 'full_scratch'
+sweep_cfg: 'simple_tune'
 sweep_mode: 'grid'
 
-# init_from_ckpt:
+# init_ckpt: './data/pretrained/f32_uych1wae_val-epoch=630-val_loss=0.5030.ckpt' # Can't use this one in general because it bleeds Indy data. Also, fails to load due to codespace imports.
+init_ckpt: './data/pretrained/pretrained_unsup_j7mq2snc_val-epoch=960-val_loss=0.3158.ckpt'

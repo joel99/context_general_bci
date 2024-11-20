@@ -98,7 +98,7 @@ class BrainBertInterface(pl.LightningModule):
             else:
                 self.backbone = SpaceTimeTransformer(
                     self.cfg.transformer,
-                    max_spatial_tokens=data_attrs.max_spatial_tokens,
+                    max_spatial_tokens=self.cfg.transformer.max_spatial_tokens if self.cfg.transformer.max_spatial_tokens else data_attrs.max_spatial_tokens,
                     debug_override_dropout_out=getattr(cfg.transformer, 'debug_override_dropout_io', False),
                     context_integration=getattr(cfg.transformer, 'context_integration', 'in_context'),
                     embed_space=cfg.transformer.embed_space,
@@ -1283,7 +1283,6 @@ def load_from_checkpoint(
         import os
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         old_model = BrainBertInterface.load_from_checkpoint(checkpoint_path)
-
     if cfg is None and data_attrs is None:
         return old_model
     if cfg is not None:
