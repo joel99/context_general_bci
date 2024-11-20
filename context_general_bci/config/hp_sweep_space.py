@@ -5,10 +5,13 @@
 # Formatted according to expectations in `halton.py`
 
 sweep_space = {
-    'simple_tune': {
+    'full_tune': {
         'model.lr_init': {
             'feasible_points': [5e-5, 1e-4, 3e-4],
-        }
+        },
+        'seed': {
+            'feasible_points': [0, 1, 2] # Same budget as NDT3
+        },
     },
     'full_scratch': {
         'model.hidden_size': {

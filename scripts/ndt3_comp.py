@@ -47,6 +47,7 @@ if 'ipykernel' in sys.modules:
     # EVAL_SET = "rtt"
     EVAL_SET = "grasp_h"
     SCALES = [0.25, 0.5, 1.0]
+    IS_PRETRAINED = False
 else:
     # This indicates the code is likely running in a shell or other non-Jupyter environment
     parser = argparse.ArgumentParser()
@@ -69,11 +70,15 @@ else:
             "grasp_v3"]
     )
     parser.add_argument(
+        '--is-pretrained', '-p', action='store_true', help='refer to pretrained configs instead of scratch configs'
+    )
+    parser.add_argument(
         "--scales", "-s", type=float, nargs='+', default=[0.03, 0.1, 0.25, 0.5, 1.0]
     )
     args = parser.parse_args()
     EVAL_SET = args.eval_set
     SCALES = args.scales
+    IS_PRETRAINED = args.is_pretrained
 
 TAG_MAP = {
     "falcon_h1": "h1_{scale_ratio}",
@@ -91,6 +96,16 @@ TAG_MAP = {
     "cursor_new": "cursor_{scale_ratio}",
     "grasp_new": "grasp_{scale_ratio}",
     "grasp_v3": "grasp_{scale_ratio}",
+}
+PRETRAINED_TAG_MAP = {
+    "falcon_h1": "h1_pt_{scale_ratio}",
+    "falcon_m1": "m1_pt_{scale_ratio}",
+    "falcon_m2": "m2_pt_{scale_ratio}",
+    "cursor_new": "cursor_pt_{scale_ratio}",
+    "rtt": "rtt_pt_{scale_ratio}",
+    "grasp_v3": "grasp_pt_{scale_ratio}",
+    "bimanual": "bimanual_pt_{scale_ratio}",
+    "cst": "cst_pt_{scale_ratio}",
 }
 NDT2_EXPERIMENT_MAP = {
     "falcon_h1": "falcon/h1",
@@ -137,13 +152,24 @@ EVAL_DATASET_FUNC_MAP = {
 }
 
 eval_paths = Path('./data/eval_metrics')
-def get_runs_for_query(variant: str, scale_ratio: float, eval_set: str, project="ndt3", exp_map=NDT2_EXPERIMENT_MAP):
+def get_runs_for_query(
+    variant: str,
+    scale_ratio: float,
+    eval_set: str,
+    project="ndt3",
+    exp_map=NDT2_EXPERIMENT_MAP,
+    is_pretrained=False
+):
     r"""
         variant: init_from_id
     """
     # sweep_tag = "simple_scratch" if "scratch" in variant else "simple_ft" # v4 settings
-    sweep_tag = "full_scratch"
-    variant_tag = TAG_MAP[eval_set].format(scale_ratio=int(scale_ratio * 100))
+    if is_pretrained:
+        variant_tag = PRETRAINED_TAG_MAP[eval_set].format(scale_ratio=int(scale_ratio * 100))
+        sweep_tag = "full_tune"
+    else:
+        sweep_tag = "full_scratch"
+        variant_tag = TAG_MAP[eval_set].format(scale_ratio=int(scale_ratio * 100))
     print(f'Querying: {variant_tag}')
     return wandb_query_experiment(
         exp_map[eval_set],
@@ -215,10 +241,20 @@ def get_run_df_for_query(variant: str, scale_ratio: float, eval_set: str, metric
     return get_best_run_per_sweep(run_df, metric=metric)
 
 def get_ndt2_run_df_for_query(scale_ratio: float, eval_set: str):
-    # only "scratch" runs compared for ndt2
-    return get_run_df_for_query("scratch", scale_ratio, eval_set, project="context_general_bci", exp_map=NDT2_EXPERIMENT_MAP)
+    return get_run_df_for_query(
+        "scratch", # Not used
+        scale_ratio,
+        eval_set,
+        project="context_general_bci",
+        exp_map=NDT2_EXPERIMENT_MAP,
+        is_pretrained=IS_PRETRAINED
+    )
 
-ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALES]).reset_index()
+
+ndt2_run_df = pd.concat([
+    get_ndt2_run_df_for_query(scale_ratio, EVAL_SET)
+    for scale_ratio in SCALES
+]).reset_index()
 # ndt2_run_df = pd.concat([get_ndt2_run_df_for_query(scale_ratio, EVAL_SET) for scale_ratio in SCALE_MAP[EVAL_SET]]).reset_index()
 eval_metrics_path = eval_paths / f"{EVAL_SET}_eval_ndt2.csv"
 def load_eval_df_so_far(eval_metrics_path):
