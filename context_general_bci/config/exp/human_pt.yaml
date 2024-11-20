@@ -1,0 +1,9 @@
+# @package _global_
+
+model:
+  transformer:
+    n_layers: 10 # For pitt_v3/human_10l
+    max_spatial_tokens: 9 # Support loading of pt model
+sweep_cfg: 'simple_tune'
+# init_ckpt: './data/pretrained/f32_uych1wae_val-epoch=630-val_loss=0.5030.ckpt' # Can't use this one in general because it bleeds Indy data. Also, fails to load due to codespace imports.
+init_ckpt: './data/pretrained/pretrained_unsup_j7mq2snc_val-epoch=960-val_loss=0.3158.ckpt'

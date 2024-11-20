@@ -4,7 +4,7 @@ defaults:
   - h1
   - ../../human_pt
 dataset:
-  scale_ratio: .25
+  scale_ratio: 1.0
 train:
-  max_batch_size: 16
-  batch_size: 16
+  max_batch_size: 32
+  batch_size: 32

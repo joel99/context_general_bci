@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - _rtt
+  - ../../human_pt
+dataset:
+  scale_ratio: 0.1
+train:
+  max_batch_size: 256
+  batch_size: 256

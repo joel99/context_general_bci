@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - _cst
+  - ../../human_pt
+dataset:
+  scale_ratio: 0.5
+train:
+  batch_size: 32
+  autoscale_batch_size: false
+  max_batch_size: 32

@@ -1,10 +1,12 @@
 # @package _global_
 
 defaults:
-  - h1
+  - _cursor
   - ../../human_pt
 dataset:
-  scale_ratio: .25
+  scale_ratio: 0.25
 train:
   max_batch_size: 16
   batch_size: 16
+
+notes: "Skipped - 100 is trivial"

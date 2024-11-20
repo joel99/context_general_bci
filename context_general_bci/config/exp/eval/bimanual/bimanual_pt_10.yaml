@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - _bimanual
+  - ../../human_pt
+dataset:
+  scale_ratio: 0.1
+train:
+  autoscale_batch_size: false
+  batch_size: 64
+  max_batch_size: 64

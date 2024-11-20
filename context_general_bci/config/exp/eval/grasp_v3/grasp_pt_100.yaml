@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - _grasp
+  - ../../human_pt
+dataset:
+  scale_ratio: 1.0
+train:
+  max_batch_size: 64
+  batch_size: 64
+  accumulate_batches: 2
