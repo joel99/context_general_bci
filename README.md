@@ -59,8 +59,8 @@ Checkpoints for these runs are available [here](https://drive.google.com/drive/u
 Given the relatively lightweight training process we recommend training your own model to then analyze. This will require overwriting the default wandb settings with your own.
 Note analysis scripts aren't build around manual checkpoint path loading; but `model.load_from_checkpoint(<download_path>)` can be used with public checkpoints.
 
-Two example checkpoints are provided:
-- one from [human data](https://wandb.ai/joelye9/context_general_bci/runs/j7mq2snc/overview): [Checkpoint](https://drive.google.com/file/d/1sdZAVIlH2CCh856BjQlEdKpRUO0IUGdU/view?usp=drive_link)
+We provide two example checkpoints:
+- one from [human data (~100 hours)](https://wandb.ai/joelye9/context_general_bci/runs/j7mq2snc/overview): [Checkpoint](https://drive.google.com/file/d/1sdZAVIlH2CCh856BjQlEdKpRUO0IUGdU/view?usp=drive_link)
 - one from [Indy multisession RTT](https://wandb.ai/joelye9/context_general_bci/runs/uych1wae?workspace=user-joelye9): [Checkpoint](https://drive.google.com/file/d/1hhC4n1UyiYjCcv1nlO6ESljNhr8qVlUF/view?usp=share_link).
 
 Checkpoints for the FALCON baselines are in this folder: [FALCON-checkpoints](https://drive.google.com/drive/folders/1ijvmPcbyjHlLEoWWSSZrNm1bBojGgrZG?usp=sharing).
