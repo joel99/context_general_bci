@@ -69,6 +69,8 @@ Checkpoints for the FALCON baselines are in this folder: [FALCON-checkpoints](ht
 ## Other Notes
 - The codebase was actually developed in Python 3.10 but this release uses 3.9 for compatibility with `onnx`. Exact numerical reproduction of paper results is not asserted, but please file an issue if large discrepancies with reported results arise.
 - Check out ./scripts/figures/` and this [wandb workspace](https://wandb.ai/joelye9/context_general_bci) to see how the results were generated.
+- Please ping my email (`joelye9@gmail.com`) if you are running into issues with this codebase.
+- This codebase shares the same namespace (`context_general_bci`) as [NDT3](https://github.com/joel99/ndt3). I recommend checking out NDT3 - it's bigger, better, more recent! 
 
 
 
