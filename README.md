@@ -71,6 +71,6 @@ Checkpoints for the FALCON baselines are in this folder: [FALCON-checkpoints](ht
 - Check out ./scripts/figures/` and this [wandb workspace](https://wandb.ai/joelye9/context_general_bci) to see how the results were generated.
 - Please ping my email (`joelye9@gmail.com`) if you are running into issues with this codebase.
 - This codebase shares the same namespace (`context_general_bci`) as [NDT3](https://github.com/joel99/ndt3). I recommend checking out NDT3 - it's bigger, better, more recent! 
-
+- Reproduction: There appears to be a regression not yet identified in recent commits that regresses reproduction of core experiments (like `f32`). I've been informed that a few commits old `0b3acbc668b1048a283f7bb9121da51bb6772f10` works well.
 
 
